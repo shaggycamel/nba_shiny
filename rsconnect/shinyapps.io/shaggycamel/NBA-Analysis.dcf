@@ -1,0 +1,12 @@
+name: NBA-Analysis
+title: NBA-Analysis
+username: shaggycamel
+account: shaggycamel
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 9525920
+bundleId: 7510284
+url: https://shaggycamel.shinyapps.io/NBA-Analysis/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE

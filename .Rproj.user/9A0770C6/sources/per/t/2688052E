@@ -1,0 +1,26 @@
+{
+    "id": "2688052E",
+    "path": "~/git/nba_shiny/server.R",
+    "project_path": "server.R",
+    "type": "r_source",
+    "hash": "4088270846",
+    "contents": "",
+    "dirty": false,
+    "created": 1690922014756.0,
+    "source_on_save": false,
+    "relative_order": 1,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "198,14",
+        "scrollLine": "142"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1690926554,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1690926554075,
+    "read_only": false,
+    "read_only_alternatives": []
+}

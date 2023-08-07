@@ -1,0 +1,126 @@
+
+
+# Libraries ---------------------------------------------------------------
+
+library(shiny)
+library(shinydashboard)
+library(shinyWidgets)
+source(here::here("_proj_const.R"))
+
+# ui ----------------------------------------------------------------------
+
+# Header
+header <- dashboardHeader(title = "NBA")
+  
+# Sidebar
+sidebar <- dashboardSidebar(
+  sidebarMenu(
+    # menuItem("Head to Head", tabName = "head_to_head", icon = icon("chess")),
+    menuItem("Player Overview", tabName = "player_overview", icon = icon("chart-bar")),
+    menuItem("Player Performance", tabName = "player_performance", icon = icon("basketball")),
+    menuItem("Player Trend", tabName = "player_trend", icon = icon("chart-line")),
+    menuItem("League Game Schedule", tabName = "league_game_schedule", icon = icon("calendar-days")),
+    fixedPanel(
+      dropdownButton(
+        inputId = "watch_list_button", 
+        label = "Watch List",
+        icon = icon("plus"),
+        tooltip = TRUE,
+        up = TRUE,
+        selectInput(inputId = "watch_list", label = "Watch List", choices = 0, multiple = TRUE)
+      ), 
+      left=30, 
+      bottom = 180
+    ),
+    fixedPanel(
+      actionButton(
+        inputId = "fty_update", 
+        label = "Update Fantasy data", 
+        style = "jelly", 
+        size = "sm"
+      ),
+      left=15, 
+      bottom = 15
+    )
+  )
+)
+    
+# Body
+body <- 
+  dashboardBody(
+    tabItems(
+
+# Player Overview ---------------------------------------------------------
+
+      tabItem(tabName = "player_overview",
+        fluidRow(
+          column(
+            width = 4, 
+            selectInput("overview_select_stat", "Statistic", choices = stat_selection$formatted_name),
+            sliderTextInput("overview_minute_filter", "Limit Minutes", choices = 0), # updated dynamically in server.R
+            sliderInput("overview_slider_top_n", "Top N Players", min = 10, max = 20, value = 15, ticks = FALSE),
+            checkboxInput("overview_scale_by_minutes", "Scale by Minutes"),
+            checkboxInput("overview_free_agent_filter", "Only Show Non-Injured Free Agents")
+          ),
+        
+          # Plot
+          column(width = 8, plotly::plotlyOutput("player_overview_plot", height = 600)) # unsure how to make height dynamic, as in = "100%"
+        )
+      ),
+     
+
+# Player Performance ------------------------------------------------------
+
+      tabItem(tabName = "player_performance",
+        fluidRow(
+          column(
+            width = 2, 
+            radioButtons("date_range_switch", "Range", choices = c("Two Weeks", "One Month")),
+            checkboxInput("performance_free_agent_filter", "Non injured Free Agents"),
+            pickerInput("excels_at_filter", "Excels At (one or more) filter", choices = stat_selection$formatted_name, multiple = TRUE, options =  list("max-options" = 5)),
+            selectInput("performance_select_player", "Player", multiple = TRUE, choices = character(0)),
+          ),
+        
+          # Table
+          column(width = 10, gt::gt_output("player_performance_table"))
+        )
+      ),
+      
+
+# Player Trend ------------------------------------------------------------
+
+      tabItem(tabName = "player_trend",
+        fluidRow(
+          column(
+            width = 4, 
+            selectInput("trend_select_stat", "Statistic", choices = stat_selection$formatted_name),
+            selectInput("trend_select_player", "Player", multiple = TRUE, choices = character(0))
+          ),
+        
+          # Plot
+          column(width = 8, plotOutput("player_trend_plot", height = 600)) # unsure how to make height dynamic, as in = "100%"
+        )
+      ),
+      
+
+# League Game Schedule ----------------------------------------------------
+
+      tabItem(tabName = "league_game_schedule",
+        fluidRow(
+          column(
+            width = 3, 
+            selectInput("week_selection", "Week", choices = character(0), selectize = FALSE)
+          ),
+        
+          # Table
+          column(width = 9, gt::gt_output("schedule_table"))
+        ) 
+      )
+    ),
+  )
+
+
+# Instantiate page --------------------------------------------------------
+
+ui <- dashboardPage(header, sidebar, body)
+
