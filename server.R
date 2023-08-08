@@ -361,19 +361,19 @@ server <- function(input, output, session) {
 # Update Fantasy Data -----------------------------------------------------
 # Using python, update fty tables
   
-  observeEvent(input$fty_update, {
-    showPageSpinner(type = 6, caption = "Collecting data, give it a minute.")
-    job_log <- reticulate::py_run_file(here("python", "fty_update.py"))$job_log
-
-    if(all(unlist(job_log) == "Success")){
-      .load_datasets()
-      hidePageSpinner()
-      shinyWidgets::show_alert(title = NULL, text = "Fantasy Data has successfully been updated.")
-    } else {
-      hidePageSpinner()
-      shinyWidgets::show_alert(title = NULL, text = paste("Job(s):", paste(names(job_log[unlist(job_log) != "Success"]), collapse = ", "), "failed to update."))
-    }
-  })
+  # observeEvent(input$fty_update, {
+  #   showPageSpinner(type = 6, caption = "Collecting data, give it a minute.")
+  #   job_log <- reticulate::py_run_file(here("python", "fty_update.py"))$job_log
+  # 
+  #   if(all(unlist(job_log) == "Success")){
+  #     .load_datasets()
+  #     hidePageSpinner()
+  #     shinyWidgets::show_alert(title = NULL, text = "Fantasy Data has successfully been updated.")
+  #   } else {
+  #     hidePageSpinner()
+  #     shinyWidgets::show_alert(title = NULL, text = paste("Job(s):", paste(names(job_log[unlist(job_log) != "Success"]), collapse = ", "), "failed to update."))
+  #   }
+  # })
   
 }
 
