@@ -44,7 +44,7 @@ class dataHub:
         
     
     def fty_get_free_agents(self, players, db_con):
-        
+      
         df = []
         for player in players:
             df.append({
@@ -59,7 +59,7 @@ class dataHub:
         df = DataFrame(df)
         
         # Write to database
-        # df.to_sql('free_agents', db_con, schema='fty', index=False, if_exists='replace')
+        df.to_sql('free_agents', db_con, schema='fty', index=False, if_exists='replace')
         print('free_agents has been updated')
         # return df # Eventually delete
 
@@ -68,12 +68,3 @@ class dataHub:
         pass
       
       
-    def test1(self):
-      return 'Success'
-    
-    def test2(self):
-      return 'Failure'
-    
-    
-        
-        
