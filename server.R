@@ -27,8 +27,8 @@ server <- function(input, output, session) {
   
   # Variables
   current_date <- as.Date("2023-01-05") # Change to Sys.Date()
-  db_con <- postgre_con
-  # db_con <- cockroach_con
+  # db_con <- postgre_con
+  db_con <- cockroach_con
   
   # Datasets
   .load_datasets <- function(){
@@ -47,7 +47,9 @@ server <- function(input, output, session) {
       mutate(week_start = min(game_date), week_end = max(game_date)) |> 
       ungroup()  
     
-    df_season_segments <<- dh_getQuery(db_con, "season_segments.sql")
+    df_season_segments <<- dh_getQuery(db_con, "season_segments.sql") |> 
+      mutate(mid_date = begin_date + (end_date - begin_date) / 2)
+
   }
   
   .load_datasets()
