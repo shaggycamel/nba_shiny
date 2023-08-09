@@ -27,10 +27,10 @@ cockroach_con <- DBI::dbConnect(
 )
 
 
-dh_getQuery <- function(connection, query){
+dh_getQuery <- function(connection, query, glue_params=NULL){
   
-  query <- if(stringr::str_detect(query, ".sql$")) readr::read_file(here::here("queries", query))
-    else query
+  query <- if(!stringr::str_detect(query, ".sql$")) query
+    else glue::glue(readr::read_file(here::here("queries", query)))
   
   connection |> 
     DBI::dbGetQuery(query) |> 

@@ -31,6 +31,6 @@ LEFT JOIN util.fty_nba_id_matchup AS id_matchup ON stats.player_id = id_matchup.
 LEFT JOIN fty.free_agents AS fa ON id_matchup.fty_id = fa.player_id::INT
 LEFT JOIN nba.player_info AS info ON stats.player_id = info.person_id
 
-WHERE season_id = '2022-23' 
+WHERE season_id = '{cur_season}' 
 
 ORDER BY stats.player_id, season_id  

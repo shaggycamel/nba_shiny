@@ -23,10 +23,13 @@ server <- function(input, output, session) {
 
 # Constants & Datasets ----------------------------------------------------
 
-  showPageSpinner(type = 6, caption = "Collecting data, give it a minute.")
+  data_collection_caption <- "Collecting data, give it a minute (literally)."
+  showPageSpinner(type = 6, caption = data_collection_caption)
   
   # Variables
   current_date <- as.Date("2023-01-05") # Change to Sys.Date()
+  cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
+  prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
   # db_con <- postgre_con
   db_con <- cockroach_con
   
@@ -361,7 +364,7 @@ server <- function(input, output, session) {
 # Using python, update fty tables
   
   observeEvent(input$fty_update, {
-    showPageSpinner(type = 6, caption = "Collecting data, give it a minute.")
+    showPageSpinner(type = 6, caption = data_collection_caption)
     job_log <- reticulate::py_run_file(here("python", "fty_update.py"))$job_log
 
     if(all(unlist(job_log) == "Success")){

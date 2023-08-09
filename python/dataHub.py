@@ -64,7 +64,7 @@ class dataHub:
         # return df # Eventually delete
 
 
-    def fty_get_team_rosters(self, players, postgres):
+    def fty_get_team_rosters(self, players, db_con):
         pass
       
       

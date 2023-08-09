@@ -35,7 +35,7 @@ FROM (
     FROM nba.league_game_schedule
 ) AS home_away_union
 
-WHERE SLUG_SEASON = '2022-23'
+WHERE SLUG_SEASON = '{cur_season}'
     AND TYPE_SEASON = 'Regular Season'
     
 
