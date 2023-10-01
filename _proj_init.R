@@ -16,15 +16,15 @@ if(stringr::str_detect(osVersion, "macOS")){
 }
 
 
-# cockroach_con <- DBI::dbConnect(
-#   drv = RPostgres::Postgres(),
-#   user = db_info$cockroach$user,
-#   host = paste0(db_info$cockroach$cluster, ".", db_info$cockroach$host),
-#   port = db_info$cockroach$port,
-#   password = db_info$cockroach$password,
-#   dbname = db_info$cockroach$database,
-#   options = paste0("--cluster=", db_info$cockroach$cluster)
-# )
+cockroach_con <- DBI::dbConnect(
+  drv = RPostgres::Postgres(),
+  user = db_info$cockroach$user,
+  host = paste0(db_info$cockroach$cluster, ".", db_info$cockroach$host),
+  port = db_info$cockroach$port,
+  password = db_info$cockroach$password,
+  dbname = db_info$cockroach$database,
+  options = paste0("--cluster=", db_info$cockroach$cluster)
+)
 
 
 dh_getQuery <- function(connection, query, glue_params=NULL){

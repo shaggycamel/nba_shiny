@@ -27,11 +27,13 @@ server <- function(input, output, session) {
   showPageSpinner(type = 6, caption = data_collection_caption)
   
   # Variables
-  current_date <- as.Date("2023-01-05") # Change to Sys.Date()
-  cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
   prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
-  db_con <- postgre_con
-  # db_con <- cockroach_con
+  cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
+  current_date <<- as.Date("2023-01-05") # Change to Sys.Date()
+  cur_season <<- prev_season # Delete
+  prev_seaon <<- "2021-22" # Delete
+  # db_con <- postgre_con
+  db_con <- cockroach_con
   
   # Datasets
   .load_datasets <- function(){

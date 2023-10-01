@@ -15,7 +15,11 @@ def job_logger(func):
     return 'Failure: ' + e
   else:
     return 'Success'
+  
+# login to espn.com and obtain cookies
+
 
 # Update statements
 job_log = dict()
 job_log['free_agents'] = job_logger(dh.fty_get_free_agents(fty_con.free_agents(size=1000), db_con))
+
