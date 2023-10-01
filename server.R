@@ -31,7 +31,7 @@ server <- function(input, output, session) {
   cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
   current_date <<- as.Date("2023-01-05") # Change to Sys.Date()
   cur_season <<- prev_season # Delete
-  prev_seaon <<- "2021-22" # Delete
+  prev_season <<- "2021-22" # Delete
   # db_con <- postgre_con
   db_con <- cockroach_con
   
