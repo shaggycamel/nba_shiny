@@ -13,9 +13,12 @@ library(gt)
 library(here)
 library(shinycssloaders)
 
+
+# Initialisation files ----------------------------------------------------
+
 source(here("_proj_const.R"))
 source(here("_proj_init.R"))
-
+if(Sys.info()["user"] == "shiny") source(here("_proj_python.R")) # only init python if running in shiny
 
 # Server ------------------------------------------------------------------
 
@@ -29,11 +32,11 @@ server <- function(input, output, session) {
   # Variables
   prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
   cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
-  current_date <<- as.Date("2023-01-05") # Change to Sys.Date()
+  cur_date <<- as.Date("2023-01-05") # Change to Sys.Date()
   cur_season <<- prev_season # Delete
   prev_season <<- "2021-22" # Delete
-  # db_con <- postgre_con
-  db_con <- cockroach_con
+  db_con <- if(Sys.info()["nodename"] == "Olivers-MacBook-Pro.local") postgre_con else cockroach_con 
+  # db_con <- cockroach_con
   
   # Datasets
   .load_datasets <- function(){
@@ -161,8 +164,8 @@ server <- function(input, output, session) {
     
     df_perf_tab <<- df_player_log |> 
       filter(
-        game_date <= current_date, 
-        game_date >= current_date - if_else(input$date_range_switch == "Two Weeks", 14, 30)
+        game_date <= cur_date, 
+        game_date >= cur_date - if_else(input$date_range_switch == "Two Weeks", 14, 30)
       ) |>
       group_by(player_id, player_name) |> 
       summarise(
@@ -266,7 +269,7 @@ server <- function(input, output, session) {
       choices = week_drop_box_choices,
       selected = week_drop_box_choices[
         distinct(df_schedule, pick(contains("week"))) |>
-          filter(week_start <= current_date, week_end >= current_date) |>
+          filter(week_start <= cur_date, week_end >= cur_date) |>
           pull(season_week)
       ]
     )
@@ -277,7 +280,7 @@ server <- function(input, output, session) {
     
     # Calculate games left this week variable
     week_game_count <- df_schedule |> 
-      mutate(week_games_remaining = game_date >= current_date) |> 
+      mutate(week_games_remaining = game_date >= cur_date) |> 
       group_by(season_week, week_start, week_end, team) |> 
       summarise(
         week_games_remaining = sum(week_games_remaining), 
@@ -331,9 +334,10 @@ server <- function(input, output, session) {
   }, height = "600px")
   
 
-# Watch List --------------------------------------------------------------
 
-  # Update select list
+# Update watch list & notepad ---------------------------------------------
+
+  # Update watch list & notepad
   observe({
     updateSelectInput(
       session, 
@@ -341,36 +345,28 @@ server <- function(input, output, session) {
       selected = dh_getQuery(db_con, "SELECT * FROM fty.watch_list")$nba_name,
       choices = sort(unique(df_player_log$player_name))
     )
+    
+    # Notepad
+    updateTextAreaInput(session, "notepad", value = dh_getQuery(db_con, "SELECT * FROM fty.notepad")$note)
   })
   
   # Write changes to db
   observe({
+    # Watch list
     if(nrow(dh_getQuery(db_con, "SELECT * FROM fty.watch_list")) != length(input$watch_list)){
       watched <- paste(input$watch_list, collapse = "', '")
       DBI::dbSendQuery(db_con, "TRUNCATE fty.watch_list")
       DBI::dbSendQuery(db_con, glue::glue(readr::read_file(here("queries", "update_watch_list.sql"))))
     }
-  })
-
-
-# Update Fantasy Data -----------------------------------------------------
-# Using python, update fty tables
-  
-  observeEvent(input$fty_update, {
-    showPageSpinner(type = 6, caption = data_collection_caption)
-    job_log <- reticulate::py_run_file(here("python", "fty_update.py"))$job_log
-
-    if(all(unlist(job_log) == "Success")){
-      .load_datasets()
-      hidePageSpinner()
-      shinyWidgets::show_alert(title = NULL, text = "Fantasy Data has successfully been updated.")
-    } else {
-      hidePageSpinner()
-      shinyWidgets::show_alert(title = NULL, text = paste("Job(s):", paste(names(job_log[unlist(job_log) != "Success"]), collapse = ", "), "failed to update."))
+    
+    # Notepad
+    if(input$notepad != dh_getQuery(db_con, "SELECT * FROM fty.notepad")$note){
+      note <- input$notepad
+      DBI::dbSendQuery(db_con, "TRUNCATE fty.notepad")
+      DBI::dbSendQuery(db_con, glue::glue("INSERT INTO fty.notepad (note) SELECT '{note}'"))
     }
   })
-  
-}
 
+}
 
 

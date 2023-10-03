@@ -19,6 +19,7 @@ sidebar <- dashboardSidebar(
     menuItem("Player Performance", tabName = "player_performance", icon = icon("basketball")),
     menuItem("Player Trend", tabName = "player_trend", icon = icon("chart-line")),
     menuItem("League Game Schedule", tabName = "league_game_schedule", icon = icon("calendar-days")),
+    textAreaInput(inputId = "notepad", label = NULL, value = character(0), height = "100px", resize = "vertical"),
     fixedPanel(
       dropdownButton(
         inputId = "watch_list_button", 
@@ -30,16 +31,6 @@ sidebar <- dashboardSidebar(
       ), 
       left=30, 
       bottom = 180
-    ),
-    fixedPanel(
-      actionButton(
-        inputId = "fty_update", 
-        label = "Update Fantasy data", 
-        style = "jelly", 
-        size = "sm"
-      ),
-      left=15, 
-      bottom = 15
     )
   )
 )

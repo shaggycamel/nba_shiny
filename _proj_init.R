@@ -3,7 +3,7 @@
 
 db_info <- ini::read.ini(here::here("database.ini"))
 
-if(str_detect(str_to_lower(Sys.info()["nodename"]), "oli")){
+if(Sys.info()["nodename"] == "Olivers-MacBook-Pro.local"){
   postgre_con <- DBI::dbConnect(
     drv = RPostgres::Postgres(),
     user = db_info$postgre$user,
@@ -38,17 +38,6 @@ dh_getQuery <- function(connection, query, glue_params=NULL){
     dplyr::mutate(dplyr::across(where(~ class(.x) == "integer64"), ~ as.integer(.x)))
 }
 
-
-# Python initilisation ----------------------------------------------------
-
-
-if(!stringr::str_detect(osVersion, "macOS")){
-  reticulate::virtualenv_create(envname = "python3_env", python = "/usr/bin/python3")
-  reticulate::virtualenv_install("python3_env", packages = c("nba_api", "configparser", "snakecase", "espn_api", "datetime", "pandas", "sqlalchemy", "psycopg2"))
-  reticulate::use_virtualenv("python3_env", required = TRUE)
-}
-
-# os, pathlib, requests
 
 # Custom Functions --------------------------------------------------------
 
