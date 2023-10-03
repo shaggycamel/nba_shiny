@@ -1,5 +1,6 @@
 SELECT 
     slug_season, 
+    year_season,
     season_type,
     RIGHT(slug_season, 2) || '-' || season_type AS year_season_type,
     log.player_id,
@@ -31,5 +32,5 @@ FROM nba.player_game_log AS log
 LEFT JOIN util.fty_nba_id_matchup AS id_matchup ON log.player_id = id_matchup.nba_id 
 LEFT JOIN fty.free_agents AS fa ON id_matchup.fty_id = fa.player_id::INT
 LEFT JOIN nba.player_info AS info ON log.player_id = info.person_id
-WHERE LEFT(slug_season, 4)::INT >= 2021
+WHERE slug_season >= '{prev_season}'
   AND season_type != 'All Star'

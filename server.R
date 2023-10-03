@@ -1,5 +1,4 @@
 
-
 # Libraries ---------------------------------------------------------------
 
 library(rlang)
@@ -13,6 +12,7 @@ library(stringr)
 library(gt)
 library(here)
 library(shinycssloaders)
+
 source(here("_proj_const.R"))
 source(here("_proj_init.R"))
 
@@ -23,10 +23,15 @@ server <- function(input, output, session) {
 
 # Constants & Datasets ----------------------------------------------------
 
-  showPageSpinner(type = 6, caption = "Collecting data, give it a minute.")
+  data_collection_caption <- "Collecting data, give it a minute (literally)."
+  showPageSpinner(type = 6, caption = data_collection_caption)
   
   # Variables
-  current_date <- as.Date("2023-01-05") # Change to Sys.Date()
+  prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
+  cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
+  current_date <<- as.Date("2023-01-05") # Change to Sys.Date()
+  cur_season <<- prev_season # Delete
+  prev_season <<- "2021-22" # Delete
   # db_con <- postgre_con
   db_con <- cockroach_con
   
@@ -49,7 +54,6 @@ server <- function(input, output, session) {
     
     df_season_segments <<- dh_getQuery(db_con, "season_segments.sql") |> 
       mutate(mid_date = begin_date + (end_date - begin_date) / 2)
-
   }
   
   .load_datasets()
@@ -130,21 +134,12 @@ server <- function(input, output, session) {
 # Uses df_player_log
   
   # Reactively filter player selection list
-  observeEvent(input$performance_free_agent_filter, {
-    fa <- filter(df_player_log, free_agent_status == "ACTIVE")$player_name
-    if(length(input$excels_at_filter) > 0)
-      xl_at <- filter(df_perf_tab, stringr::str_detect(`Excels At`, paste0(filter(stat_selection, formatted_name %in% input$excels_at_filter)$database_name, collapse = "|")))$Player
-
-    chs <- if(length(input$excels_at_filter) == 0) fa
-      else intersect(xl_at, fa)
-
-    updateSelectizeInput(session, "performance_select_player", choices = sort(chs), server = TRUE)
-  })
-
-  # Reactively filter player selection list
-  observeEvent(input$excels_at_filter, {
-    fa <- filter(df_player_log, free_agent_status == "ACTIVE")$player_name
-    xl_at <- filter(df_perf_tab, stringr::str_detect(`Excels At`, paste0(filter(stat_selection, formatted_name %in% input$excels_at_filter)$database_name, collapse = "|")))$Player
+  observe({
+    
+    fa <- unique(filter(df_player_log, free_agent_status == "ACTIVE")$player_name)
+    xl_at <- if(length(input$excels_at_filter) > 0)
+      filter(df_perf_tab, stringr::str_detect(`Excels At`, paste0(filter(stat_selection, formatted_name %in% input$excels_at_filter)$database_name, collapse = "|")))$Player
+    else unique(df_player_log$player_name) # base event, when no xl_at is selected
 
     chs <- if(!input$performance_free_agent_filter) xl_at
       else intersect(xl_at, fa)
@@ -361,19 +356,19 @@ server <- function(input, output, session) {
 # Update Fantasy Data -----------------------------------------------------
 # Using python, update fty tables
   
-  # observeEvent(input$fty_update, {
-  #   showPageSpinner(type = 6, caption = "Collecting data, give it a minute.")
-  #   job_log <- reticulate::py_run_file(here("python", "fty_update.py"))$job_log
-  # 
-  #   if(all(unlist(job_log) == "Success")){
-  #     .load_datasets()
-  #     hidePageSpinner()
-  #     shinyWidgets::show_alert(title = NULL, text = "Fantasy Data has successfully been updated.")
-  #   } else {
-  #     hidePageSpinner()
-  #     shinyWidgets::show_alert(title = NULL, text = paste("Job(s):", paste(names(job_log[unlist(job_log) != "Success"]), collapse = ", "), "failed to update."))
-  #   }
-  # })
+  observeEvent(input$fty_update, {
+    showPageSpinner(type = 6, caption = data_collection_caption)
+    job_log <- reticulate::py_run_file(here("python", "fty_update.py"))$job_log
+
+    if(all(unlist(job_log) == "Success")){
+      .load_datasets()
+      hidePageSpinner()
+      shinyWidgets::show_alert(title = NULL, text = "Fantasy Data has successfully been updated.")
+    } else {
+      hidePageSpinner()
+      shinyWidgets::show_alert(title = NULL, text = paste("Job(s):", paste(names(job_log[unlist(job_log) != "Success"]), collapse = ", "), "failed to update."))
+    }
+  })
   
 }
 
