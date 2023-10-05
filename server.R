@@ -11,14 +11,15 @@ library(plotly)
 library(stringr)
 library(gt)
 library(here)
+library(nba.dataRub)
 library(shinycssloaders)
 
 
 # Initialisation files ----------------------------------------------------
 
-source(here("_proj_const.R"))
-source(here("_proj_init.R"))
+source(here("_proj_useful.R"))
 if(Sys.info()["user"] == "shiny") source(here("_proj_python.R")) # only init python if running in shiny
+
 
 # Server ------------------------------------------------------------------
 
@@ -35,8 +36,8 @@ server <- function(input, output, session) {
   cur_date <<- as.Date("2023-01-05") # Change to Sys.Date()
   cur_season <<- prev_season # Delete
   prev_season <<- "2021-22" # Delete
-  db_con <- if(Sys.info()["nodename"] == "Olivers-MacBook-Pro.local") postgre_con else cockroach_con 
-  # db_con <- cockroach_con
+  db_con <- if(Sys.info()["nodename"] == "Olivers-MacBook-Pro.local") dh_createCon("postgres") else dh_createCon("cockroach") 
+  # db_con <- dh_createCon("cockroach")
   
   # Datasets
   .load_datasets <- function(){
