@@ -14,7 +14,7 @@ header <- dashboardHeader(title = "NBA")
 # Sidebar
 sidebar <- dashboardSidebar(
   sidebarMenu(
-    # menuItem("Head to Head", tabName = "head_to_head", icon = icon("chess")),
+    menuItem("Head to Head", tabName = "head_to_head", icon = icon("chess")),
     menuItem("Player Overview", tabName = "player_overview", icon = icon("chart-bar")),
     menuItem("Player Performance", tabName = "player_performance", icon = icon("basketball")),
     menuItem("Player Trend", tabName = "player_trend", icon = icon("chart-line")),
@@ -39,6 +39,17 @@ sidebar <- dashboardSidebar(
 body <- 
   dashboardBody(
     tabItems(
+      
+      tabItem(tabName = "head_to_head",
+        fluidRow(
+          column(
+            width = 2, 
+            selectInput("h2h_competitor", "Competitor", choices = character(0)),
+            selectInput("h2h_week", "Week", choices = 0)
+          ),
+          column(width = 10, plotOutput("h2h_plot", height = 600))
+        )
+      ),
 
 # Player Overview ---------------------------------------------------------
 

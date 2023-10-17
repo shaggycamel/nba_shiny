@@ -33,7 +33,7 @@ server <- function(input, output, session) {
   # Variables
   prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
   cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
-  cur_date <<- Sys.Date()
+  cur_date <<- as.POSIXct(Sys.time(), tz="America/New_York")
   db_con <- if(Sys.info()["nodename"] == "Olivers-MacBook-Pro.local") dh_createCon("postgres") else dh_createCon("cockroach") 
   
   # Datasets
@@ -59,6 +59,15 @@ server <- function(input, output, session) {
     
     df_season_segments <<- dh_getQuery(db_con, "season_segments.sql") |> 
       mutate(mid_date = begin_date + (end_date - begin_date) / 2)
+    
+    df_h2h <<- dh_getQuery(db_con, "h2h.sql") |> 
+      pivot_longer(all_of(anl_cols$h2h_cols), names_to = "stat") |> 
+      (\(t_df){
+        dh_getQuery(db_con, "SELECT season, week, competitor_id, opponent_id FROM fty.league_schedule WHERE season = '{cur_season}'") |> 
+          left_join(rename(t_df, competitor_value = value), by = join_by(competitor_id), relationship = "many-to-many") |> 
+          left_join(rename(t_df, opponent_name = competitor_name, opponent_value = value), by = join_by(opponent_id == competitor_id, stat))
+      })() |> 
+      select(season, week, starts_with("competitor"), stat, starts_with("opponent"))
   }
   
   .load_datasets()
@@ -78,10 +87,41 @@ server <- function(input, output, session) {
     
     # Player trend tab
     updateSelectInput(session, "trend_select_player", choices = sort(unique(df_player_log$player_name)))
+    
+    # H2H tab
+    updateSelectInput(session, "h2h_competitor", choices = unique(df_h2h$competitor_name), selected = "senor_cactus")
+    updateSelectInput(session, "h2h_week", choices = unique(df_h2h$week), selected = unique(filter(df_schedule, week_start <= cur_date, week_end >= cur_date)$season_week))
   })
   
-  
-  
+
+# Head to Head -----------------------------------------------------------
+
+  output$h2h_plot <- renderPlot({
+    
+    h2h_plt <- filter(df_h2h, competitor_name == input$h2h_competitor, week == input$h2h_week) |> 
+      select(-c(season, week, ends_with("id"))) |>
+      (\(t_df){
+        bind_rows(
+          select(t_df, name = competitor_name, stat, value = competitor_value),
+          select(t_df, name = opponent_name, stat, value = opponent_value)
+        )
+      })()
+      
+    ggplot(h2h_plt, aes(x = stat, y = value, fill = name)) +
+      geom_col(position = "fill") +
+      geom_hline(yintercept = 0.5) +
+      labs(title = paste(str_trim(unique(h2h_plt$name)[1]), "vs", unique(h2h_plt$name)[2]), subtitle = paste("Week", input$h2h_week), x = NULL, y = NULL) +
+      theme_bw() +
+      theme(
+        title = element_text(size = 20),
+        axis.text = element_text(size = 15),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 10)
+      )
+
+  })
+
+    
 # Player Overview Analysis ------------------------------------------------
 # Uses df_overview
   
@@ -272,7 +312,7 @@ server <- function(input, output, session) {
 # Uses df_schedule 
   
   # Drop box choices
-  week_drop_box_choices <- unique(paste0("Week:", df_schedule$season_week, " (", df_schedule$week_start, " to ", df_schedule$week_end, ")"))
+  week_drop_box_choices <- unique(paste0("Week: ", df_schedule$season_week, " (", df_schedule$week_start, " to ", df_schedule$week_end, ")"))
   
   # Update drop box values
   observe({
@@ -313,7 +353,7 @@ server <- function(input, output, session) {
       select(slug_season, season_week, game_date, team, against) |> 
       nest_by(slug_season, season_week, .keep = TRUE) |> 
       mutate(data = list(
-        pivot_wider(data, names_from = game_date, values_from = against) |> 
+        pivot_wider(data, names_from = game_date, values_from = against, values_fn = list) |> 
         left_join(select(week_game_count, season_week, team, contains("games"),-week_games)) |> 
         select(-slug_season, -season_week) |> 
         arrange(desc(week_games_remaining), team) |> 

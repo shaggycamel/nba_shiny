@@ -1,8 +1,4 @@
--- Pull latest competitor rosters and calculate average stats per player in last two weeks.
---  Then sum stats per competitor
---  And face off stats H2H
- 
--- Pivot this object so stats and their values occupy columns
+
 WITH cte_fantasy_rosters AS (
     SELECT base.*, id_matchup.nba_id, league_info.competitor_name
     FROM fty.competitor_roster AS base
@@ -45,19 +41,3 @@ LEFT JOIN (
 ) AS player_stats_two_weeks ON cte_fantasy_rosters.nba_id = player_stats_two_weeks.player_id
     
 GROUP BY cte_fantasy_rosters.competitor_id, cte_fantasy_rosters.competitor_name
-
-;
-
--- Join pivoted table above onto competitor_id and opponent_id
-SELECT 
-    season,
-    week,
-    competitor_id,
-    opponent_id
-FROM fty.league_schedule AS schedule
-WHERE schedule.season = '2023-24'
-ORDER BY schedule.competitor_id;
-
-
-
-
