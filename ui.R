@@ -49,6 +49,7 @@ body <-
             selectInput("overview_select_stat", "Statistic", choices = stat_selection$formatted_name),
             sliderTextInput("overview_minute_filter", "Limit Minutes", choices = 0), # updated dynamically in server.R
             sliderInput("overview_slider_top_n", "Top N Players", min = 10, max = 20, value = 15, ticks = FALSE),
+            checkboxInput("this_season_overview_switch", "This year only"),
             checkboxInput("overview_scale_by_minutes", "Scale by Minutes"),
             checkboxInput("overview_free_agent_filter", "Only Show Non-Injured Free Agents")
           ),

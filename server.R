@@ -38,8 +38,6 @@ server <- function(input, output, session) {
   
   # Datasets
   .load_datasets <- function(){
-    df_overview <<- dh_getQuery(db_con, "player_overview.sql")
-    
     df_player_log <<- dh_getQuery(db_con, "player_log.sql") |> 
       mutate(slug_season = ordered(slug_season)) |> 
       mutate(season_type = ordered(season_type, c("Pre Season", "Regular Season", "Playoffs"))) |> 
@@ -48,10 +46,16 @@ server <- function(input, output, session) {
     df_schedule <<- dh_getQuery(db_con, "league_schedule.sql") |> 
       group_by(slug_season) |> 
       mutate(season_week = if_else(season_week < 30, season_week + 52, season_week)) |> 
-      mutate(season_week = season_week - min(season_week) + 1) |>
+      (\(t_df) {
+        mutate(t_df, season_week = case_when(
+          type_season == "Pre Season" ~ 0,
+          type_season == "Regular Season" ~ season_week - max(filter(t_df, type_season == "Pre Season")$season_week)
+        ))
+      })() |> 
       group_by(season_week) |> 
       mutate(week_start = min(game_date), week_end = max(game_date)) |> 
-      ungroup()  
+      ungroup() |> 
+      arrange(season_week)
     
     df_season_segments <<- dh_getQuery(db_con, "season_segments.sql") |> 
       mutate(mid_date = begin_date + (end_date - begin_date) / 2)
@@ -66,7 +70,8 @@ server <- function(input, output, session) {
 
   observe({
     # Player overview tab
-    updateSliderTextInput(session, "overview_minute_filter", choices = seq(from = max(df_overview$min), to = min(df_overview$min)), selected = round(quantile(df_overview$min)[["75%"]]))
+    min_range <- summarise(group_by(df_player_log, slug_season, player_id), min = sum(min))
+    updateSliderTextInput(session, "overview_minute_filter", choices = seq(from = max(min_range$min), to = min(min_range$min)), selected = round(quantile(min_range$min)[["75%"]]))
     
     # Player performance tab
     updateSelectizeInput(session, "performance_select_player", choices = sort(unique(df_player_log$player_name)), server = TRUE)
@@ -83,9 +88,18 @@ server <- function(input, output, session) {
   # Code to render plot
   output$player_overview_plot <- renderPlotly({
     
+    # This season only filter (uses df_player_log)
+    df_overview_plt <- if(!input$this_season_overview_switch) df_player_log
+      else filter(df_player_log, slug_season == cur_season)
+    
     # Non-injured Free Agent filter (if selected)
-    df_overview_plt <- if(!input$overview_free_agent_filter) df_overview
-      else filter(df_overview, free_agent_status == "ACTIVE")
+    df_overview_plt <- if(!input$overview_free_agent_filter) df_overview_plt
+      else filter(df_overview_plt, free_agent_status == "ACTIVE")
+    
+    # Stat summation
+    df_overview_plt <- df_overview_plt |> 
+      summarise(across(any_of(anl_cols$stat_cols), \(x) sum(x)), .by = c(player_id, player_name)) |> 
+      calc_pcts()
     
     # Minute filter
     df_overview_plt <- filter(df_overview_plt, min >= as.numeric(input$overview_minute_filter))
@@ -98,15 +112,16 @@ server <- function(input, output, session) {
       
       col = sym(.x)
       
+      # NEED TO SOMEHOW FIGURE TO INCLUE ZSCORE HERE FOR PCT
       if(col == sym("tov")){
         slice_max(df_overview_plt, order_by = min, prop = 0.35) |> 
           select(player_name, {{ col }}) |>
-          arrange({{ col }}) |> 
+          arrange({{ col }}) |>
           slice_head(n = input$overview_slider_top_n) |> 
           set_names(c("player_name", "value"))
       } else {
-        select(df_overview_plt, player_name, {{ col }}) |>
-          arrange(desc({{ col }})) |> 
+        select(df_overview_plt, player_name, {{ col }}) |> 
+          arrange(desc({{ col }})) |>
           slice_head(n = input$overview_slider_top_n) |> 
           set_names(c("player_name", "value"))
       }
@@ -116,8 +131,6 @@ server <- function(input, output, session) {
       bind_rows(.id = "stat") |> 
       mutate(top_cat_count = n(), .by = player_name) |> 
       mutate(top_cats = paste(stat, collapse = ", "), .by = player_name)
-    
-    clipr::write_clip(df_overview_plt) # delete
     
     # Stat selection and render plot
     plt <- filter(df_overview_plt, stat == input$overview_select_stat) |> 
@@ -165,7 +178,7 @@ server <- function(input, output, session) {
     df_perf_tab <<- df_player_log |> 
       filter(
         game_date <= cur_date, 
-        game_date >= cur_date - if_else(input$date_range_switch == "Two Weeks", 14, 30)
+        game_date >= cur_date - if_else(input$date_range_switch == "Two Weeks", 15, 30)
       ) |>
       group_by(player_id, player_name) |> 
       summarise(
@@ -270,7 +283,7 @@ server <- function(input, output, session) {
       selected = week_drop_box_choices[
         distinct(df_schedule, pick(contains("week"))) |>
           filter(week_start <= cur_date, week_end >= cur_date) |>
-          pull(season_week)
+          pull(season_week) + 1 # plus one because index starts at 1
       ]
     )
   })
@@ -281,11 +294,10 @@ server <- function(input, output, session) {
     # Calculate games left this week variable
     week_game_count <- df_schedule |> 
       mutate(week_games_remaining = game_date >= cur_date) |> 
-      group_by(season_week, week_start, week_end, team) |> 
       summarise(
         week_games_remaining = sum(week_games_remaining), 
         week_games = n(), 
-        .groups = "drop"
+        .by = c(season_week, week_start, week_end, team)
       ) |> (\(t_df) {
         left_join(
           t_df,
