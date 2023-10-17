@@ -33,11 +33,8 @@ server <- function(input, output, session) {
   # Variables
   prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
   cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
-  cur_date <<- as.Date("2023-01-05") # Change to Sys.Date()
-  cur_season <<- prev_season # Delete
-  prev_season <<- "2021-22" # Delete
+  cur_date <<- Sys.Date()
   db_con <- if(Sys.info()["nodename"] == "Olivers-MacBook-Pro.local") dh_createCon("postgres") else dh_createCon("cockroach") 
-  # db_con <- dh_createCon("cockroach")
   
   # Datasets
   .load_datasets <- function(){
@@ -119,6 +116,8 @@ server <- function(input, output, session) {
       bind_rows(.id = "stat") |> 
       mutate(top_cat_count = n(), .by = player_name) |> 
       mutate(top_cats = paste(stat, collapse = ", "), .by = player_name)
+    
+    clipr::write_clip(df_overview_plt) # delete
     
     # Stat selection and render plot
     plt <- filter(df_overview_plt, stat == input$overview_select_stat) |> 
