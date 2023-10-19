@@ -60,55 +60,8 @@ server <- function(input, output, session) {
     df_season_segments <<- dh_getQuery(db_con, "season_segments.sql") |> 
       mutate(mid_date = begin_date + (end_date - begin_date) / 2)
     
-    df_h2h <<- dh_getQuery(db_con, "h2h.sql") |> 
-      pivot_longer(any_of(anl_cols$stat_cols), names_to = "stat") |> 
-      group_by(competitor_id, competitor_name, stat) |> 
-      arrange(competitor_id, desc(value)) |> 
-      (\(t_df){
-        bind_rows(
-          # fg_pct
-          filter(t_df, stat %in%  c("fga", "fgm")) |> 
-            pivot_wider(names_from = stat, values_from = value) |> 
-            mutate(fg_pct = round(fgm / fga, 2)) |> 
-            summarise(
-              competitor_roster = paste0(player_name, " ", fg_pct, " (", fg_pct, "/", fga, ")", collapse = "\n"),
-              value = sum(fgm) / sum(fga)
-            ) |> 
-            mutate(stat = "fg_pct"),
-          
-          #ft_pct
-          filter(t_df, stat %in%  c("fta", "ftm")) |> 
-            pivot_wider(names_from = stat, values_from = value) |> 
-            mutate(ft_pct = round(ftm / fta, 2)) |> 
-            summarise(
-              competitor_roster = paste0(player_name, " ", ft_pct, " (", ftm, "/", fta, ")", collapse = "\n"),
-              value = sum(ftm) / sum(fta)
-            ) |> 
-            mutate(stat = "ft_pct"),
-          
-          # tov
-          filter(t_df, stat == "tov") |> 
-            arrange(value) |> 
-            summarise(
-              competitor_roster = paste(player_name, round(value, 1), collapse = "\n"),
-              value = sum(value)
-            ),
-          
-          # the rest
-          filter(t_df, !stat %in% c("fga", "fgm", "fta", "ftm", "tov")) |> 
-            summarise(
-              competitor_roster = paste(player_name, round(value, 1), collapse = "\n"),
-              value = sum(value)
-            )
-        )
-        
-      })() |> 
-      (\(t_df){
-        dh_getQuery(db_con, "SELECT season, week, competitor_id, opponent_id FROM fty.league_schedule WHERE season = '{cur_season}'") |> 
-          left_join(rename(t_df, competitor_value = value), by = join_by(competitor_id), relationship = "many-to-many") |> 
-          left_join(rename(t_df, opponent_name = competitor_name, opponent_value = value, opponent_roster = competitor_roster), by = join_by(opponent_id == competitor_id, stat))
-      })() |> 
-      select(season, week, starts_with("competitor"), stat, starts_with("opponent"))
+    df_competitor_roster_avg <<- dh_getQuery(db_con, "competitor_roster_avg.sql") |> 
+      pivot_longer(any_of(anl_cols$stat_cols), names_to = "stat") 
   }
   
   .load_datasets()
@@ -130,8 +83,8 @@ server <- function(input, output, session) {
     updateSelectInput(session, "trend_select_player", choices = sort(unique(df_player_log$player_name)))
     
     # H2H tab
-    updateSelectInput(session, "h2h_competitor", choices = unique(df_h2h$competitor_name), selected = "senor_cactus")
-    updateSelectInput(session, "h2h_week", choices = unique(df_h2h$week), selected = unique(filter(df_schedule, week_start <= cur_date, week_end >= cur_date)$season_week))
+    updateSelectInput(session, "h2h_competitor", choices = unique(df_competitor_roster_avg$competitor_name), selected = "senor_cactus")
+    updateSelectInput(session, "h2h_week", choices = unique(df_schedule$season_week), selected = unique(filter(df_schedule, week_start <= cur_date, week_end >= cur_date)$season_week))
   })
   
 
@@ -139,8 +92,70 @@ server <- function(input, output, session) {
 
   output$h2h_plot <- renderPlotly({
     
+    df_h2h <- group_by(df_competitor_roster_avg, competitor_id, competitor_name, stat) |> 
+      arrange(competitor_id, desc(value)) |> 
+      ungroup() |> 
+      left_join(
+        summarise(df_schedule, game_count = n_distinct(game_id), .by = c(season_week, team)),
+        by = join_by(player_team == team),
+        relationship = "many-to-many"
+      ) |> 
+      (\(t_df){
+        bind_rows(
+          # fg_pct
+          filter(t_df, stat %in%  c("fga", "fgm")) |> 
+            pivot_wider(names_from = stat, values_from = value) |> 
+            mutate(fgm = fgm * game_count, fga = fga * game_count) |> 
+            mutate(fg_pct = round(fgm / fga, 3)) |> 
+            summarise(
+              competitor_roster = paste0(player_name, " ", fg_pct, " (", fgm, "/", fga, ")", collapse = "\n"),
+              value = sum(fgm) / sum(fga),
+              .by = c(competitor_id, competitor_name, season_week)
+            ) |> 
+            mutate(stat = "fg_pct"),
+          
+          #ft_pct
+          filter(t_df, stat %in%  c("fta", "ftm")) |> 
+            pivot_wider(names_from = stat, values_from = value) |>
+            mutate(ftm = ftm * game_count, fta = fta * game_count) |> 
+            mutate(ft_pct = round(ftm / fta, 3)) |> 
+            summarise(
+              competitor_roster = paste0(player_name, " ", ft_pct, " (", ftm, "/", fta, ")", collapse = "\n"),
+              value = sum(ftm) / sum(fta),
+              .by = c(competitor_id, competitor_name, season_week)
+            ) |> 
+            mutate(stat = "ft_pct"),
+          
+          # tov
+          filter(t_df, stat == "tov") |> 
+            arrange(value) |> 
+            mutate(value = value * game_count) |> 
+            summarise(
+              competitor_roster = paste(player_name, round(value, 3), collapse = "\n"),
+              value = sum(value),
+              .by = c(competitor_id, competitor_name, season_week, stat)
+            ),
+          
+          # the rest
+          filter(t_df, !stat %in% c("fga", "fgm", "fta", "ftm", "tov")) |> 
+            mutate(value = value * game_count) |> 
+            summarise(
+              competitor_roster = paste(player_name, round(value, 3), collapse = "\n"),
+              value = sum(value),
+              .by = c(competitor_id, competitor_name, season_week, stat)
+            )
+        )
+      })() |> 
+      (\(t_df){
+        dh_getQuery(db_con, "SELECT week, competitor_id, opponent_id FROM fty.league_schedule WHERE season = '{cur_season}'") |> 
+          left_join(rename(t_df, competitor_value = value), by = join_by(competitor_id, week == season_week), relationship = "many-to-many") |> 
+          left_join(rename(t_df, opponent_id = competitor_id, opponent_name = competitor_name, opponent_value = value, opponent_roster = competitor_roster), by = join_by(opponent_id, stat, week == season_week))
+      })() |> 
+      select(week, starts_with("competitor"), stat, starts_with("opponent"))
+    
+    
     h2h_plt <- filter(df_h2h, competitor_name == input$h2h_competitor, week == input$h2h_week) |>
-      select(-c(season, week, ends_with("id"))) |>
+      select(-c(week, ends_with("id"))) |>
       (\(t_df){
         bind_rows(
           select(t_df, name = competitor_name, stat, value = competitor_value, roster = competitor_roster),
@@ -148,10 +163,10 @@ server <- function(input, output, session) {
         )
       })()
     
-    plt <- ggplot(h2h_plt, aes(x = stat, y = value, fill = name, text = roster)) +
+    plt <- ggplot(h2h_plt, aes(x = stat, y = value, fill = name, text = paste(round(value, 2), "\n\n", roster))) +
       geom_col(position = "fill") +
       geom_hline(yintercept = 0.5) +
-      labs(title = paste0(str_trim(unique(h2h_plt$name)[1]), " vs ", unique(h2h_plt$name)[2], ": Week", input$h2h_week), x = NULL, y = NULL, fill = NULL) +
+      labs(title = paste0("Week ", input$h2h_week, ":", str_trim(unique(h2h_plt$name)[1]), " vs ", unique(h2h_plt$name)[2]), x = NULL, y = NULL, fill = NULL) +
       theme_bw()
     
     ggplotly(plt, tooltip = "text")
