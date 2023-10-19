@@ -170,7 +170,50 @@ server <- function(input, output, session) {
       theme_bw()
     
     ggplotly(plt, tooltip = "text")
+        
+  })
+  
+  output$game_count_table <- render_gt({
+    
+    df_h2h_week_game_count <- select(df_schedule, season_week, game_date, team, game_id) |> 
+      left_join(
+        distinct(select(df_competitor_roster_avg, -c(stat, value))),
+        by = join_by(team == player_team),
+        relationship = "many-to-many"
+      ) |> 
+      summarise(
+        competitor_game_count = n_distinct(player_name),
+        competitor_playing = paste(player_name, collapse = "\n"),
+        .by = c(season_week, game_date, competitor_id, competitor_name)
+      ) |> 
+      left_join(
+        distinct(df_h2h, week, competitor_id, opponent_id, opponent_name),
+        by = join_by(season_week == week, competitor_id)
+      ) |> 
+      (\(t_df){
+        left_join(
+          t_df,
+          select(t_df, season_week, game_date, opponent_id = competitor_id, opponent_game_count = competitor_game_count, opponent_playing = competitor_playing),
+        )
+      })() |> 
+      mutate(game_day = lubridate::wday(game_date, label = TRUE, week_start = 1))
 
+    h2h_table_game_count <- filter(df_h2h_week_game_count, competitor_name == input$h2h_competitor, season_week == input$h2h_week) |>
+      select(ends_with(c("name", "playing")), game_day) |> 
+      arrange(game_day) |> 
+      (\(t_df){
+        bind_rows(
+          select(t_df, name = competitor_name, playing = competitor_playing, game_day),
+          select(t_df, name = opponent_name, playing = opponent_playing, game_day)
+        )
+      })() |> 
+      pivot_wider(names_from = game_day, values_from = playing) |> 
+      rowwise() |> 
+      mutate(Total = sum(c_across(where(is.numeric)))) # NOT WORKING
+      
+      
+      gt(h2h_table_game_count, rowname_col = "name") |> 
+        text_transform(\(x) (str_count(x,"\\n") + 1))
   })
 
     

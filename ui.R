@@ -47,7 +47,12 @@ body <-
             selectInput("h2h_competitor", "Competitor", choices = character(0)),
             selectInput("h2h_week", "Week", choices = 0)
           ),
-          column(width = 10, plotly::plotlyOutput("h2h_plot", height = 600))
+          column(
+            width = 10, 
+            plotly::plotlyOutput("h2h_plot", height = 600),
+            gt::gt_output("game_count_table")
+          ),
+          
         )
       ),
 
