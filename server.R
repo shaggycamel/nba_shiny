@@ -5,6 +5,7 @@ library(rlang)
 library(dplyr)
 library(tidyr)
 library(tidyselect)
+library(lubridate)
 library(purrr)
 library(ggplot2)
 library(plotly)
@@ -27,6 +28,7 @@ server <- function(input, output, session) {
 
 # Constants & Datasets ----------------------------------------------------
 
+  # Start loading page
   data_collection_caption <- "Collecting data, give it a minute (literally)."
   showPageSpinner(type = 6, caption = data_collection_caption)
   
@@ -36,37 +38,17 @@ server <- function(input, output, session) {
   cur_date <<- as.POSIXct(Sys.time(), tz="America/New_York")
   db_con <- if(Sys.info()["nodename"] == "Olivers-MacBook-Pro.local") dh_createCon("postgres") else dh_createCon("cockroach") 
   
-  # Datasets
-  .load_datasets <- function(){
-    df_player_log <<- dh_getQuery(db_con, "player_log.sql") |> 
-      mutate(slug_season = ordered(slug_season)) |> 
-      mutate(season_type = ordered(season_type, c("Pre Season", "Regular Season", "Playoffs"))) |> 
-      mutate(year_season_type = forcats::fct_cross(season_type, str_sub(slug_season, start = 6), sep=" "))
-  
-    df_schedule <<- dh_getQuery(db_con, "league_schedule.sql") |> 
-      group_by(slug_season) |> 
-      mutate(season_week = if_else(season_week < 30, season_week + 52, season_week)) |> 
-      (\(t_df) {
-        mutate(t_df, season_week = case_when(
-          type_season == "Pre Season" ~ 0,
-          type_season == "Regular Season" ~ season_week - max(filter(t_df, type_season == "Pre Season")$season_week)
-        ))
-      })() |> 
-      group_by(season_week) |> 
-      mutate(week_start = min(game_date), week_end = max(game_date)) |> 
-      ungroup() |> 
-      arrange(season_week)
-    
-    df_season_segments <<- dh_getQuery(db_con, "season_segments.sql") |> 
-      mutate(mid_date = begin_date + (end_date - begin_date) / 2)
-    
-    df_competitor_roster_avg <<- dh_getQuery(db_con, "competitor_roster_avg.sql") |> 
-      pivot_longer(any_of(anl_cols$stat_cols), names_to = "stat") 
-  }
-  
+  # Creates & updates datasets:
+  # df_player_log
+  # df_schedule
+  # df_season_segments
+  # df_competitor_roster_avg
+  # df_h2h
+  .load_datasets <- function() walk(list.files(here("queries", "app_data_prep"), full.names = TRUE), \(x) source(x, local = TRUE))
   .load_datasets()
-  hidePageSpinner()
   
+  # Stop loading page
+  hidePageSpinner()
 
 
 # Set Server Side Dynamic Menus -------------------------------------------
@@ -91,68 +73,6 @@ server <- function(input, output, session) {
 # Head to Head -----------------------------------------------------------
 
   output$h2h_plot <- renderPlotly({
-    
-    df_h2h <- group_by(df_competitor_roster_avg, competitor_id, competitor_name, stat) |> 
-      arrange(competitor_id, desc(value)) |> 
-      ungroup() |> 
-      left_join(
-        summarise(df_schedule, game_count = n_distinct(game_id), .by = c(season_week, team)),
-        by = join_by(player_team == team),
-        relationship = "many-to-many"
-      ) |> 
-      (\(t_df){
-        bind_rows(
-          # fg_pct
-          filter(t_df, stat %in%  c("fga", "fgm")) |> 
-            pivot_wider(names_from = stat, values_from = value) |> 
-            mutate(fgm = fgm * game_count, fga = fga * game_count) |> 
-            mutate(fg_pct = round(fgm / fga, 3)) |> 
-            summarise(
-              competitor_roster = paste0(player_name, " ", fg_pct, " (", fgm, "/", fga, ")", collapse = "\n"),
-              value = sum(fgm) / sum(fga),
-              .by = c(competitor_id, competitor_name, season_week)
-            ) |> 
-            mutate(stat = "fg_pct"),
-          
-          #ft_pct
-          filter(t_df, stat %in%  c("fta", "ftm")) |> 
-            pivot_wider(names_from = stat, values_from = value) |>
-            mutate(ftm = ftm * game_count, fta = fta * game_count) |> 
-            mutate(ft_pct = round(ftm / fta, 3)) |> 
-            summarise(
-              competitor_roster = paste0(player_name, " ", ft_pct, " (", ftm, "/", fta, ")", collapse = "\n"),
-              value = sum(ftm) / sum(fta),
-              .by = c(competitor_id, competitor_name, season_week)
-            ) |> 
-            mutate(stat = "ft_pct"),
-          
-          # tov
-          filter(t_df, stat == "tov") |> 
-            arrange(value) |> 
-            mutate(value = value * game_count) |> 
-            summarise(
-              competitor_roster = paste(player_name, round(value, 3), collapse = "\n"),
-              value = sum(value),
-              .by = c(competitor_id, competitor_name, season_week, stat)
-            ),
-          
-          # the rest
-          filter(t_df, !stat %in% c("fga", "fgm", "fta", "ftm", "tov")) |> 
-            mutate(value = value * game_count) |> 
-            summarise(
-              competitor_roster = paste(player_name, round(value, 3), collapse = "\n"),
-              value = sum(value),
-              .by = c(competitor_id, competitor_name, season_week, stat)
-            )
-        )
-      })() |> 
-      (\(t_df){
-        dh_getQuery(db_con, "SELECT week, competitor_id, opponent_id FROM fty.league_schedule WHERE season = '{cur_season}'") |> 
-          left_join(rename(t_df, competitor_value = value), by = join_by(competitor_id, week == season_week), relationship = "many-to-many") |> 
-          left_join(rename(t_df, opponent_id = competitor_id, opponent_name = competitor_name, opponent_value = value, opponent_roster = competitor_roster), by = join_by(opponent_id, stat, week == season_week))
-      })() |> 
-      select(week, starts_with("competitor"), stat, starts_with("opponent"))
-    
     
     h2h_plt <- filter(df_h2h, competitor_name == input$h2h_competitor, week == input$h2h_week) |>
       select(-c(week, ends_with("id"))) |>
@@ -196,9 +116,10 @@ server <- function(input, output, session) {
           select(t_df, season_week, game_date, opponent_id = competitor_id, opponent_game_count = competitor_game_count, opponent_playing = competitor_playing),
         )
       })() |> 
-      mutate(game_day = lubridate::wday(game_date, label = TRUE, week_start = 1))
+      mutate(game_day = wday(game_date, label = TRUE, week_start = 1))
 
     h2h_table_game_count <- filter(df_h2h_week_game_count, competitor_name == input$h2h_competitor, season_week == input$h2h_week) |>
+    # h2h_table_game_count <- filter(df_h2h_week_game_count, competitor_id == 5, season_week == 1) |>
       select(ends_with(c("name", "playing")), game_day) |> 
       arrange(game_day) |> 
       (\(t_df){
@@ -209,12 +130,27 @@ server <- function(input, output, session) {
       })() |> 
       pivot_wider(names_from = game_day, values_from = playing) |> 
       rowwise() |> 
-      mutate(Total = sum(c_across(where(is.numeric)))) # NOT WORKING
+      mutate(Total = sum(c((ifelse(str_count(c_across(-name), "\\n") + 1 > 10, 10, str_count(c_across(-name), "\\n") + 1))), na.rm = TRUE))
+      # using this count of "\\n" so names can be used in tooltip eventually
       
       
       gt(h2h_table_game_count, rowname_col = "name") |> 
-        text_transform(\(x) (str_count(x,"\\n") + 1))
-  })
+        text_transform(\(x) (str_count(x,"\\n") + 1), locations = cells_body(-Total)) |> 
+        tab_style_body(
+          style = cell_fill(color = "pink"),
+          columns = any_of(str_sub(bsts::weekday.names, 1, 3)),
+          fn = \(x) (str_count(x, "\\n") + 1) > 10
+        ) |>
+        tab_style(
+          style = list(cell_text(weight = "bold"), cell_borders(sides = c("left", "right"))),
+          locations = cells_body(columns = Total)
+        ) |>
+        tab_style(
+          style = cell_fill(color = "lightgreen"),
+          locations = cells_body(columns = Total, rows = Total == max(Total))
+        )
+
+  }, align = "left")
 
     
 # Player Overview Analysis ------------------------------------------------
@@ -313,7 +249,7 @@ server <- function(input, output, session) {
     df_perf_tab <<- df_player_log |> 
       filter(
         game_date <= cur_date, 
-        game_date >= cur_date - if_else(input$date_range_switch == "Two Weeks", 15, 30)
+        game_date >= cur_date - if_else(input$date_range_switch == "Two Weeks", days(15), days(30))
       ) |>
       group_by(player_id, player_name) |> 
       summarise(
