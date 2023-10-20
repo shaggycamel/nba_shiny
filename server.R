@@ -183,7 +183,8 @@ server <- function(input, output, session) {
       
       col = sym(.x)
       
-      # NEED TO SOMEHOW FIGURE TO INCLUE ZSCORE HERE FOR PCT
+      # CALCULATE ZSCORE FOR IMPACT COEFFICIENT FOR FG% & FT%
+      # https://www.reddit.com/r/fantasybball/comments/71bdq0/how_to_calculate_weighted_zscore_for_fg/
       if(col == sym("tov")){
         slice_max(df_overview_plt, order_by = min, prop = 0.35) |> 
           select(player_name, {{ col }}) |>
@@ -324,6 +325,8 @@ server <- function(input, output, session) {
     
     trend_selected_stat <- sym(filter(stat_selection, formatted_name == input$trend_select_stat)$database_name)
     
+    # GEOM SMOOTH WITH LINE BREAKS TO CHOP UP NEW SEASONS
+    # https://stackoverflow.com/questions/63765583/can-i-get-geom-smooth-to-allow-line-breaks-when-there-are-na-values
     filter(df_player_log, player_name %in% input$trend_select_player) |>
       ggplot(aes(x = game_date, y = {{ trend_selected_stat }}, colour = player_name)) +
       geom_point(alpha = 0.2) +
@@ -392,7 +395,7 @@ server <- function(input, output, session) {
       ))
     
     # Present table
-    tbl_week_games$data[[match(input$week_selection, week_drop_box_choices)]] |> 
+    tbl_week_games$data[[match(input$week_selection, week_drop_box_choices)]] |>
       gt() |> 
       tab_header(title = input$week_selection) |>
       sub_missing(missing_text = "") |> 
