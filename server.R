@@ -35,7 +35,7 @@ server <- function(input, output, session) {
   # Variables
   prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
   cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
-  cur_date <<- as.POSIXct(Sys.time(), tz="America/New_York")
+  cur_date <<- as.Date(as.POSIXct(Sys.time(), tz="America/New_York"))
   db_con <- if(Sys.info()["nodename"] == "Olivers-MacBook-Pro.local") dh_createCon("postgres") else dh_createCon("cockroach") 
   
   # Creates & updates datasets:
@@ -353,7 +353,7 @@ server <- function(input, output, session) {
       choices = week_drop_box_choices,
       selected = week_drop_box_choices[
         distinct(df_schedule, pick(contains("week"))) |>
-          filter(week_start <= as.Date(cur_date), week_end >= as.Date(cur_date)) |>
+          filter(week_start <= cur_date, week_end >= cur_date) |>
           pull(season_week) + 1 # plus one because index starts at 1
       ]
     )
