@@ -353,7 +353,7 @@ server <- function(input, output, session) {
       choices = week_drop_box_choices,
       selected = week_drop_box_choices[
         distinct(df_schedule, pick(contains("week"))) |>
-          filter(week_start <= cur_date, week_end >= cur_date) |>
+          filter(week_start <= as.Date(cur_date), week_end >= as.Date(cur_date)) |>
           pull(season_week) + 1 # plus one because index starts at 1
       ]
     )
