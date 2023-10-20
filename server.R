@@ -29,7 +29,7 @@ server <- function(input, output, session) {
 # Constants & Datasets ----------------------------------------------------
 
   # Start loading page
-  data_collection_caption <- "Collecting data, give it a minute (literally)."
+  data_collection_caption <- "Collecting data, countdown from 120s (for real)."
   showPageSpinner(type = 6, caption = data_collection_caption)
   
   # Variables
@@ -86,7 +86,7 @@ server <- function(input, output, session) {
     plt <- ggplot(h2h_plt, aes(x = stat, y = value, fill = name, text = paste(round(value, 2), "\n\n", roster))) +
       geom_col(position = "fill") +
       geom_hline(yintercept = 0.5) +
-      labs(title = paste0("Week ", input$h2h_week, ":", str_trim(unique(h2h_plt$name)[1]), " vs ", unique(h2h_plt$name)[2]), x = NULL, y = NULL, fill = NULL) +
+      labs(title = paste0("Week ", input$h2h_week, ": ", str_trim(unique(h2h_plt$name)[1]), " vs ", unique(h2h_plt$name)[2]), x = NULL, y = NULL, fill = NULL) +
       theme_bw()
     
     ggplotly(plt, tooltip = "text")
