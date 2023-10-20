@@ -17,8 +17,16 @@ stat_selection <-
      "Turnovers", "tov"
   )
 
+# Analysis columns
+anl_cols <- list(
+  stat_cols = c("min", "fgm", "fga", "fg_pct", "fg3_m", "fg3_a", "fg3_pct", "ft_pct", "ftm", "fta", "oreb", "dreb", "reb", "ast", "stl", "blk", "tov", "pf", "pts"),
+  h2h_cols = c("fg_pct", "fg3_m", "ft_pct", "reb", "ast", "stl", "blk", "tov", "pts")
+)
+
 
 # Custom Functions --------------------------------------------------------
+
+calc_pcts <- function(df) dplyr::mutate(df, fg_pct = coalesce(fgm / fga, 0), ft_pct = coalesce(ftm / fta, 0))
 
 # Reverse plotly legend labels
 reverse_legend_labels <- function(plotly_plot) {

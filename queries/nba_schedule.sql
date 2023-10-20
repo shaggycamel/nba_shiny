@@ -36,6 +36,6 @@ FROM (
 ) AS home_away_union
 
 WHERE SLUG_SEASON = '{cur_season}'
-    AND TYPE_SEASON = 'Regular Season'
+    AND TYPE_SEASON IN ('Pre Season', 'Regular Season')
     
 
