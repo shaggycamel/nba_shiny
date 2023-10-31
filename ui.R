@@ -62,7 +62,7 @@ body <-
         fluidRow(
           column(
             width = 4, 
-            selectInput("overview_select_stat", "Statistic", choices = stat_selection$formatted_name),
+            selectInput("overview_select_stat", "Statistic", choices = dplyr::filter(stat_selection, !stringr::str_detect(formatted_name, "%"))$formatted_name),
             sliderTextInput("overview_minute_filter", "Limit Minutes", choices = 0), # updated dynamically in server.R
             sliderInput("overview_slider_top_n", "Top N Players", min = 10, max = 20, value = 15, ticks = FALSE),
             checkboxInput("this_season_overview_switch", "This year only", value = TRUE),
@@ -84,7 +84,7 @@ body <-
             width = 2, 
             radioButtons("date_range_switch", "Range", choices = c("Two Weeks", "One Month")),
             checkboxInput("performance_free_agent_filter", "Non injured Free Agents"),
-            pickerInput("excels_at_filter", "Excels At (one or more) filter", choices = stat_selection$formatted_name, multiple = TRUE, options =  list("max-options" = 5)),
+            pickerInput("excels_at_filter", "Excels At (one or more) filter", choices = dplyr::filter(stat_selection, !stringr::str_detect(formatted_name, "%"))$formatted_name, multiple = TRUE, options =  list("max-options" = 5)),
             selectInput("performance_select_player", "Player", multiple = TRUE, choices = character(0)),
           ),
         
@@ -100,7 +100,7 @@ body <-
         fluidRow(
           column(
             width = 4, 
-            selectInput("trend_select_stat", "Statistic", choices = stat_selection$formatted_name),
+            selectInput("trend_select_stat", "Statistic", choices = dplyr::filter(stat_selection, !stringr::str_detect(formatted_name, "Z"))$formatted_name),
             selectInput("trend_select_player", "Player", multiple = TRUE, choices = character(0))
           ),
         

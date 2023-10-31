@@ -29,7 +29,7 @@ server <- function(input, output, session) {
 # Constants & Datasets ----------------------------------------------------
 
   # Start loading page
-  data_collection_caption <- "Collecting data, countdown from 120s (for real)."
+  data_collection_caption <- "Processing data, two minutes..."
   showPageSpinner(type = 6, caption = data_collection_caption)
   
   # Variables
@@ -119,7 +119,6 @@ server <- function(input, output, session) {
       mutate(game_day = wday(game_date, label = TRUE, week_start = 1))
 
     h2h_table_game_count <- filter(df_h2h_week_game_count, competitor_name == input$h2h_competitor, season_week == input$h2h_week) |>
-    # h2h_table_game_count <- filter(df_h2h_week_game_count, competitor_id == 5, season_week == 1) |>
       select(ends_with(c("name", "playing")), game_day) |> 
       arrange(game_day) |> 
       (\(t_df){
@@ -170,7 +169,7 @@ server <- function(input, output, session) {
     # Stat summation
     df_overview_plt <- df_overview_plt |> 
       summarise(across(any_of(anl_cols$stat_cols), \(x) sum(x)), .by = c(player_id, player_name)) |> 
-      calc_pcts()
+      calc_z_pcts()
     
     # Minute filter
     df_overview_plt <- filter(df_overview_plt, min >= as.numeric(input$overview_minute_filter))
@@ -183,18 +182,16 @@ server <- function(input, output, session) {
       
       col = sym(.x)
       
-      # CALCULATE ZSCORE FOR IMPACT COEFFICIENT FOR FG% & FT%
-      # https://www.reddit.com/r/fantasybball/comments/71bdq0/how_to_calculate_weighted_zscore_for_fg/
       if(col == sym("tov")){
         slice_max(df_overview_plt, order_by = min, prop = 0.35) |> 
           select(player_name, {{ col }}) |>
           arrange({{ col }}) |>
-          slice_head(n = input$overview_slider_top_n) |> 
+          slice_head(n = input$overview_slider_top_n) |>
           set_names(c("player_name", "value"))
       } else {
         select(df_overview_plt, player_name, {{ col }}) |> 
           arrange(desc({{ col }})) |>
-          slice_head(n = input$overview_slider_top_n) |> 
+          slice_head(n = input$overview_slider_top_n) |>
           set_names(c("player_name", "value"))
       }
       
@@ -238,7 +235,7 @@ server <- function(input, output, session) {
   # Count how many events a player excels given the selection
   .calc_xl_at_count <- function(df){
     df$xl_at_count <- 0
-    for(category in filter(stat_selection, formatted_name %in% input$excels_at_filter)$database_name){
+    for(category in filter(stat_selection, formatted_name %in% input$excels_at_filter, !str_detect(formatted_name, "%"))$database_name){
       df <- mutate(df, xl_at_count = str_detect(`Excels At`, category) + xl_at_count)
     }
     df
@@ -250,15 +247,11 @@ server <- function(input, output, session) {
     df_perf_tab <<- df_player_log |> 
       filter(
         game_date <= cur_date, 
-        game_date >= cur_date - if_else(input$date_range_switch == "Two Weeks", days(15), days(30))
+        game_date >= cur_date - days(15)
+        # game_date >= cur_date - if_else(input$date_range_switch == "Two Weeks", days(15), days(30))
       ) |>
-      group_by(player_id, player_name) |> 
-      summarise(
-        across(all_of(stat_selection$database_name), ~ mean(.x)),
-        across(c(ftm, fta, fgm, fga), ~ sum(.x)),
-        .groups = "drop"
-      ) |>
-      mutate(pct_ft = ftm / fta, pct_fg = fgm / fga) |>
+      summarise(across(any_of(anl_cols$stat_cols), ~ mean(.x)), .by = c(player_id, player_name)) |>
+      calc_z_pcts() |> 
       mutate(across(where(is.numeric), ~ replace_na(.x, 0L))) |> 
       (\(t_df) {
         left_join(
@@ -282,9 +275,9 @@ server <- function(input, output, session) {
           by = join_by(player_name, player_id)
         )
       })() |> 
-      select(player_name, all_of(stat_selection$database_name), contains("at")) |> 
+      select(player_name, all_of(stat_selection$database_name), contains("at"), -ends_with("pct")) |> 
       arrange(player_name) |> 
-      rename(all_of(setNames(stat_selection$database_name, stat_selection$formatted_name)), Player = player_name) |> 
+      rename(any_of(setNames(stat_selection$database_name, stat_selection$formatted_name)), Player = player_name) |> 
       .calc_xl_at_count()
     
     filter(df_perf_tab, Player %in% input$performance_select_player) |> 
@@ -298,7 +291,7 @@ server <- function(input, output, session) {
       tab_style(
         style = cell_fill(color = "darkolivegreen1"),
         locations = lapply(
-          c("Minutes", "3-pointers", "Points", "Field Goal %", "Free Throw %", "Rebounds", "Assists", "Steals", "Blocks", "Turnovers"), 
+          c("Minutes", "3-pointers", "Points", "Field Goal Z", "Free Throw Z", "Rebounds", "Assists", "Steals", "Blocks", "Turnovers"), 
           \(x) cells_body(columns = !!sym(x), rows = !!sym(x) == if_else(x == "Turnovers", min(!!sym(x)), max(!!sym(x))))
         )
       ) |> 
