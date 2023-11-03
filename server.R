@@ -89,65 +89,72 @@ server <- function(input, output, session) {
       labs(title = paste0("Week ", input$h2h_week, ": ", str_trim(unique(h2h_plt$name)[1]), " vs ", unique(h2h_plt$name)[2]), x = NULL, y = NULL, fill = NULL) +
       theme_bw()
     
-    ggplotly(plt, tooltip = "text")
+    ggplotly(plt, tooltip = "text") |> 
+      layout(hovermode = "x")
         
   })
   
   output$game_count_table <- render_gt({
     
-    df_h2h_week_game_count <- select(df_schedule, season_week, game_date, team, game_id) |> 
-      left_join(
-        distinct(select(df_competitor_roster_avg, -c(stat, value))),
-        by = join_by(team == player_team),
-        relationship = "many-to-many"
-      ) |> 
-      summarise(
-        competitor_game_count = n_distinct(player_name),
-        competitor_playing = paste(player_name, collapse = "\n"),
-        .by = c(season_week, game_date, competitor_id, competitor_name)
-      ) |> 
-      left_join(
-        distinct(df_h2h, week, competitor_id, opponent_id, opponent_name),
-        by = join_by(season_week == week, competitor_id)
-      ) |> 
-      (\(t_df){
-        left_join(
-          t_df,
-          select(t_df, season_week, game_date, opponent_id = competitor_id, opponent_game_count = competitor_game_count, opponent_playing = competitor_playing),
-        )
-      })() |> 
-      mutate(game_day = wday(game_date, label = TRUE, week_start = 1))
-
-    h2h_table_game_count <- filter(df_h2h_week_game_count, competitor_name == input$h2h_competitor, season_week == input$h2h_week) |>
-      select(ends_with(c("name", "playing")), game_day) |> 
-      arrange(game_day) |> 
-      (\(t_df){
-        bind_rows(
-          select(t_df, name = competitor_name, playing = competitor_playing, game_day),
-          select(t_df, name = opponent_name, playing = opponent_playing, game_day)
-        )
-      })() |> 
-      pivot_wider(names_from = game_day, values_from = playing) |> 
-      rowwise() |> 
-      mutate(Total = sum(c((ifelse(str_count(c_across(-name), "\\n") + 1 > 10, 10, str_count(c_across(-name), "\\n") + 1))), na.rm = TRUE))
-      # using this count of "\\n" so names can be used in tooltip eventually
+    df_h2h_week_game_count <- filter(df_competitor_game_count, league_week == input$h2h_week) |> 
+        (\(df){
+        
+          df <- df$data[[1]]
+          c_name <<- input$h2h_competitor
+          o_name <- filter(df, competitor_name == c_name)$opponent_name[1]
+          
+          inner_func <- function(x, nm) filter(x, competitor_name == nm) |> 
+            mutate(player_team = "Total", player_name = nm) |> 
+            summarise(across(starts_with("20"), \(x) as.character(sum(x == "1", na.rm = TRUE))), .by = c(player_team, player_name))
+  
+          bind_rows(
+            inner_func(df, o_name),
+            inner_func(df, c_name),
+            setNames(as.data.frame(matrix(rep(NA, length(colnames(df))), nrow = 1)), colnames(df)),
+            select(filter(df, competitor_name == c_name), starts_with(c("player", "20")))
+          ) |> 
+            select(-starts_with(c("competitor", "opponent"))) |> 
+            mutate(across(starts_with("20"), \(x) ifelse(is.na(as.numeric(x)) | as.numeric(x) <= 10, x, 10))) |>
+            rowwise() |>
+            mutate(Total = sum(as.numeric(c_across(starts_with("20"))), na.rm = TRUE)) |> 
+            mutate(Total = if_else(Total == 0 & is.na(player_team), NA, Total))
+          
+        })()
+    
       
-      
-      gt(h2h_table_game_count, rowname_col = "name") |> 
-        text_transform(\(x) (str_count(x,"\\n") + 1), locations = cells_body(-Total)) |> 
+      gt(df_h2h_week_game_count, rowname_col = "info") |> 
+        sub_missing(missing_text = "") |>
+        (\(t){
+          if(any(str_detect(colnames(df_h2h_week_game_count), as.character(cur_date))))
+            tab_style(
+              t,
+              style = list(cell_fill(color = "lightblue1"), cell_text(weight = "bold"), cell_borders(sides = c("left", "right"))),
+              locations = cells_body(columns = as.character(cur_date))
+            )
+          else t
+        })() |>
         tab_style_body(
           style = cell_fill(color = "pink"),
-          columns = any_of(str_sub(bsts::weekday.names, 1, 3)),
-          fn = \(x) (str_count(x, "\\n") + 1) > 10
-        ) |>
+          columns = starts_with("20"),
+          fn = \(x) str_detect(x, "\\*")
+        ) |>     
+        tab_style(style = cell_borders(sides = c("left", "right")), locations = cells_body(columns = c(starts_with("20"), Total))) |> 
         tab_style(
           style = list(cell_text(weight = "bold"), cell_borders(sides = c("left", "right"))),
           locations = cells_body(columns = Total)
         ) |>
+        tab_style(style = cell_text(weight = "bold"), locations = cells_body(columns = player_name, rows = player_name == c_name)) |>
         tab_style(
           style = cell_fill(color = "lightgreen"),
-          locations = cells_body(columns = Total, rows = Total == max(Total))
-        )
+          locations = cells_body(columns = Total, rows = Total == max(Total, na.rm = TRUE))
+        ) |> 
+        tab_style(
+          style = list(cell_text(weight = "bold"), cell_borders(sides = c("top", "bottom"))),
+          locations = cells_body(rows = 3)
+        ) |> 
+        tab_style(style = cell_text(align = "center"), locations = cells_body(c(starts_with("20"), Total))) |> 
+        cols_label_with(columns = starts_with("20"), fn = \(x) weekdays(as.Date(x))) |>
+        tab_options(column_labels.background.color = "blue")
 
   }, align = "left")
 

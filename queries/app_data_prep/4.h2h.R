@@ -63,3 +63,22 @@ df_h2h <<- group_by(df_competitor_roster_avg, competitor_id, competitor_name, st
       left_join(rename(t_df, opponent_id = competitor_id, opponent_name = competitor_name, opponent_value = value, opponent_roster = competitor_roster), by = join_by(opponent_id, stat, week == season_week))
   })() |> 
   select(week, starts_with("competitor"), stat, starts_with("opponent"))
+
+
+
+df_competitor_game_count <<- dh_getQuery(db_con, "competitor_game_count.sql") |> 
+  # This is a bandaid...for some reason the query gives different results in R and SQL
+  mutate(league_week = if_else(origin == "past" & dow == 7, league_week - 1, league_week)) |> 
+  left_join(
+    dh_getQuery(db_con, "SELECT week, competitor_id, opponent_id, opponent_name FROM fty.league_schedule WHERE season = '{cur_season}'"),
+    by = join_by(league_week == week, competitor_id)
+  ) |> 
+  mutate(playing = case_when(
+    playing == 1 & player_injury_status == "OUT" ~ "1*",
+    playing == 1 ~ "1",
+    .default = NA_character_
+  )) |>
+  arrange(us_date, player_team, player_name) |> 
+  nest_by(league_week, .keep = TRUE) |> 
+  mutate(data = list(pivot_wider(data, id_cols = c(competitor_id, competitor_name, opponent_id, opponent_name, player_team, player_name), names_from = us_date, values_from = playing)))
+  
