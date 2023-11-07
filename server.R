@@ -145,7 +145,7 @@ server <- function(input, output, session) {
     
     opp_name <- filter(df_h2h, competitor_name == input$h2h_competitor, league_week == input$h2h_week)$opponent_name[1]
         
-    df_h2h_week_game_count <<- bind_rows(
+    df_h2h_week_game_count <- bind_rows(
         filter(df_h2h, competitor_name == input$h2h_competitor, league_week == input$h2h_week),
         filter(df_h2h, competitor_name == opp_name, league_week == input$h2h_week)
       ) |>
@@ -173,11 +173,16 @@ server <- function(input, output, session) {
 
         mutate(df, Total = Ttl)
       })() |>
-      mutate(Total = if_else(Total == 0 & is.na(player_team), NA, Total))
+      mutate(Total = if_else(Total == 0 & is.na(player_team), NA, Total)) |> 
+      mutate(season_week = as.numeric(input$h2h_week)) |> 
+      left_join(
+        select(df_week_game_count, season_week, team, following_week_games),
+        by = join_by(player_team == team, season_week)
+      ) |> 
+      select(-season_week, next_week = following_week_games)
       
       
-      
-      gt(df_h2h_week_game_count, rowname_col = "info") |> 
+      gt(df_h2h_week_game_count, rowname_col = "info") |>
         sub_missing(missing_text = "") |>
         (\(t){
           if(any(str_detect(colnames(df_h2h_week_game_count), as.character(cur_date))))
@@ -192,8 +197,8 @@ server <- function(input, output, session) {
           style = cell_fill(color = "pink", alpha = 0.5),
           columns = starts_with("20"),
           fn = \(x) str_detect(x, "\\*") | as.numeric(x) > 10
-        ) |>     
-        tab_style(style = cell_borders(sides = c("left", "right")), locations = cells_body(columns = c(starts_with("20"), Total))) |> 
+        ) |>
+        tab_style(style = cell_borders(sides = c("left", "right")), locations = cells_body(columns = c(starts_with("20"), Total))) |>
         tab_style(
           style = list(cell_text(weight = "bold"), cell_borders(sides = c("left", "right"))),
           locations = cells_body(columns = Total)
@@ -202,12 +207,12 @@ server <- function(input, output, session) {
         tab_style(
           style = cell_fill(color = "lightgreen"),
           locations = cells_body(columns = Total, rows = Total == max(Total, na.rm = TRUE))
-        ) |> 
+        ) |>
         tab_style(
           style = list(cell_fill(color = "grey", alpha = 0.5), cell_borders(sides = c("top", "bottom"))),
           locations = cells_body(rows = 3)
         ) |>
-        tab_style(style = cell_text(align = "center"), locations = cells_body(c(starts_with("20"), Total))) |> 
+        tab_style(style = cell_text(align = "center"), locations = cells_body(c(starts_with("20"), Total))) |>
         cols_label_with(columns = starts_with("20"), fn = \(x) weekdays(as.Date(x))) |>
         tab_options(column_labels.background.color = "blue")
 
@@ -421,22 +426,6 @@ server <- function(input, output, session) {
   
   output$schedule_table <- render_gt({
     
-    # Calculate games left this week variable
-    week_game_count <- df_schedule |> 
-      mutate(week_games_remaining = game_date >= cur_date) |> 
-      summarise(
-        week_games_remaining = sum(week_games_remaining), 
-        week_games = n(), 
-        .by = c(season_week, week_start, week_end, team)
-      ) |> (\(t_df) {
-        left_join(
-          t_df,
-          select(t_df, team, next_week = season_week, following_week_games = week_games),
-          join_by(team, closest(season_week < next_week))
-        ) |> 
-        select(-next_week)
-      })()
-        
     # Prepare tables to be presented
     tbl_week_games <- df_schedule |> 
       mutate(game_date = paste0(weekdays(game_date, abbreviate = TRUE), " (", format(game_date, "%m/%d"), ")")) |> 
@@ -444,7 +433,7 @@ server <- function(input, output, session) {
       nest_by(slug_season, season_week, .keep = TRUE) |> 
       mutate(data = list(
         pivot_wider(data, names_from = game_date, values_from = against, values_fn = list) |> 
-        left_join(select(week_game_count, season_week, team, contains("games"),-week_games)) |> 
+        left_join(select(df_week_game_count, season_week, team, contains("games"),-week_games)) |> 
         select(-slug_season, -season_week) |> 
         arrange(desc(week_games_remaining), team) |> 
         rename_with(~ str_to_title(str_replace_all(.x, "_", " ")))
