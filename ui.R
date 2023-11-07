@@ -84,6 +84,7 @@ body <-
             width = 2, 
             radioButtons("date_range_switch", "Range", choices = c("Two Weeks", "One Month")),
             checkboxInput("performance_free_agent_filter", "Non injured Free Agents"),
+            pickerInput("team_filter", "Team filter", choices = character(0), multiple = TRUE),
             pickerInput("excels_at_filter", "Excels At (one or more) filter", choices = dplyr::filter(stat_selection, !stringr::str_detect(formatted_name, "%"))$formatted_name, multiple = TRUE, options =  list("max-options" = 5)),
             selectInput("performance_select_player", "Player", multiple = TRUE, choices = character(0)),
           ),

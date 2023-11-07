@@ -10,3 +10,4 @@ df_h2h <<- dh_getQuery(db_con, "h2h.sql") |>
       playing == 1 ~ "1",
       .default = NA_character_
     ))
+

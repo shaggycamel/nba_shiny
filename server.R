@@ -60,6 +60,7 @@ server <- function(input, output, session) {
     
     # Player performance tab
     updateSelectizeInput(session, "performance_select_player", choices = sort(unique(df_player_log$player_name)), server = TRUE)
+    updatePickerInput(session, "team_filter", choices = sort(unique(df_player_log$team_slug)))
     
     # Player trend tab
     updateSelectInput(session, "trend_select_player", choices = sort(unique(df_player_log$player_name)))
@@ -198,6 +199,7 @@ server <- function(input, output, session) {
           columns = starts_with("20"),
           fn = \(x) str_detect(x, "\\*") | as.numeric(x) > 10
         ) |>
+        tab_style(style = cell_fill(color = "pink", alpha = 0.5), locations = cells_body(columns = next_week, rows = next_week < 3)) |> 
         tab_style(style = cell_borders(sides = c("left", "right")), locations = cells_body(columns = c(starts_with("20"), Total))) |>
         tab_style(
           style = list(cell_text(weight = "bold"), cell_borders(sides = c("left", "right"))),
@@ -295,6 +297,9 @@ server <- function(input, output, session) {
 
     chs <- if(!input$performance_free_agent_filter) xl_at
       else intersect(xl_at, fa)
+    
+    chs <- if(length(input$team_filter) == 0) chs
+      else intersect(filter(df_player_log, team_slug %in% input$team_filter)$player_name, chs)
 
     updateSelectizeInput(session, "performance_select_player", choices = sort(chs), server = TRUE)
   })
@@ -314,8 +319,8 @@ server <- function(input, output, session) {
     df_perf_tab <<- df_player_log |> 
       filter(
         game_date <= cur_date, 
-        game_date >= cur_date - days(15)
-        # game_date >= cur_date - if_else(input$date_range_switch == "Two Weeks", days(15), days(30))
+        # game_date >= cur_date - days(15)
+        game_date >= cur_date - if_else(input$date_range_switch == "Two Weeks", days(15), days(30))
       ) |>
       summarise(across(any_of(anl_cols$stat_cols), ~ mean(.x)), .by = c(player_id, player_name)) |>
       calc_z_pcts() |> 
