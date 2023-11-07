@@ -11,6 +11,7 @@ library(ggplot2)
 library(plotly)
 library(stringr)
 library(gt)
+library(DT)
 library(here)
 library(nba.dataRub)
 library(shinycssloaders)
@@ -145,17 +146,17 @@ server <- function(input, output, session) {
   output$game_count_table <- render_gt({
     
     opp_name <- filter(df_h2h, competitor_name == input$h2h_competitor, league_week == input$h2h_week)$opponent_name[1]
-        
+
     df_h2h_week_game_count <- bind_rows(
         filter(df_h2h, competitor_name == input$h2h_competitor, league_week == input$h2h_week),
         filter(df_h2h, competitor_name == opp_name, league_week == input$h2h_week)
-      ) |>
-      arrange(us_date, player_team, player_name) |> 
+      ) |> 
+      arrange(us_date, player_team, player_name) |>
       pivot_wider(id_cols = c(competitor_id, competitor_name, opponent_id, opponent_name, player_team, player_name), names_from = us_date, values_from = playing) |> 
       (\(df){
-        
-        inner_func <- function(x, nm) filter(x, competitor_name == nm) |> 
-          mutate(player_team = "Total", player_name = str_trim(nm)) |> 
+
+        inner_func <- function(x, nm) filter(x, competitor_name == nm) |>
+          mutate(player_team = "Total", player_name = str_trim(nm)) |>
           summarise(across(starts_with("20"), \(x) as.character(sum(x == "1", na.rm = TRUE))), .by = c(player_team, player_name))
 
         bind_rows(
@@ -164,7 +165,7 @@ server <- function(input, output, session) {
           setNames(as.data.frame(matrix(rep(NA, length(colnames(df))), nrow = 1)), colnames(df)),
           select(filter(df, competitor_name == input$h2h_competitor), starts_with(c("player", "20")))
         )
-      })() |> 
+      })() |>
       select(-starts_with(c("competitor", "opponent"))) |>
       (\(df){
         Ttl = as.data.frame(t(df)) |>
@@ -174,12 +175,12 @@ server <- function(input, output, session) {
 
         mutate(df, Total = Ttl)
       })() |>
-      mutate(Total = if_else(Total == 0 & is.na(player_team), NA, Total)) |> 
-      mutate(season_week = as.numeric(input$h2h_week)) |> 
+      mutate(Total = if_else(Total == 0 & is.na(player_team), NA, Total)) |>
+      mutate(season_week = as.numeric(input$h2h_week)) |>
       left_join(
         select(df_week_game_count, season_week, team, following_week_games),
         by = join_by(player_team == team, season_week)
-      ) |> 
+      ) |>
       select(-season_week, next_week = following_week_games)
       
       

@@ -39,7 +39,9 @@ sidebar <- dashboardSidebar(
 body <- 
   dashboardBody(
     tabItems(
-      
+
+# Head 2 Head -------------------------------------------------------------
+
       tabItem(tabName = "head_to_head",
         fluidRow(
           column(
