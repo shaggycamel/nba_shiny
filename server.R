@@ -429,45 +429,33 @@ server <- function(input, output, session) {
   })
   
   
-  output$schedule_table <- render_gt({
+  output$schedule_table <- renderDT({
     
     # Prepare tables to be presented
-    tbl_week_games <- df_schedule |> 
-      mutate(game_date = paste0(weekdays(game_date, abbreviate = TRUE), " (", format(game_date, "%m/%d"), ")")) |> 
-      select(slug_season, season_week, game_date, team, against) |> 
-      nest_by(slug_season, season_week, .keep = TRUE) |> 
-      mutate(data = list(
-        pivot_wider(data, names_from = game_date, values_from = against, values_fn = list) |> 
-        left_join(select(df_week_game_count, season_week, team, contains("games"),-week_games)) |> 
-        select(-slug_season, -season_week) |> 
-        arrange(desc(week_games_remaining), team) |> 
-        rename_with(~ str_to_title(str_replace_all(.x, "_", " ")))
-      ))
+    tbl_schedule <- tbl_week_games$data[[match(input$week_selection, week_drop_box_choices)]] |> 
+      mutate(across(ends_with(")"), \(x) as.factor(if_else(as.character(x) == "NULL", NA_integer_, 1)))) |>
+      mutate(across(c(contains("games"), Team), as.factor))
     
     # Present table
-    tbl_week_games$data[[match(input$week_selection, week_drop_box_choices)]] |>
-      gt() |> 
-      tab_header(title = input$week_selection) |>
-      sub_missing(missing_text = "") |> 
-      tab_style(style = cell_fill(color = "azure1"), locations = cells_body(columns = Team)) |> 
-      tab_style(
-        style = cell_fill(color = "darkseagreen1"),
-        locations = lapply(
-          c("Following Week Games", "Week Games Remaining"), 
-          \(x) cells_body(columns = !!sym(x), rows = !!sym(x) == max(!!sym(x)))
-        )
-      ) |> 
-      tab_style(
-        style = cell_fill(color = "darkseagreen3"),
-        locations = lapply(
-          c("Following Week Games", "Week Games Remaining"), 
-          \(x) cells_body(columns = !!sym(x), rows = !!sym(x) == max(!!sym(x)) - 1)
-        )
-      ) |> 
-      gtExtras::gt_add_divider(columns = everything(), sides = "all", include_labels = TRUE) |> 
-      tab_options(column_labels.background.color = "blue")
+    DT::datatable(
+      tbl_schedule,
+      # caption = input$week_selection,
+      rownames = FALSE,
+      class = "cell-border stripe",
+      options = list(paging = FALSE, autoWidth = TRUE, dom = 't', scrollX = TRUE),
+      filter = list(position = "top", clear = FALSE)
+    ) |> 
+    formatStyle(columns = "Team", backgroundColor = "lightblue") |> 
+    formatStyle(
+      columns = "Week Games Remaining",
+      backgroundColor = styleEqual(levels = 0:tail(levels(tbl_schedule$`Week Games Remaining`), 1), values = rev(RColorBrewer::brewer.pal(length(0:tail(levels(tbl_schedule$`Week Games Remaining`), 1)), "Greens")))
+    ) |> 
+    formatStyle(
+      columns = "Following Week Games",
+      backgroundColor = styleEqual(levels = 0:tail(levels(tbl_schedule$`Following Week Games`), 1), values = rev(RColorBrewer::brewer.pal(length(0:tail(levels(tbl_schedule$`Following Week Games`), 1)), "Greens")))
+    )
     
-  }, height = "600px")
+  })
   
 
 

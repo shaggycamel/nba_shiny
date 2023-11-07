@@ -29,3 +29,16 @@ df_week_game_count <<- df_schedule |>
     ) |> 
     select(-next_week)
   })()
+
+
+tbl_week_games <<- df_schedule |> 
+      mutate(game_date = paste0(weekdays(game_date, abbreviate = TRUE), " (", format(game_date, "%m/%d"), ")")) |> 
+      select(slug_season, season_week, game_date, team, against) |> 
+      nest_by(slug_season, season_week, .keep = TRUE) |> 
+      mutate(data = list(
+        pivot_wider(data, names_from = game_date, values_from = against, values_fn = list) |> 
+        left_join(select(df_week_game_count, season_week, team, contains("games"),-week_games)) |> 
+        select(-slug_season, -season_week) |> 
+        arrange(desc(week_games_remaining), team) |> 
+        rename_with(~ str_to_title(str_replace_all(.x, "_", " ")))
+      ))

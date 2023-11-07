@@ -13,7 +13,7 @@
     ]
   },
   "Python": {
-    "Version": "3.11.4",
+    "Version": "3.11.6",
     "Type": "virtualenv",
     "Name": "./renv/python/virtualenvs/renv-python-3.11"
   },
@@ -24,28 +24,6 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "68122010f01c4dcfbe58ce7112f2433d"
-    },
-    "Boom": {
-      "Package": "Boom",
-      "Version": "0.9.11",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Requirements": [
-        "MASS",
-        "R"
-      ],
-      "Hash": "7fa29ff40c163792a889acb013d03960"
-    },
-    "BoomSpikeSlab": {
-      "Package": "BoomSpikeSlab",
-      "Version": "1.2.5",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Requirements": [
-        "Boom",
-        "R"
-      ],
-      "Hash": "339b88d04461ec1d953f64fc17d0c624"
     },
     "DBI": {
       "Package": "DBI",
@@ -268,20 +246,6 @@
         "sass"
       ],
       "Hash": "283015ddfbb9d7bf15ea9f0b5698f0d9"
-    },
-    "bsts": {
-      "Package": "bsts",
-      "Version": "0.9.9",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Requirements": [
-        "Boom",
-        "BoomSpikeSlab",
-        "R",
-        "xts",
-        "zoo"
-      ],
-      "Hash": "27042d59301a826c0604e404d0136fe6"
     },
     "cachem": {
       "Package": "cachem",
@@ -1678,39 +1642,12 @@
       ],
       "Hash": "b8acdf8af494d9ec19ccb2481a9b11c2"
     },
-    "xts": {
-      "Package": "xts",
-      "Version": "0.13.1",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Requirements": [
-        "R",
-        "methods",
-        "zoo"
-      ],
-      "Hash": "b8aa1235fd8b0ff10756150b792dc60f"
-    },
     "yaml": {
       "Package": "yaml",
       "Version": "2.3.7",
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "0d0056cc5383fbc240ccd0cb584bf436"
-    },
-    "zoo": {
-      "Package": "zoo",
-      "Version": "1.8-12",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Requirements": [
-        "R",
-        "grDevices",
-        "graphics",
-        "lattice",
-        "stats",
-        "utils"
-      ],
-      "Hash": "5c715954112b45499fb1dadc6ee6ee3e"
     }
   }
 }

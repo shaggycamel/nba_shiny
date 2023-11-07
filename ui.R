@@ -121,7 +121,7 @@ body <-
           ),
         
           # Table
-          column(width = 9, gt::gt_output("schedule_table"))
+          column(width = 9, DT::DTOutput("schedule_table"))
         ) 
       )
     ),
