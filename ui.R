@@ -14,6 +14,7 @@ header <- dashboardHeader(title = "NBA")
 # Sidebar
 sidebar <- dashboardSidebar(
   sidebarMenu(
+    menuItem("News", tabName = "news", icon = icon("newspaper")),
     menuItem("Head to Head", tabName = "head_to_head", icon = icon("chess")),
     menuItem("Player Overview", tabName = "player_overview", icon = icon("chart-bar")),
     menuItem("Player Comparison", tabName = "player_comparison", icon = icon("basketball")),
@@ -39,6 +40,37 @@ sidebar <- dashboardSidebar(
 body <- 
   dashboardBody(
     tabItems(
+
+# News (twitter feed) -----------------------------------------------------
+    
+      tabItem(tabName = "news",
+        # fluidRow(
+        #   tags$head(
+        #     tags$script(
+        #       HTML('
+        #         $(window).on("message", function(e) {
+        #           var oe = e.originalEvent;
+        #           if (oe.origin !== "https://twitframe.com")
+        #             return;
+        #           if (oe.data.height && oe.data.element.id === "tweet"){
+        #             $("#tweet").css("height", parseInt(oe.data.height) + "px");
+        #           }
+        #       });')
+        #     ),
+        #     tags$style(HTML(
+        #       "
+        #       .content {
+        #       margin: auto;
+        #       padding: 20px;
+        #       width: 60%;
+        #       }"
+        #     ))
+        #   ),
+        #   
+        #   uiOutput("frame")
+        # )
+      ),
+
 
 # Head 2 Head -------------------------------------------------------------
 
@@ -118,7 +150,8 @@ body <-
           column(
             width = 4, 
             selectInput("trend_select_stat", "Statistic", choices = dplyr::filter(stat_selection, !stringr::str_detect(formatted_name, "Z"))$formatted_name),
-            selectInput("trend_select_player", "Player", multiple = TRUE, choices = character(0))
+            selectInput("trend_select_player", "Player", multiple = TRUE, choices = character(0)),
+            checkboxInput("this_season_trend_switch", "This year only", value = FALSE)
           ),
         
           # Plot

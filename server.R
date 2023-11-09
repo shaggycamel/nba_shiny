@@ -72,6 +72,40 @@ server <- function(input, output, session) {
   })
   
 
+# News (twitter feed) -----------------------------------------------------
+
+  # output$frame <- renderUI({
+  #   
+  #   tweet <- "https://x.com/itsfoss2/status/1722426833881158021?s=20"
+  #   url <- URLencode(tweet, reserved = TRUE)
+  #   src <- paste0("https://twitframe.com/show?url=", url)
+  # 
+  #   tagList(
+  #     
+  #     tags$div(
+  #       class = "content", 
+  #       tags$div(tags$iframe(
+  #         id = "tweet", 
+  #         border = 0, 
+  #         frameborder = 0, 
+  #         height = 50, 
+  #         width = 550, 
+  #         src = src
+  #       ))
+  #     ),
+  #     
+  #     singleton(tags$script(HTML(
+  #       "$(document).ready(function(){
+  #         $('iframe#tweet').on('load', function() {
+  #           this.contentWindow.postMessage(
+  #             { element: {id:this.id}, query: 'height' },
+  #             'https://twitframe.com');
+  #         });
+  #       });")))
+  #   )
+  # })  
+  
+
 # Head to Head -----------------------------------------------------------
 
   output$h2h_plot <- renderPlotly({
@@ -397,11 +431,16 @@ server <- function(input, output, session) {
         theme_void() +
         geom_text(aes(x = 0, y = 0, label = "Select players"))
     } else {
-      df_player_log |> 
+      
+      df_trend <- if(!input$this_season_trend_switch) df_player_log
+        else filter(df_player_log, slug_season == cur_season) 
+      
+      df_trend |> 
         filter(player_name %in% input$trend_select_player) |>
         arrange(game_date) |> 
         mutate(
-          smooth = loess(replace_na({{ trend_selected_stat }}, 0) ~ row_number())$fitted, 
+          day_sequence = as.integer((game_date - min(game_date)) + 1),
+          smooth = loess(replace_na({{ trend_selected_stat }}, 0) ~ day_sequence)$fitted, 
           .by = c(year_season, player_name)
         ) |> 
         (\(df) bind_rows(df, summarise(df, game_date = max(game_date) + 1, .by = c(player_name, year_season))))() |> 
