@@ -17,8 +17,8 @@ sidebar <- dashboardSidebar(
     menuItem("Head to Head", tabName = "head_to_head", icon = icon("chess")),
     menuItem("Player Overview", tabName = "player_overview", icon = icon("chart-bar")),
     menuItem("Player Performance", tabName = "player_performance", icon = icon("basketball")),
-    menuItem("Player Trend", tabName = "player_trend", icon = icon("chart-line")),
     menuItem("League Game Schedule", tabName = "league_game_schedule", icon = icon("calendar-days")),
+    menuItem("Player Trend", tabName = "player_trend", icon = icon("chart-line")),
     textAreaInput(inputId = "notepad", label = NULL, value = character(0), height = "100px", resize = "vertical"),
     fixedPanel(
       dropdownButton(
@@ -95,6 +95,20 @@ body <-
           column(width = 10, gt::gt_output("player_performance_table"))
         )
       ),
+
+# League Game Schedule ----------------------------------------------------
+
+      tabItem(tabName = "league_game_schedule",
+        fluidRow(
+          column(
+            width = 3, 
+            selectInput("week_selection", "Week", choices = character(0), selectize = FALSE)
+          ),
+        
+          # Table
+          column(width = 9, DT::DTOutput("schedule_table"))
+        ) 
+      ),
       
 
 # Player Trend ------------------------------------------------------------
@@ -110,21 +124,6 @@ body <-
           # Plot
           column(width = 8, plotOutput("player_trend_plot", height = 600)) # unsure how to make height dynamic, as in = "100%"
         )
-      ),
-      
-
-# League Game Schedule ----------------------------------------------------
-
-      tabItem(tabName = "league_game_schedule",
-        fluidRow(
-          column(
-            width = 3, 
-            selectInput("week_selection", "Week", choices = character(0), selectize = FALSE)
-          ),
-        
-          # Table
-          column(width = 9, DT::DTOutput("schedule_table"))
-        ) 
       )
     ),
   )

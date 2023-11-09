@@ -57,7 +57,7 @@ server <- function(input, output, session) {
   observe({
     # Player overview tab
     min_range <- summarise(group_by(df_player_log, slug_season, player_id), min = sum(min))
-    updateSliderTextInput(session, "overview_minute_filter", choices = seq(from = max(min_range$min), to = min(min_range$min)), selected = round(quantile(min_range$min)[["75%"]]))
+    updateSliderTextInput(session, "overview_minute_filter", choices = seq(from = max(min_range$min), to = min(min_range$min)), selected = 1) # selected = round(quantile(min_range$min)[["75%"]]))
     
     # Player performance tab
     updateSelectizeInput(session, "performance_select_player", choices = sort(unique(df_player_log$player_name)), server = TRUE)
@@ -392,23 +392,31 @@ server <- function(input, output, session) {
     
     trend_selected_stat <- sym(filter(stat_selection, formatted_name == input$trend_select_stat)$database_name)
     
-    # GEOM SMOOTH WITH LINE BREAKS TO CHOP UP NEW SEASONS
-    # https://stackoverflow.com/questions/63765583/can-i-get-geom-smooth-to-allow-line-breaks-when-there-are-na-values
-    filter(df_player_log, player_name %in% input$trend_select_player) |>
-      ggplot(aes(x = game_date, y = {{ trend_selected_stat }}, colour = player_name)) +
-      geom_point(alpha = 0.2) +
-      geom_line(alpha = 0.2) +
-      stat_smooth(na.rm = TRUE, show.legend = FALSE, se = FALSE) +
-      scale_x_date(name = NULL, breaks = df_season_segments$mid_date, labels = df_season_segments$year_season_type) +
-      geom_vline(xintercept = df_season_segments$begin_date, colour = "grey") +
-      ylim(0, NA) +
-      labs(title = input$trend_select_stat, x = NULL, y = NULL) +
-      theme_bw() +
-      theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
-
+    if(is.null(input$trend_select_player)){
+      ggplot() +
+        theme_void() +
+        geom_text(aes(x = 0, y = 0, label = "Select players"))
+    } else {
+      df_player_log |> 
+        filter(player_name %in% input$trend_select_player) |>
+        arrange(game_date) |> 
+        mutate(
+          smooth = loess(replace_na({{ trend_selected_stat }}, 0) ~ row_number())$fitted, 
+          .by = c(year_season, player_name)
+        ) |> 
+        (\(df) bind_rows(df, summarise(df, game_date = max(game_date) + 1, .by = c(player_name, year_season))))() |> 
+        ggplot(aes(x = game_date, colour = player_name)) +
+        geom_point(aes(y = {{ trend_selected_stat }}), alpha = 0.2) +
+        geom_line(aes(y = smooth)) +
+        scale_x_date(name = NULL, breaks = df_season_segments$mid_date, labels = df_season_segments$year_season_type) +
+        geom_vline(xintercept = df_season_segments$begin_date, colour = "grey") +
+        ylim(0, NA) +
+        labs(title = input$trend_select_stat, x = NULL, y = NULL) +
+        theme_bw() +
+        theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+    }
   })
   
-
 # League Game Schedule Analysis -------------------------------------------
 # Uses df_schedule 
   
