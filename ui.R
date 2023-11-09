@@ -16,7 +16,7 @@ sidebar <- dashboardSidebar(
   sidebarMenu(
     menuItem("Head to Head", tabName = "head_to_head", icon = icon("chess")),
     menuItem("Player Overview", tabName = "player_overview", icon = icon("chart-bar")),
-    menuItem("Player Performance", tabName = "player_performance", icon = icon("basketball")),
+    menuItem("Player Comparison", tabName = "player_comparison", icon = icon("basketball")),
     menuItem("League Game Schedule", tabName = "league_game_schedule", icon = icon("calendar-days")),
     menuItem("Player Trend", tabName = "player_trend", icon = icon("chart-line")),
     textAreaInput(inputId = "notepad", label = NULL, value = character(0), height = "100px", resize = "vertical"),
@@ -80,7 +80,7 @@ body <-
 
 # Player Performance ------------------------------------------------------
 
-      tabItem(tabName = "player_performance",
+      tabItem(tabName = "player_comparison",
         fluidRow(
           column(
             width = 2, 
@@ -92,7 +92,7 @@ body <-
           ),
         
           # Table
-          column(width = 10, gt::gt_output("player_performance_table"))
+          column(width = 10, gt::gt_output("player_comparison_table"))
         )
       ),
 

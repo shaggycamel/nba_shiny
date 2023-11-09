@@ -315,7 +315,7 @@ server <- function(input, output, session) {
   }
 
   # Build table
-  output$player_performance_table <- render_gt({
+  output$player_comparison_table <- render_gt({
     
     df_perf_tab <<- df_player_log |> 
       filter(
