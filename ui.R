@@ -14,7 +14,7 @@ header <- dashboardHeader(title = "NBA")
 # Sidebar
 sidebar <- dashboardSidebar(
   sidebarMenu(
-    menuItem("News", tabName = "news", icon = icon("newspaper")),
+    menuItem("News", tabName = "news_transactions", icon = icon("newspaper")),
     menuItem("Head to Head", tabName = "head_to_head", icon = icon("chess")),
     menuItem("Player Overview", tabName = "player_overview", icon = icon("chart-bar")),
     menuItem("Player Comparison", tabName = "player_comparison", icon = icon("basketball")),
@@ -42,8 +42,16 @@ body <-
     tabItems(
 
 # News (twitter feed) -----------------------------------------------------
-    
-      tabItem(tabName = "news", plotOutput("news_twitter_feed")),
+      tabItem(tabName = "news_transactions", 
+        box(
+          title = paste0("News: NBA transactions within the last two weeks (", cur_date, ")"),
+          width = NULL,
+          height = 600,
+          status = "primary", 
+          solidHeader = TRUE,
+          style = "overflow-x: scroll",
+          DT::DTOutput("news_transactions", height = 530))
+      ),
 
 
 # Head 2 Head -------------------------------------------------------------

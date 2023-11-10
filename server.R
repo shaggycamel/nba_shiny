@@ -72,12 +72,18 @@ server <- function(input, output, session) {
   })
   
 
-# News (twitter feed) -----------------------------------------------------
 
-  output$news_twitter_feed <- renderPlot({
-    ggplot() +
-      theme_void() +
-      geom_text(aes(x = 0, y = 0, label = "WIP...\nInsert Twitter feed"))
+# News Transactions -------------------------------------------------------
+
+  output$news_transactions <- renderDT({
+    DT::datatable(
+      df_news,
+      rownames = FALSE,
+      class = "cell-border stripe",
+      filter = list(position = "top", clear = FALSE),
+      options = list(paging = FALSE, autoWidth = TRUE, dom = 't', scrollX = TRUE)
+    ) |> 
+    formatStyle(columns = colnames(df_news), background = "white", color = "black")
   })
   
 
