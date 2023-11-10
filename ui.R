@@ -43,33 +43,7 @@ body <-
 
 # News (twitter feed) -----------------------------------------------------
     
-      tabItem(tabName = "news",
-        # fluidRow(
-        #   tags$head(
-        #     tags$script(
-        #       HTML('
-        #         $(window).on("message", function(e) {
-        #           var oe = e.originalEvent;
-        #           if (oe.origin !== "https://twitframe.com")
-        #             return;
-        #           if (oe.data.height && oe.data.element.id === "tweet"){
-        #             $("#tweet").css("height", parseInt(oe.data.height) + "px");
-        #           }
-        #       });')
-        #     ),
-        #     tags$style(HTML(
-        #       "
-        #       .content {
-        #       margin: auto;
-        #       padding: 20px;
-        #       width: 60%;
-        #       }"
-        #     ))
-        #   ),
-        #   
-        #   uiOutput("frame")
-        # )
-      ),
+      tabItem(tabName = "news", plotOutput("news_twitter_feed")),
 
 
 # Head 2 Head -------------------------------------------------------------

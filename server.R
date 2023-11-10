@@ -74,36 +74,11 @@ server <- function(input, output, session) {
 
 # News (twitter feed) -----------------------------------------------------
 
-  # output$frame <- renderUI({
-  #   
-  #   tweet <- "https://x.com/itsfoss2/status/1722426833881158021?s=20"
-  #   url <- URLencode(tweet, reserved = TRUE)
-  #   src <- paste0("https://twitframe.com/show?url=", url)
-  # 
-  #   tagList(
-  #     
-  #     tags$div(
-  #       class = "content", 
-  #       tags$div(tags$iframe(
-  #         id = "tweet", 
-  #         border = 0, 
-  #         frameborder = 0, 
-  #         height = 50, 
-  #         width = 550, 
-  #         src = src
-  #       ))
-  #     ),
-  #     
-  #     singleton(tags$script(HTML(
-  #       "$(document).ready(function(){
-  #         $('iframe#tweet').on('load', function() {
-  #           this.contentWindow.postMessage(
-  #             { element: {id:this.id}, query: 'height' },
-  #             'https://twitframe.com');
-  #         });
-  #       });")))
-  #   )
-  # })  
+  output$news_twitter_feed <- renderPlot({
+    ggplot() +
+      theme_void() +
+      geom_text(aes(x = 0, y = 0, label = "WIP...\nInsert Twitter feed"))
+  })
   
 
 # Head to Head -----------------------------------------------------------
@@ -480,8 +455,8 @@ server <- function(input, output, session) {
   output$schedule_table <- renderDT({
     
     # Prepare tables to be presented
-    tbl_schedule <- tbl_week_games$data[[match(input$week_selection, week_drop_box_choices)]] |> 
-      mutate(across(ends_with(")"), \(x) as.factor(if_else(as.character(x) == "NULL", NA_integer_, 1)))) |>
+    tbl_schedule <- tbl_week_games$data[[match(input$week_selection, week_drop_box_choices)]] |>
+      mutate(across(ends_with(")"), \(x) as.factor(if_else(as.character(x) == "NULL", "", "1")))) |>
       mutate(across(c(contains("games"), Team), as.factor))
     
     # Present table
