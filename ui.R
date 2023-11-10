@@ -9,7 +9,7 @@ source(here::here("_proj_useful.R"))
 # ui ----------------------------------------------------------------------
 
 # Header
-header <- dashboardHeader(title = "NBA")
+header <- dashboardHeader(title = "Fantasy NBA")
   
 # Sidebar
 sidebar <- dashboardSidebar(
@@ -44,7 +44,7 @@ body <-
 # News (twitter feed) -----------------------------------------------------
       tabItem(tabName = "news_transactions", 
         box(
-          title = paste0("News: NBA transactions within the last two weeks (", cur_date, ")"),
+          title = paste0("News: NBA transactions made within the last two weeks"),
           width = NULL,
           height = 600,
           status = "primary", 

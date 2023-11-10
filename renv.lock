@@ -913,10 +913,10 @@
       "Source": "GitHub",
       "RemoteType": "github",
       "RemoteHost": "api.github.com",
-      "RemoteRepo": "nba.dataRub",
       "RemoteUsername": "shaggycamel",
-      "RemoteRef": "HEAD",
-      "RemoteSha": "39c67aed4b1f31c549d4ab73616d76460b70c085",
+      "RemoteRepo": "nba.dataRub",
+      "RemoteRef": "master",
+      "RemoteSha": "f02399cde779501154da57ad42724cd478265d46",
       "Requirements": [
         "DBI",
         "R",
@@ -924,11 +924,12 @@
         "dplyr",
         "glue",
         "here",
+        "purrr",
         "readr",
         "stringr",
         "tibble"
       ],
-      "Hash": "da6df6c58ae7141e3e7bf9bd5b0e42f1"
+      "Hash": "9da2e6865f4d66de99e1122eadb38435"
     },
     "nlme": {
       "Package": "nlme",

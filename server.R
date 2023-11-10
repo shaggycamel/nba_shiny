@@ -45,7 +45,7 @@ server <- function(input, output, session) {
   # df_season_segments
   # df_competitor_roster_avg
   # df_h2h
-  .load_datasets <- function() walk(list.files(here("queries", "app_data_prep"), full.names = TRUE), \(x) source(x, local = TRUE))
+  .load_datasets <- function() walk(list.files(here("data", "app_data_prep"), full.names = TRUE), \(x) source(x, local = TRUE))
   .load_datasets()
   
   # Stop loading page
