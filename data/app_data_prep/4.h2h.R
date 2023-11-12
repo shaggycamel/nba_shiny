@@ -13,6 +13,7 @@ df_h2h <<- dh_getQuery(db_con, "h2h.sql") |>
 
 ############### NEW
 
+df_roster <- dh_getQuery(db_con, "roster.sql") 
 
 # rolling stats -----------------------------------------------------------
 
@@ -42,8 +43,7 @@ df_rolling_schedule <- select(df_schedule, game_date, team, playing) |>
 
 # past --------------------------------------------------------------------
 
-df_past_pre <- dh_getQuery(db_con, "roster.sql") |>
-  filter(as.Date(timestamp) < cur_date) |> 
+df_past_pre <- filter(df_roster, as.Date(timestamp) < cur_date) |> 
   select(
     us_date = timestamp,
     league_week,
@@ -66,8 +66,30 @@ df_past_pre <- dh_getQuery(db_con, "roster.sql") |>
 
 # future ------------------------------------------------------------------
 
-df_future_pre <- slice_max(df_past, us_date, by = player_id) |> 
-  mutate(origin = "future")
+df_future_pre <- select(
+  df_roster,
+  us_date = timestamp,
+  competitor_id,
+  competitor_name,
+  player_fantasy_id,
+  nba_id,
+  player_name,
+  player_team,
+  player_injury_status
+) |> 
+  mutate(ts = format(us_date, "%H:%M"), us_date = as.Date(us_date) - 1, .after = us_date) |>
+  mutate(origin = "future") |> 
+  slice_max(paste(us_date, ts), by = competitor_id) |> 
+  select(-c(ts, us_date)) |> 
+  left_join(
+    select(filter(df_schedule, game_date >= cur_date), us_date=game_date, team, season_week), # dow
+    by = join_by(player_team == team),
+    relationship = "many-to-many"
+  ) |> 
+  mutate(dow = lubridate::wday(us_date, week_start = 1))
+  
+  
+  
 
 
 # Bring together ----------------------------------------------------------
@@ -83,10 +105,13 @@ df_past <- left_join(
 # This is where ammendment to player roles needs to take place
 # NEED TO FIX DOW, LEAGUE WEEK AND COMPETITOR DATA
 df_future <- left_join(
-  select(filter(df_rolling_schedule, game_date >= cur_date), us_date=game_date, player_id),
-  select(df_future_pre, -us_date),
-  by = join_by(player_id),
+  df_future_pre,
+  select(slice_max(df_rolling, game_date, by = player_id), player_id, any_of(anl_cols$stat_cols)),
+  by = join_by(nba_id == player_id),
   relationship = "many-to-many"
-)
-
+) |> 
+  left_join(
+    dh_getQuery(db_con, "SELECT week, competitor_id, opponent_id, opponent_name FROM fty.league_schedule"),
+    by = join_by(competitor_id, season_week == week) 
+  )
 
