@@ -56,8 +56,12 @@ server <- function(input, output, session) {
 
   observe({
     # Player overview tab
-    min_range <- summarise(group_by(df_player_log, slug_season, player_id), min = sum(min))
-    updateSliderTextInput(session, "overview_minute_filter", choices = seq(from = max(min_range$min), to = min(min_range$min)), selected = 1) # selected = round(quantile(min_range$min)[["75%"]]))
+    t_df <- df_player_log
+    if(input$overview_free_agent_filter) t_df <- filter(t_df, free_agent_status == "ACTIVE")
+    if(input$this_season_overview_switch) t_df <- filter(t_df, slug_season == cur_season)
+    min_range <- if(input$tot_avg_toggle) round(quantile(summarise(group_by(t_df, player_id), min = sum(min, na.rm = TRUE))$min))
+      else round(quantile(summarise(group_by(t_df, player_id), min = mean(min, na.rm = TRUE))$min))
+    updateSliderTextInput(session, "overview_minute_filter", choices = seq(from = min_range[["100%"]], to = min_range[["0%"]]), selected = min_range[["75%"]])
     
     # Player performance tab
     updateSelectizeInput(session, "performance_select_player", choices = sort(unique(df_player_log$player_name)), server = TRUE)
@@ -243,38 +247,38 @@ server <- function(input, output, session) {
   # Code to render plot
   output$player_overview_plot <- renderPlotly({
     
-    # This season only filter (uses df_player_log)
-    df_overview_plt <- if(!input$this_season_overview_switch) df_player_log
-      else filter(df_player_log, slug_season == cur_season)
-    
     # Non-injured Free Agent filter (if selected)
-    df_overview_plt <- if(!input$overview_free_agent_filter) df_overview_plt
-      else filter(df_overview_plt, free_agent_status == "ACTIVE")
+    df_overview <- if(!input$overview_free_agent_filter) df_player_log
+      else filter(df_player_log, free_agent_status == "ACTIVE")
     
-    # Stat summation
-    df_overview_plt <- df_overview_plt |> 
-      summarise(across(any_of(anl_cols$stat_cols), \(x) sum(x)), .by = c(player_id, player_name)) |> 
+    # This season only filter (uses df_player_log)
+    if(input$this_season_overview_switch) df_overview <- filter(df_overview, slug_season == cur_season)
+    
+    # Stat calc
+    stat_calc <- if(input$tot_avg_toggle) getFunction("sum") else getFunction("mean")
+    df_overview <- df_overview |> 
+      summarise(across(any_of(anl_cols$stat_cols), \(x) stat_calc(x, na.rm = TRUE)), .by = c(player_id, player_name)) |> 
       calc_z_pcts()
     
     # Minute filter
-    df_overview_plt <- filter(df_overview_plt, min >= as.numeric(input$overview_minute_filter))
+    df_overview <- filter(df_overview, min >= as.numeric(input$overview_minute_filter))
     
     # Scale by minutes (if selected)
-    if(input$overview_scale_by_minutes) df_overview_plt <- mutate(df_overview_plt, across(all_of(stat_selection$database_name), ~ .x / min))
+    if(input$overview_scale_by_minutes) df_overview <- mutate(df_overview, across(all_of(stat_selection$database_name), ~ .x / min))
     
     # Create df for plot
-    df_overview_plt <- map(str_subset(stat_selection$database_name, "_pct", negate = TRUE), ~ {
+    df_overview <- map(str_subset(stat_selection$database_name, "_pct", negate = TRUE), ~ {
       
       col = sym(.x)
       
       if(col == sym("tov")){
-        slice_max(df_overview_plt, order_by = min, prop = 0.35) |> 
+        slice_max(df_overview, order_by = min, prop = 0.35) |> 
           select(player_name, {{ col }}) |>
           arrange({{ col }}) |>
           slice_head(n = input$overview_slider_top_n) |>
           set_names(c("player_name", "value"))
       } else {
-        select(df_overview_plt, player_name, {{ col }}) |> 
+        select(df_overview, player_name, {{ col }}) |> 
           arrange(desc({{ col }})) |>
           slice_head(n = input$overview_slider_top_n) |>
           set_names(c("player_name", "value"))
@@ -287,7 +291,7 @@ server <- function(input, output, session) {
       mutate(top_cats = paste(stat, collapse = ", "), .by = player_name)
     
     # Stat selection and render plot
-    plt <- filter(df_overview_plt, stat == input$overview_select_stat) |> 
+    plt <- filter(df_overview, stat == input$overview_select_stat) |> 
       ggplot(aes(x = value, y = if(input$overview_select_stat == "Turnovers") reorder(player_name, -value) else reorder(player_name, value), fill = ordered(top_cat_count), text = top_cats)) +
       geom_col() +
       guides(fill = guide_legend(title = "Other Category Count", reverse=TRUE)) +
@@ -300,7 +304,7 @@ server <- function(input, output, session) {
   })
   
 
-# Player Performance ------------------------------------------------------
+# Player Comparison ------------------------------------------------------
 # Uses df_player_log
   
   # Reactively filter player selection list

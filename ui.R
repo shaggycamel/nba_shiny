@@ -77,10 +77,11 @@ body <-
       tabItem(tabName = "player_overview",
         fluidRow(
           column(
-            width = 4, 
+            width = 4,
             selectInput("overview_select_stat", "Statistic", choices = dplyr::filter(stat_selection, !stringr::str_detect(formatted_name, "%"))$formatted_name),
             sliderTextInput("overview_minute_filter", "Limit Minutes", choices = 0), # updated dynamically in server.R
             sliderInput("overview_slider_top_n", "Top N Players", min = 10, max = 20, value = 15, ticks = FALSE),
+            switchInput("tot_avg_toggle", onLabel = "Total", offLabel = "Average", size = "small"),
             checkboxInput("this_season_overview_switch", "This year only", value = TRUE),
             checkboxInput("overview_scale_by_minutes", "Scale by Minutes"),
             checkboxInput("overview_free_agent_filter", "Only Show Non-Injured Free Agents")

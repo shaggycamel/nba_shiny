@@ -11,7 +11,8 @@ df_schedule <<- dh_getQuery(db_con, "nba_schedule.sql") |>
   group_by(season_week) |> 
   mutate(week_start = min(game_date), week_end = max(game_date)) |> 
   ungroup() |> 
-  arrange(season_week)
+  arrange(season_week) |> 
+  mutate(playing = 1) # used in h2h calculations
 
 
 # Calculate games left this week variable
