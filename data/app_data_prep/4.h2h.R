@@ -1,18 +1,4 @@
 
-df_h2h <<- dh_getQuery(db_con, "h2h.sql") |> 
-    mutate(league_week = if_else(origin == "past" & dow == 7, league_week - 1, league_week)) |> 
-    left_join(
-      dh_getQuery(db_con, "SELECT week, competitor_id, opponent_id, opponent_name FROM fty.league_schedule WHERE season = '{cur_season}'"),
-      by = join_by(league_week == week, competitor_id)
-    ) |> 
-    mutate(playing = case_when(
-      playing == 1 & player_injury_status == "OUT" ~ "1*",
-      playing == 1 ~ "1",
-      .default = NA_character_
-    ))
-
-############### NEW
-
 df_roster <- dh_getQuery(db_con, "roster.sql") 
 
 # rolling stats -----------------------------------------------------------
@@ -40,12 +26,15 @@ df_rolling_schedule <- select(df_schedule, game_date, team, playing) |>
   left_join(df_rolling)
 
 
+mutate(df_roster, eq = force_tz(timestamp, tzone = "America/Los_Angeles")) |> View("<")
 
 # past --------------------------------------------------------------------
 
-df_past_pre <- filter(df_roster, as.Date(timestamp) < cur_date) |> 
+df_past_pre <- df_roster |> 
+  mutate(us_date = with_tz(timestamp, tzone = "EST")) |> 
+  filter(us_date < cur_date) |> 
   select(
-    us_date = timestamp,
+    us_date,
     league_week,
     competitor_id,
     competitor_name,
@@ -57,8 +46,8 @@ df_past_pre <- filter(df_roster, as.Date(timestamp) < cur_date) |>
     opponent_id,
     opponent_name
   ) |> 
-  mutate(ts = format(us_date, "%H:%M"), us_date = as.Date(us_date) - 1, dow = lubridate::wday(us_date, week_start = 1), .after = us_date) |>
-  mutate(league_week = if_else(dow == 7, league_week - 1, league_week)) |> 
+  mutate(ts = format(us_date, "%H:%M"), us_date = as.Date(us_date), dow = lubridate::wday(us_date, week_start = 1), .after = us_date) |>
+  # mutate(league_week = if_else(dow == 7, league_week - 1, league_week)) |> 
   mutate(origin = "past") |> 
   slice_max(ts, by = c(us_date, competitor_id)) |> 
   select(-ts)
@@ -66,6 +55,7 @@ df_past_pre <- filter(df_roster, as.Date(timestamp) < cur_date) |>
 
 # future ------------------------------------------------------------------
 
+# This is where ammendment to player roles needs to take place
 df_future_pre <- select(
   df_roster,
   us_date = timestamp,
@@ -77,9 +67,9 @@ df_future_pre <- select(
   player_team,
   player_injury_status
 ) |> 
-  mutate(ts = format(us_date, "%H:%M"), us_date = as.Date(us_date) - 1, .after = us_date) |>
+  mutate(ts = format(us_date, "%H:%M"), us_date = with_tz(us_date, tzone = "EST"), .after = us_date) |>
   mutate(origin = "future") |> 
-  slice_max(paste(us_date, ts), by = competitor_id) |> 
+  slice_max(paste(as.Date(us_date), ts), by = competitor_id) |> 
   select(-c(ts, us_date)) |> 
   left_join(
     select(filter(df_schedule, game_date >= cur_date), us_date=game_date, team, season_week), # dow
@@ -102,8 +92,6 @@ df_past <- left_join(
   select(-nba_id)
 
 
-# This is where ammendment to player roles needs to take place
-# NEED TO FIX DOW, LEAGUE WEEK AND COMPETITOR DATA
 df_future <- left_join(
   df_future_pre,
   select(slice_max(df_rolling, game_date, by = player_id), player_id, any_of(anl_cols$stat_cols)),
@@ -113,5 +101,8 @@ df_future <- left_join(
   left_join(
     dh_getQuery(db_con, "SELECT week, competitor_id, opponent_id, opponent_name FROM fty.league_schedule"),
     by = join_by(competitor_id, season_week == week) 
-  )
+  ) |> 
+  rename(league_week = season_week, player_id = nba_id) |> 
+  select(all_of(colnames(df_past)))
 
+df_h2h <<- bind_rows(df_past, df_future)

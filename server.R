@@ -36,7 +36,7 @@ server <- function(input, output, session) {
   # Variables
   prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
   cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
-  cur_date <<- as.Date(str_extract(as.POSIXct(Sys.time(), tz="US/Eastern"), "\\d{4}-\\d{2}-\\d{2}"))
+  cur_date <<- as.Date(str_extract(as.POSIXct(Sys.time(), tz="NZ"), "\\d{4}-\\d{2}-\\d{2}")) - 1
   db_con <- if(Sys.info()["nodename"] == "Olivers-MacBook-Pro.local") dh_createCon("postgres") else dh_createCon("cockroach") 
   
   # Creates & updates datasets:
@@ -101,7 +101,7 @@ server <- function(input, output, session) {
         filter(df_h2h, competitor_name == input$h2h_competitor, league_week == input$h2h_week),
         filter(df_h2h, competitor_name == opp_name, league_week == input$h2h_week)
       ) |> 
-      filter(playing == "1") |> 
+      filter(!is.na(player_id)) |> 
       pivot_longer(cols = c(ast, stl, blk, tov, pts, ftm, fta, fgm, fga, fg3_m, reb), names_to = "stat", values_to = "value") |> 
       select(competitor_name, player_name, stat, value) |> 
       summarise(value = sum(value, na.rm = TRUE), .by = c(competitor_name, player_name, stat)) |> 
@@ -170,7 +170,12 @@ server <- function(input, output, session) {
         filter(df_h2h, competitor_name == input$h2h_competitor, league_week == input$h2h_week),
         filter(df_h2h, competitor_name == opp_name, league_week == input$h2h_week)
       ) |> 
-      arrange(us_date, player_team, player_name) |>
+      arrange(us_date, player_team, player_name) |> 
+      mutate(playing = case_when(
+        !is.na(player_id) & player_injury_status == "OUT" ~ "1*",
+        !is.na(player_id) ~ "1",
+        .default = NA_character_
+      )) |> 
       pivot_wider(id_cols = c(competitor_id, competitor_name, opponent_id, opponent_name, player_team, player_name), names_from = us_date, values_from = playing) |> 
       (\(df){
 
@@ -479,10 +484,11 @@ server <- function(input, output, session) {
       filter = list(position = "top", clear = FALSE)
     ) |> 
     formatStyle(columns = "Team", backgroundColor = "lightblue") |> 
+    # FIX THIS SECTION: COLOUR SELECTION DOESN"T WORK WITH VECTORS LESS THAN 3 IN LENGTH
     formatStyle(
       columns = "Week Games Remaining",
-      backgroundColor = styleEqual(levels = 0:tail(levels(tbl_schedule$`Week Games Remaining`), 1), values = rev(RColorBrewer::brewer.pal(length(0:tail(levels(tbl_schedule$`Week Games Remaining`), 1)), "Greens")))
-    ) |> 
+      backgroundColor = styleEqual(levels = 0:length(unique(tbl_schedule$`Week Games Remaining`)), values = rev(RColorBrewer::brewer.pal(length(0:length(unique(tbl_schedule$`Week Games Remaining`))), "Greens")))
+    ) |>
     formatStyle(
       columns = "Following Week Games",
       backgroundColor = styleEqual(levels = 0:tail(levels(tbl_schedule$`Following Week Games`), 1), values = rev(RColorBrewer::brewer.pal(length(0:tail(levels(tbl_schedule$`Following Week Games`), 1)), "Greens")))
