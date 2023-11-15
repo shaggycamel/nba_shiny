@@ -104,11 +104,13 @@ server <- function(input, output, session) {
 
   output$h2h_plot <- renderPlotly({
     
-    opp_name <- filter(df_h2h, league_week == input$h2h_week, competitor_name == input$h2h_competitor)$opponent_name[1]
+    df_h <- if(!input$future_only) df_h2h else filter(df_h2h, origin == "future")
+    
+    opp_name <- filter(df_h, league_week == input$h2h_week, competitor_name == input$h2h_competitor)$opponent_name[1]
     
     h2h_plt <<- bind_rows(
-        filter(df_h2h, competitor_name == input$h2h_competitor, league_week == input$h2h_week),
-        filter(df_h2h, competitor_name == opp_name, league_week == input$h2h_week)
+        filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week),
+        filter(df_h, competitor_name == opp_name, league_week == input$h2h_week)
       ) |> 
       filter(!is.na(player_id)) |> 
       pivot_longer(cols = c(ast, stl, blk, tov, pts, ftm, fta, fgm, fga, fg3_m, reb), names_to = "stat", values_to = "value") |> 
@@ -173,11 +175,12 @@ server <- function(input, output, session) {
   
   output$game_count_table <- render_gt({
     
-    opp_name <- filter(df_h2h, competitor_name == input$h2h_competitor, league_week == input$h2h_week)$opponent_name[1]
+    df_h <- if(!input$future_only) df_h2h else filter(df_h2h, origin == "future")
+    opp_name <- filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week)$opponent_name[1]
 
     df_h2h_week_game_count <- bind_rows(
-        filter(df_h2h, competitor_name == input$h2h_competitor, league_week == input$h2h_week),
-        filter(df_h2h, competitor_name == opp_name, league_week == input$h2h_week)
+        filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week),
+        filter(df_h, competitor_name == opp_name, league_week == input$h2h_week)
       ) |> 
       arrange(us_date, player_team, player_name) |> 
       mutate(playing = case_when(

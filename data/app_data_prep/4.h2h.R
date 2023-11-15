@@ -54,8 +54,22 @@ df_past <- df_past_pre |>
 # future ------------------------------------------------------------------
 
 # This is where ammendment to player roles needs to take place
-df_future_pre <- df_roster |> 
+df_future_pre_prepare <- function(competitor=NULL, exclude=NULL, add=NULL){
+  
+  df_t <- filter(df_roster, !player_name %in% exclude)
+  
+  if(!is.null(add)) df_t <- df_t |> 
+      bind_rows({
+        t_id <- unique(filter(df_roster, competitor_name == competitor)$competitor_id)
+        
+        t <- slice_max(filter(df_player_log, player_name %in% add), game_date, by = player_id) |> 
+          select(player_fantasy_id=fty_id, nba_id=player_id, player_name, player_team=team_slug) |> 
+          mutate(player_injury_status="ACTIVE", origin="future") |> 
+          mutate(competitor_id=t_id, competitor_name=competitor, .before = everything())
+      })
+  
   select(
+    df_t,
     us_date = timestamp,
     competitor_id,
     competitor_name,
@@ -75,7 +89,10 @@ df_future_pre <- df_roster |>
     relationship = "many-to-many"
   ) |> 
   mutate(dow = lubridate::wday(us_date, week_start = 1))
+  
+}
 
+df_future_pre <- df_future_pre_prepare()
 
 df_future <- df_future_pre |> 
   left_join(
