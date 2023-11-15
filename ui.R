@@ -61,7 +61,11 @@ body <-
           column(
             width = 2, 
             selectInput("h2h_competitor", "Competitor", choices = character(0)),
-            selectInput("h2h_week", "Week", choices = 0)
+            selectInput("h2h_week", "Week", choices = 0),
+            selectInput("ex_player", "Exclude Player", choices = character(0), multiple = TRUE),
+            selectInput("add_player", "Add Player", choices = character(0), multiple = TRUE),
+            checkboxInput("start_tomorrow", "Alter from tomorrow"),
+            checkboxInput("future_only", "View future games only")
           ),
           column(
             width = 10, 

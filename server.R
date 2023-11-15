@@ -54,6 +54,7 @@ server <- function(input, output, session) {
 
 # Set Server Side Dynamic Menus -------------------------------------------
 
+  active_players <<- sort(unique(filter(df_player_log, min > 1)$player_name))
   observe({
     # Player overview tab
     t_df <- df_player_log
@@ -64,15 +65,23 @@ server <- function(input, output, session) {
     updateSliderTextInput(session, "overview_minute_filter", choices = seq(from = min_range[["100%"]], to = min_range[["0%"]]), selected = min_range[["75%"]])
     
     # Player performance tab
-    updateSelectizeInput(session, "performance_select_player", choices = sort(unique(df_player_log$player_name)), server = TRUE)
+    updateSelectizeInput(session, "performance_select_player", choices = active_players, server = TRUE)
     updatePickerInput(session, "team_filter", choices = sort(unique(df_player_log$team_slug)))
     
     # Player trend tab
-    updateSelectInput(session, "trend_select_player", choices = sort(unique(df_player_log$player_name)))
+    updateSelectInput(session, "trend_select_player", choices = active_players)
     
     # H2H tab
     updateSelectInput(session, "h2h_competitor", choices = unique(df_h2h$competitor_name), selected = "senor_cactus")
     updateSelectInput(session, "h2h_week", choices = unique(df_schedule$season_week), selected = unique(filter(df_schedule, week_start <= cur_date, week_end >= cur_date)$season_week))
+  })
+  
+  # Additional H2H filter alteration
+  observe({
+    competitor_players <- sort(unique(filter(df_h2h, competitor_name == input$h2h_competitor, league_week == input$h2h_week)$player_name))
+    print(competitor_players)
+    updateSelectInput(session, "ex_player", choices = competitor_players)
+    updateSelectInput(session, "add_player", choices = setdiff(active_players, competitor_players))
   })
   
 
@@ -97,7 +106,7 @@ server <- function(input, output, session) {
     
     opp_name <- filter(df_h2h, league_week == input$h2h_week, competitor_name == input$h2h_competitor)$opponent_name[1]
     
-    h2h_plt <- bind_rows(
+    h2h_plt <<- bind_rows(
         filter(df_h2h, competitor_name == input$h2h_competitor, league_week == input$h2h_week),
         filter(df_h2h, competitor_name == opp_name, league_week == input$h2h_week)
       ) |> 
@@ -483,12 +492,12 @@ server <- function(input, output, session) {
       options = list(paging = FALSE, autoWidth = TRUE, dom = 't', scrollX = TRUE),
       filter = list(position = "top", clear = FALSE)
     ) |> 
-    formatStyle(columns = "Team", backgroundColor = "lightblue") |> 
-    # FIX THIS SECTION: COLOUR SELECTION DOESN"T WORK WITH VECTORS LESS THAN 3 IN LENGTH
-    formatStyle(
-      columns = "Week Games Remaining",
-      backgroundColor = styleEqual(levels = 0:length(unique(tbl_schedule$`Week Games Remaining`)), values = rev(RColorBrewer::brewer.pal(length(0:length(unique(tbl_schedule$`Week Games Remaining`))), "Greens")))
-    ) |>
+    formatStyle(columns = "Team", backgroundColor = "lightblue") |>
+    (\(tb){
+      lvl <- 0:length(unique(tbl_schedule$`Week Games Remaining`))
+      col <- c("white", rev(RColorBrewer::brewer.pal(5, "Greens")))[lvl + 1]
+      formatStyle(tb, columns = "Week Games Remaining", backgroundColor = styleEqual(levels = lvl, values = col))
+    })() |> 
     formatStyle(
       columns = "Following Week Games",
       backgroundColor = styleEqual(levels = 0:tail(levels(tbl_schedule$`Following Week Games`), 1), values = rev(RColorBrewer::brewer.pal(length(0:tail(levels(tbl_schedule$`Following Week Games`), 1)), "Greens")))
