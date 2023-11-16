@@ -37,7 +37,7 @@ server <- function(input, output, session) {
   prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
   cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
   cur_date <<- as.Date(str_extract(as.POSIXct(Sys.time(), tz="NZ"), "\\d{4}-\\d{2}-\\d{2}")) - 1
-  db_con <- if(Sys.info()["nodename"] == "Olivers-MacBook-Pro.local") dh_createCon("postgres") else dh_createCon("cockroach") 
+  db_con <<- if(Sys.info()["nodename"] == "Olivers-MacBook-Pro.local") dh_createCon("postgres") else dh_createCon("cockroach") 
   
   # Creates & updates datasets:
   # df_player_log
@@ -45,6 +45,7 @@ server <- function(input, output, session) {
   # df_season_segments
   # df_competitor_roster_avg
   # df_h2h
+  source(here("data", "base_frames.R"))
   .load_datasets <- function() walk(list.files(here("data", "app_data_prep"), full.names = TRUE), \(x) source(x, local = TRUE))
   .load_datasets()
   
@@ -79,7 +80,6 @@ server <- function(input, output, session) {
   # Additional H2H filter alteration
   observe({
     competitor_players <- sort(unique(filter(df_h2h, competitor_name == input$h2h_competitor, league_week == input$h2h_week)$player_name))
-    print(competitor_players)
     updateSelectInput(session, "ex_player", choices = competitor_players)
     updateSelectInput(session, "add_player", choices = setdiff(active_players, competitor_players))
   })
@@ -104,11 +104,12 @@ server <- function(input, output, session) {
 
   output$h2h_plot <- renderPlotly({
     
-    df_h <- if(!input$future_only) df_h2h else filter(df_h2h, origin == "future")
-    
+    df_h <- df_h2h_prepare(input$h2h_competitor, input$ex_player, input$add_player)
+    if(input$start_tomorrow) df_h <- mutate(df_h, origin = if_else(us_date == cur_date, "past", origin))
+    if(input$future_only) df_h <- filter(df_h, origin == "future")
     opp_name <- filter(df_h, league_week == input$h2h_week, competitor_name == input$h2h_competitor)$opponent_name[1]
     
-    h2h_plt <<- bind_rows(
+    h2h_plt <- bind_rows(
         filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week),
         filter(df_h, competitor_name == opp_name, league_week == input$h2h_week)
       ) |> 
@@ -175,7 +176,9 @@ server <- function(input, output, session) {
   
   output$game_count_table <- render_gt({
     
-    df_h <- if(!input$future_only) df_h2h else filter(df_h2h, origin == "future")
+    df_h <- df_h2h_prepare(input$h2h_competitor, input$ex_player, input$add_player)
+    if(input$start_tomorrow) df_h <- mutate(df_h, origin = if_else(us_date == cur_date, "past", origin))
+    if(input$future_only) df_h <- filter(df_h, origin == "future")
     opp_name <- filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week)$opponent_name[1]
 
     df_h2h_week_game_count <- bind_rows(
