@@ -14,6 +14,7 @@ SELECT
     season_type,
     RIGHT(log.slug_season, 2) || '-' || season_type AS year_season_type,
     log.player_id,
+    id_matchup.fty_id,
     info.display_first_last AS player_name,
     team.team_slug,
     fa.player_status AS free_agent_status,
@@ -38,7 +39,8 @@ SELECT
     blk, 
     tov, 
     pf, 
-    pts
+    pts,
+    plus_minus
 FROM nba.player_game_log AS log
 LEFT JOIN cte_team_latest_roster AS team ON log.player_id = team.player_id
 LEFT JOIN util.fty_nba_id_matchup AS id_matchup ON log.player_id = id_matchup.nba_id 
