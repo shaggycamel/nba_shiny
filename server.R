@@ -40,11 +40,6 @@ server <- function(input, output, session) {
   db_con <<- if(Sys.info()["nodename"] == "Olivers-MacBook-Pro.local") dh_createCon("postgres") else dh_createCon("cockroach") 
   
   # Creates & updates datasets:
-  # df_player_log
-  # df_schedule
-  # df_season_segments
-  # df_competitor_roster_avg
-  # df_h2h
   if(Sys.info()["nodename"] == "Olivers-MacBook-Pro.local") source(here("data", "base_frames.R")) else load(".RData")
   .load_datasets <- function() walk(list.files(here("data", "app_data_prep"), full.names = TRUE), \(x) source(x, local = TRUE))
   .load_datasets()
