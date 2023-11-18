@@ -69,7 +69,7 @@ body <-
           ),
           column(
             width = 10, 
-            plotly::plotlyOutput("h2h_plot", height = 600),
+            plotly::plotlyOutput("h2h_plot", height = 650),
             gt::gt_output("game_count_table")
           ),
           

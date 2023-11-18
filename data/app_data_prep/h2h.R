@@ -5,21 +5,24 @@ df_rolling <<- df_player_log |>
   arrange(game_date) |> 
   mutate(across(any_of(anl_cols$stat_cols), \(x) slider::slide_period_dbl(x, game_date, "day", ~ mean(.x, na.rm = TRUE), .before = 15, .after = -1)), .by = player_id) |> 
   mutate(across(any_of(anl_cols$stat_cols), \(x) coalesce(x, 0))) |> 
-  select(-c(slug_season, year_season, season_type, year_season_type, team_slug, free_agent_status, game_id, wl)) # cols not needed
+  select(-c(slug_season, year_season, season_type, year_season_type, free_agent_status, game_id, wl)) # cols not needed
 
   
 # This is where amendment to player roles needs to take place
-df_h2h_prepare <<- function(competitor=NULL, exclude=NULL, add=NULL){
+df_h2h_prepare <<- function(competitor=NULL, exclude=NULL, add=NULL, from_tomorrow=NULL){
   
-  df_rolling_schedule <- select(df_schedule, game_date, team, playing) |> 
-    left_join({
-      slice_max(df_player_log, order_by = game_date, by = player_id) |> 
-        select(player_id, team_slug)
-      },
-      by = join_by(team == team_slug),
-      relationship = "many-to-many"
-    ) |>
-    left_join(df_rolling)
+  # Add future averages here
+  df_rolling_schedule <- df_rolling |> 
+    bind_rows(
+      slice_max(df_rolling, order_by = game_date, by = player_id) |> 
+        select(-game_date) |>
+        left_join(
+          select(df_schedule, team, game_date), 
+          by = join_by(team_slug == team),
+          relationship = "many-to-many"
+        ) |>
+        filter(game_date > cur_date)
+    )
   
   
 # past --------------------------------------------------------------------
@@ -45,7 +48,7 @@ df_h2h_prepare <<- function(competitor=NULL, exclude=NULL, add=NULL){
     slice_max(ts, by = c(us_date, competitor_id)) |> 
     select(-ts) |> 
     left_join(
-      select(filter(df_rolling_schedule, game_date < cur_date), -c(team, playing)),
+      select(filter(df_rolling_schedule, game_date < cur_date), -team_slug),
       by = join_by(player_name, player_fantasy_id == fty_id, us_date == game_date)
     ) |> 
     select(-nba_id)
@@ -82,7 +85,6 @@ df_h2h_prepare <<- function(competitor=NULL, exclude=NULL, add=NULL){
   mutate(ts = format(us_date, "%H:%M"), us_date = with_tz(us_date, tzone = "EST"), .after = us_date) |>
   mutate(origin = "future") |> 
   slice_max(paste(as.Date(us_date), ts), by = competitor_id) |> 
-  filter(!player_name %in% exclude) |> 
   select(-c(ts, us_date)) |> 
   left_join(
     select(filter(df_schedule, game_date >= cur_date), us_date=game_date, team, season_week), # dow
@@ -99,6 +101,16 @@ df_h2h_prepare <<- function(competitor=NULL, exclude=NULL, add=NULL){
   rename(league_week = season_week, player_id = nba_id) |> 
   select(all_of(colnames(df_past)))
   
+  # if tomorrow: remove add players from today
+  df_future <- if(!is.null(from_tomorrow) && from_tomorrow){
+    df_future |> 
+      anti_join(filter(df_future, player_name %in% add & us_date == cur_date & competitor_name == competitor)) |> 
+      anti_join(filter(df_future, player_name %in% exclude & us_date > cur_date & competitor_name == competitor))
+  } else if(!is.null(from_tomorrow) && !from_tomorrow){
+    df_future |> 
+      anti_join(filter(df_future, player_name %in% exclude & us_date > cur_date & competitor_name == competitor))
+  } else df_future
+      
   bind_rows(df_past, df_future)
   
 }

@@ -104,10 +104,11 @@ server <- function(input, output, session) {
 
   output$h2h_plot <- renderPlotly({
     
-    df_h <- df_h2h_prepare(input$h2h_competitor, input$ex_player, input$add_player)
+    df_h <- df_h2h_prepare(input$h2h_competitor, input$ex_player, input$add_player, input$start_tomorrow)
     if(input$start_tomorrow) df_h <- mutate(df_h, origin = if_else(us_date == cur_date, "past", origin))
     if(input$future_only) df_h <- filter(df_h, origin == "future")
     opp_name <- filter(df_h, league_week == input$h2h_week, competitor_name == input$h2h_competitor)$opponent_name[1]
+   
     
     h2h_plt <- bind_rows(
         filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week),
@@ -176,7 +177,7 @@ server <- function(input, output, session) {
   
   output$game_count_table <- render_gt({
     
-    df_h <- df_h2h_prepare(input$h2h_competitor, input$ex_player, input$add_player)
+    df_h <- df_h2h_prepare(input$h2h_competitor, input$ex_player, input$add_player, input$start_tomorrow)
     if(input$start_tomorrow) df_h <- mutate(df_h, origin = if_else(us_date == cur_date, "past", origin))
     if(input$future_only) df_h <- filter(df_h, origin == "future")
     opp_name <- filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week)$opponent_name[1]
@@ -185,7 +186,6 @@ server <- function(input, output, session) {
         filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week),
         filter(df_h, competitor_name == opp_name, league_week == input$h2h_week)
       ) |> 
-      arrange(us_date, player_team, player_name) |> 
       mutate(playing = case_when(
         !is.na(player_id) & player_injury_status == "OUT" ~ "1*",
         !is.na(player_id) ~ "1",
@@ -202,7 +202,8 @@ server <- function(input, output, session) {
           inner_func(df, opp_name),
           inner_func(df, input$h2h_competitor),
           setNames(as.data.frame(matrix(rep(NA, length(colnames(df))), nrow = 1)), colnames(df)),
-          select(filter(df, competitor_name == input$h2h_competitor), starts_with(c("player", "20")))
+          select(filter(df, competitor_name == input$h2h_competitor), starts_with(c("player", "20"))) |> 
+            arrange(player_team, player_name)
         )
       })() |>
       select(-starts_with(c("competitor", "opponent"))) |>
@@ -211,6 +212,7 @@ server <- function(input, output, session) {
           mutate(across(everything(), \(x) ifelse(is.na(as.numeric(x)) | as.numeric(x) <= 10, as.numeric(x), 10))) |>
           summarise(across(everything(), \(x) sum(x, na.rm = TRUE))) |>
           t()
+
 
         mutate(df, Total = Ttl)
       })() |>
