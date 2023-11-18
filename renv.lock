@@ -1388,10 +1388,10 @@
       "Source": "GitHub",
       "RemoteType": "github",
       "RemoteHost": "api.github.com",
-      "RemoteRepo": "shinycssloaders",
       "RemoteUsername": "daattali",
-      "RemoteRef": "HEAD",
-      "RemoteSha": "ad867f7a15533ab524286061836c4ee5d2b9de17",
+      "RemoteRepo": "shinycssloaders",
+      "RemoteRef": "master",
+      "RemoteSha": "62815f7af20df73e1dfd561ce9a9460f73907488",
       "Requirements": [
         "R",
         "digest",
@@ -1400,7 +1400,7 @@
         "htmltools",
         "shiny"
       ],
-      "Hash": "72df252b44f792da770872f83d7dcf94"
+      "Hash": "17191ca6178e0d0aa9cebecf563e733f"
     },
     "shinydashboard": {
       "Package": "shinydashboard",
