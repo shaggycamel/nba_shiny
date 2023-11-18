@@ -47,3 +47,5 @@ rsconnect::deployApp(
   forceUpdate = TRUE,
   python = "/usr/bin/python3"
 )
+
+cat("Successfully deployed on:", format(as.POSIXct(Sys.time(), tz="NZ"), usetz=TRUE))
