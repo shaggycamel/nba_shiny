@@ -213,7 +213,6 @@ server <- function(input, output, session) {
           summarise(across(everything(), \(x) sum(x, na.rm = TRUE))) |>
           t()
 
-
         mutate(df, Total = Ttl)
       })() |>
       mutate(Total = if_else(Total == 0 & is.na(player_team), NA, Total)) |>
@@ -223,7 +222,7 @@ server <- function(input, output, session) {
         by = join_by(player_team == team, season_week)
       ) |>
       select(-season_week, next_week = following_week_games)
-      
+      df_h2h_week_game_count <- select(df_h2h_week_game_count, starts_with("player"), all_of(sort(str_subset(colnames(df_h2h_week_game_count), "\\d"))), Total, next_week)
       
       gt(df_h2h_week_game_count, rowname_col = "info") |>
         sub_missing(missing_text = "") |>
