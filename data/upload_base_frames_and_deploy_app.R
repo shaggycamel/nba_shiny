@@ -48,4 +48,4 @@ rsconnect::deployApp(
   python = "/usr/bin/python3"
 )
 
-cat("Successfully deployed on:", format(as.POSIXct(Sys.time(), tz="NZ"), usetz=TRUE))
+cat("Successfully deployed on:", format(as.POSIXct(Sys.time(), tz="NZ"), usetz=TRUE), "\n\n")
