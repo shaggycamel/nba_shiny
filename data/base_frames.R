@@ -1,6 +1,14 @@
 
+suppressMessages({
+  library(nba.dataRub)
+  library(dplyr)
+  library(stringr)
+})
+
+
 # News --------------------------------------------------------------------
 
+cat("\t- df_news\n")
 df_news <<- dh_getQuery(db_con, "SELECT * FROM nba.transaction_log WHERE date >= '{cur_date}'::DATE - 15") |>
   mutate(across(c(transaction_type, team, acc_req), as.factor)) |> 
   arrange(desc(date))
@@ -8,6 +16,7 @@ df_news <<- dh_getQuery(db_con, "SELECT * FROM nba.transaction_log WHERE date >=
 
 # Player log --------------------------------------------------------------
 
+cat("\t- df_player_log\n")
 df_player_log <<- dh_getQuery(db_con, "player_log.sql") |> 
   mutate(slug_season = ordered(slug_season)) |> 
   mutate(season_type = ordered(season_type, c("Pre Season", "Regular Season", "Playoffs"))) |> 
@@ -16,6 +25,7 @@ df_player_log <<- dh_getQuery(db_con, "player_log.sql") |>
 
 # Season segments ---------------------------------------------------------
 
+cat("\t- df_season_segments\n")
 df_season_segments <<- dh_getQuery(db_con, "season_segments.sql") |> 
   (\(df){
     bind_rows(
@@ -30,6 +40,7 @@ df_season_segments <<- dh_getQuery(db_con, "season_segments.sql") |>
 
 # NBA schedule ------------------------------------------------------------
 
+cat("\t- df_schedule\n")
 df_schedule <<- dh_getQuery(db_con, "nba_schedule.sql") |> 
   group_by(slug_season) |> 
   mutate(season_week = if_else(season_week < 30, season_week + 52, season_week)) |> 
@@ -48,8 +59,10 @@ df_schedule <<- dh_getQuery(db_con, "nba_schedule.sql") |>
 
 # Fantasy league schedule -------------------------------------------------
 
+cat("\t- df_fantasy_schedule\n")
 df_fantasy_schedule <<- dh_getQuery(db_con, "SELECT * FROM fty.league_schedule")
 
 # Fantasy competitor roster -------------------------------------------------------
 
+cat("\t- df_roster\n")
 df_roster <<- dh_getQuery(db_con, "roster.sql") 

@@ -30,7 +30,7 @@ server <- function(input, output, session) {
 # Constants & Datasets ----------------------------------------------------
 
   # Start loading page
-  data_collection_caption <- "Processing data, two minutes..."
+  data_collection_caption <- "Processing data, one minute..."
   showPageSpinner(type = 6, caption = data_collection_caption)
   
   # Variables
@@ -45,7 +45,7 @@ server <- function(input, output, session) {
   # df_season_segments
   # df_competitor_roster_avg
   # df_h2h
-  source(here("data", "base_frames.R"))
+  if(Sys.info()["nodename"] == "Olivers-MacBook-Pro.local") source(here("data", "base_frames.R")) else load(".RData")
   .load_datasets <- function() walk(list.files(here("data", "app_data_prep"), full.names = TRUE), \(x) source(x, local = TRUE))
   .load_datasets()
   
