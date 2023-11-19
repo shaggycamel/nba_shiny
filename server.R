@@ -79,6 +79,7 @@ server <- function(input, output, session) {
     updateSelectInput(session, "add_player", choices = setdiff(active_players, competitor_players))
   })
   
+  
 
 
 # News Transactions -------------------------------------------------------
@@ -99,8 +100,8 @@ server <- function(input, output, session) {
 
   output$h2h_plot <- renderPlotly({
     
-    df_h <- df_h2h_prepare(input$h2h_competitor, input$ex_player, input$add_player, input$start_tomorrow)
-    if(input$start_tomorrow) df_h <- mutate(df_h, origin = if_else(us_date == cur_date, "past", origin))
+    df_h <- df_h2h_prepare(input$h2h_competitor, input$ex_player, input$add_player, input$future_from_tomorrow)
+    if(input$future_from_tomorrow) df_h <- mutate(df_h, origin = if_else(us_date == cur_date, "past", origin))
     if(input$future_only) df_h <- filter(df_h, origin == "future")
     opp_name <- filter(df_h, league_week == input$h2h_week, competitor_name == input$h2h_competitor)$opponent_name[1]
    
@@ -172,8 +173,8 @@ server <- function(input, output, session) {
   
   output$game_count_table <- render_gt({
     
-    df_h <- df_h2h_prepare(input$h2h_competitor, input$ex_player, input$add_player, input$start_tomorrow)
-    if(input$start_tomorrow) df_h <- mutate(df_h, origin = if_else(us_date == cur_date, "past", origin))
+    df_h <- df_h2h_prepare(input$h2h_competitor, input$ex_player, input$add_player, input$future_from_tomorrow)
+    if(input$future_from_tomorrow) df_h <- mutate(df_h, origin = if_else(us_date == cur_date, "past", origin))
     if(input$future_only) df_h <- filter(df_h, origin == "future")
     opp_name <- filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week)$opponent_name[1]
 
