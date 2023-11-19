@@ -530,7 +530,7 @@ server <- function(input, output, session) {
     if(nrow(dh_getQuery(db_con, "SELECT * FROM fty.watch_list")) != length(input$watch_list)){
       watched <- paste(input$watch_list, collapse = "', '")
       DBI::dbSendQuery(db_con, "TRUNCATE fty.watch_list")
-      DBI::dbSendQuery(db_con, glue::glue(readr::read_file(here("queries", "update_watch_list.sql"))))
+      DBI::dbSendQuery(db_con, glue::glue(readr::read_file(here("data", "update_watch_list.sql"))))
     }
     
     # Notepad
