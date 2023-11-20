@@ -41,13 +41,17 @@ df_past <- df_fty_roster |>
     .after = timestamp
   ) |> 
   slice_max(ts, by = c(us_date, competitor_id)) |> 
-  select(-c(ts, timestamp)) 
+  select(-c(ts, timestamp)) |> 
+  left_join(
+    select(df_nba_schedule, team, game_date, scheduled_to_play),
+    by = join_by(player_team == team, us_date == game_date)    
+  )
 
 
 # FUTURE PRE | ADD STEP
 
 competitor = "senor_cactus"
-c_id <- 5 # define way to obtain competitor_id
+c_id <- unique(filter(df_fty_schedule, competitor_name == competitor)$competitor_id)
 add = "Alex Caruso"
 
 df_future_pre <- df_fty_roster |> 
@@ -83,13 +87,16 @@ df_future <- left_join(
   ) |> 
   rename(us_date = game_date, league_week = season_week) |> 
   mutate(dow = lubridate::wday(us_date, week_start = 1)) |> 
+  left_join(
+    select(df_nba_schedule, team, game_date, scheduled_to_play),
+    by = join_by(player_team == team, us_date == game_date)    
+  ) |> 
   select(all_of(colnames(df_past)))
 
 
 
 
 # FILTRATION HERE!!!!
-competitor = "senor_cactus"
 exclude = "Ausar Thompson"
 from_tomorrow = TRUE
 
@@ -119,7 +126,82 @@ if(from_tomorrow){
 }
 
   
+df_h = df_h2h
 
+df_h2h_week_game_count <- bind_rows(
+    filter(df_h, competitor_name == competitor, league_week == 4),
+    filter(df_h, competitor_name == opp_name, league_week == 4)
+  ) |> 
+  mutate(play_status = case_when(
+    scheduled_to_play == 1 & player_injury_status == "OUT" ~ "1*",
+     scheduled_to_play == 1 ~ "1",
+    .default = NA_character_
+  )) |> 
+  # UPTO HERE
+  pivot_wider(id_cols = c(competitor_id, competitor_name, opponent_id, opponent_name, player_team, player_name), names_from = us_date, values_from = play_status) |> 
+  (\(df){
+
+    inner_func <- function(x, nm) filter(x, competitor_name == nm) |>
+      mutate(player_team = "Total", player_name = str_trim(nm)) |>
+      summarise(across(starts_with("20"), \(x) as.character(sum(x == "1", na.rm = TRUE))), .by = c(player_team, player_name))
+
+    bind_rows(
+      inner_func(df, opp_name),
+      inner_func(df, input$h2h_competitor),
+      setNames(as.data.frame(matrix(rep(NA, length(colnames(df))), nrow = 1)), colnames(df)),
+      select(filter(df, competitor_name == input$h2h_competitor), starts_with(c("player", "20"))) |> 
+        arrange(player_team, player_name)
+    )
+  })() |>
+  select(-starts_with(c("competitor", "opponent"))) |>
+  (\(df){
+    Ttl = as.data.frame(t(df)) |>
+      mutate(across(everything(), \(x) ifelse(is.na(as.numeric(x)) | as.numeric(x) <= 10, as.numeric(x), 10))) |>
+      summarise(across(everything(), \(x) sum(x, na.rm = TRUE))) |>
+      t()
+
+    mutate(df, Total = Ttl)
+  })() |>
+  mutate(Total = if_else(Total == 0 & is.na(player_team), NA, Total)) |>
+  mutate(season_week = as.numeric(input$h2h_week)) |>
+  left_join(
+    select(df_week_game_count, season_week, team, following_week_games),
+    by = join_by(player_team == team, season_week)
+  ) |>
+  select(-season_week, next_week = following_week_games)
+  df_h2h_week_game_count <- select(df_h2h_week_game_count, starts_with("player"), all_of(sort(str_subset(colnames(df_h2h_week_game_count), "\\d"))), Total, next_week)
   
-
-
+  gt(df_h2h_week_game_count, rowname_col = "info") |>
+    sub_missing(missing_text = "") |>
+    (\(t){
+      if(any(str_detect(colnames(df_h2h_week_game_count), as.character(cur_date))))
+        tab_style(
+          t,
+          style = list(cell_fill(color = "lightblue1"), cell_text(weight = "bold"), cell_borders(sides = c("left", "right"))),
+          locations = cells_body(columns = as.character(cur_date))
+        )
+      else t
+    })() |>
+    tab_style_body(
+      style = cell_fill(color = "pink", alpha = 0.5),
+      columns = starts_with("20"),
+      fn = \(x) str_detect(x, "\\*") | as.numeric(x) > 10
+    ) |>
+    tab_style(style = cell_fill(color = "pink", alpha = 0.5), locations = cells_body(columns = next_week, rows = next_week < 3)) |> 
+    tab_style(style = cell_borders(sides = c("left", "right")), locations = cells_body(columns = c(starts_with("20"), Total))) |>
+    tab_style(
+      style = list(cell_text(weight = "bold"), cell_borders(sides = c("left", "right"))),
+      locations = cells_body(columns = Total)
+    ) |>
+    tab_style(style = cell_text(weight = "bold"), locations = cells_body(columns = player_name, rows = player_name == input$h2h_competitor)) |>
+    tab_style(
+      style = cell_fill(color = "lightgreen"),
+      locations = cells_body(columns = Total, rows = Total == max(Total, na.rm = TRUE))
+    ) |>
+    tab_style(
+      style = list(cell_fill(color = "grey", alpha = 0.5), cell_borders(sides = c("top", "bottom"))),
+      locations = cells_body(rows = 3)
+    ) |>
+    tab_style(style = cell_text(align = "center"), locations = cells_body(c(starts_with("20"), Total))) |>
+    cols_label_with(columns = starts_with("20"), fn = \(x) weekdays(as.Date(x))) |>
+    tab_options(column_labels.background.color = "blue")

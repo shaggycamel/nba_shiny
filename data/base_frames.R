@@ -54,7 +54,7 @@ df_nba_schedule <<- dh_getQuery(db_con, "nba_schedule.sql") |>
   mutate(week_start = min(game_date), week_end = max(game_date)) |> 
   ungroup() |> 
   arrange(season_week) |> 
-  mutate(playing = 1) # used in h2h calculations
+  mutate(scheduled_to_play = 1) # used in h2h calculations
 
 
 # NBA team roster -------------------------------------------------------

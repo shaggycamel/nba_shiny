@@ -101,65 +101,63 @@ server <- function(input, output, session) {
   output$h2h_plot <- renderPlotly({
     
     df_h <- df_h2h_prepare(input$h2h_competitor, input$ex_player, input$add_player, input$future_from_tomorrow)
-    if(input$future_from_tomorrow) df_h <- mutate(df_h, origin = if_else(us_date == cur_date, "past", origin))
-    if(input$future_only) df_h <- filter(df_h, origin == "future")
-    opp_name <- filter(df_h, league_week == input$h2h_week, competitor_name == input$h2h_competitor)$opponent_name[1]
+    if(future_only) df_h2 <- filter(df_h2, origin == "future")
+    opp_name <- filter(df_h2, league_week == input$h2h_week, competitor_name == input$h2h_competitor)$opponent_name[1]
    
-    
     h2h_plt <- bind_rows(
-        filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week),
-        filter(df_h, competitor_name == opp_name, league_week == input$h2h_week)
-      ) |> 
-      filter(!is.na(player_id)) |> 
-      pivot_longer(cols = c(ast, stl, blk, tov, pts, ftm, fta, fgm, fga, fg3_m, reb), names_to = "stat", values_to = "value") |> 
-      select(competitor_name, player_name, stat, value) |> 
-      summarise(value = sum(value, na.rm = TRUE), .by = c(competitor_name, player_name, stat)) |> 
-      (\(t_df){
-        bind_rows(
-          # fg_pct
-          filter(t_df, stat %in%  c("fga", "fgm")) |> 
-            pivot_wider(names_from = stat, values_from = value) |> 
-            arrange(desc(fgm)) |> 
-            mutate(fg_pct = round(fgm / fga, 3)) |> 
-            summarise(
-              competitor_roster = paste0(player_name, " ", fg_pct, " (", round(fgm, 2), "/", round(fga, 2), ")", collapse = "\n"),
-              value = sum(fgm) / sum(fga),
-              .by = competitor_name
-            ) |> 
-            mutate(stat = "fg_pct"),
-          
-          #ft_pct
-          filter(t_df, stat %in%  c("fta", "ftm")) |> 
-            pivot_wider(names_from = stat, values_from = value) |>
-            arrange(desc(ftm)) |> 
-            mutate(ft_pct = round(ftm / fta, 3)) |> 
-            summarise(
-              competitor_roster = paste0(player_name, " ", ft_pct, " (", round(ftm, 2), "/", round(fta, 2), ")", collapse = "\n"),
-              value = sum(ftm) / sum(fta),
-              .by = competitor_name
-            ) |> 
-            mutate(stat = "ft_pct"),
-          
-          # tov
-          filter(t_df, stat == "tov") |> 
-            arrange(value) |> 
-            summarise(
-              competitor_roster = paste(player_name, round(value, 3), collapse = "\n"),
-              value = sum(value),
-              .by = c(competitor_name, stat)
-            ),
-          
-          # the rest
-          filter(t_df, !stat %in% c("fga", "fgm", "fta", "ftm", "tov")) |> 
-            arrange(desc(value)) |> 
-            summarise(
-              competitor_roster = paste(player_name, round(value, 3), collapse = "\n"),
-              value = sum(value),
-              .by = c(competitor_name, stat)
-            )
-        )
-      })()
-    
+      filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week),
+      filter(df_h, competitor_name == opp_name, league_week == input$h2h_week)
+    ) |> 
+    filter(!is.na(player_id), player_injury_status == "ACTIVE" | is.na(player_injury_status)) |> 
+    pivot_longer(cols = c(ast, stl, blk, tov, pts, ftm, fta, fgm, fga, fg3_m, reb), names_to = "stat", values_to = "value") |> 
+    select(competitor_name, player_name, stat, value) |> 
+    summarise(value = sum(value, na.rm = TRUE), .by = c(competitor_name, player_name, stat)) |> 
+    (\(t_df){
+      bind_rows(
+        # fg_pct
+        filter(t_df, stat %in%  c("fga", "fgm")) |> 
+          pivot_wider(names_from = stat, values_from = value) |> 
+          arrange(desc(fgm)) |> 
+          mutate(fg_pct = round(fgm / fga, 2)) |> 
+          summarise(
+            competitor_roster = paste0(player_name, " ", fg_pct, " (", round(fgm, 2), "/", round(fga, 2), ")", collapse = "\n"),
+            value = sum(fgm) / sum(fga),
+            .by = competitor_name
+          ) |> 
+          mutate(stat = "fg_pct"),
+        
+        #ft_pct
+        filter(t_df, stat %in%  c("fta", "ftm")) |> 
+          pivot_wider(names_from = stat, values_from = value) |>
+          arrange(desc(ftm)) |> 
+          mutate(ft_pct = round(ftm / fta, 2)) |> 
+          summarise(
+            competitor_roster = paste0(player_name, " ", ft_pct, " (", round(ftm, 2), "/", round(fta, 2), ")", collapse = "\n"),
+            value = sum(ftm) / sum(fta),
+            .by = competitor_name
+          ) |> 
+          mutate(stat = "ft_pct"),
+        
+        # tov
+        filter(t_df, stat == "tov") |> 
+          arrange(value) |> 
+          summarise(
+            competitor_roster = paste(player_name, round(value), collapse = "\n"),
+            value = sum(value),
+            .by = c(competitor_name, stat)
+          ),
+        
+        # the rest
+        filter(t_df, !stat %in% c("fga", "fgm", "fta", "ftm", "tov")) |> 
+          arrange(desc(value)) |> 
+          summarise(
+            competitor_roster = paste(player_name, round(value), collapse = "\n"),
+            value = sum(value),
+            .by = c(competitor_name, stat)
+          )
+      )
+    })()
+  
     plt <- ggplot(h2h_plt, aes(x = stat, y = value, fill = competitor_name, text = paste(round(value, 2), "\n\n", competitor_roster))) +
       geom_col(position = "fill") +
       geom_hline(yintercept = 0.5) +
