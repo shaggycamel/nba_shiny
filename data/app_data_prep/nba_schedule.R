@@ -1,7 +1,7 @@
 
 
 # Calculate games left this week variable
-df_week_game_count <<- df_schedule |> 
+df_week_game_count <<- df_nba_schedule |> 
   mutate(week_games_remaining = game_date >= cur_date) |> 
   summarise(
     week_games_remaining = sum(week_games_remaining), 
@@ -17,7 +17,7 @@ df_week_game_count <<- df_schedule |>
   })()
 
 
-tbl_week_games <<- df_schedule |> 
+tbl_week_games <<- df_nba_schedule |> 
       mutate(game_date = paste0(weekdays(game_date, abbreviate = TRUE), " (", format(game_date, "%m/%d"), ")")) |> 
       select(slug_season, season_week, game_date, team, against) |> 
       nest_by(slug_season, season_week, .keep = TRUE) |> 
