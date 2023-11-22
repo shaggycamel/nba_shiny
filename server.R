@@ -115,11 +115,11 @@ server <- function(input, output, session) {
       if(input$future_only) df_h <- filter(df_h, origin == "future")
       opp_name <- filter(df_h, league_week == input$h2h_week, competitor_name == input$h2h_competitor)$opponent_name[1]
      
-      h2h_plt <- bind_rows(
+      h2h_plt <<- bind_rows(
         filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week),
         filter(df_h, competitor_name == opp_name, league_week == input$h2h_week)
       ) |> 
-      filter(!is.na(player_id), player_injury_status == "ACTIVE" | is.na(player_injury_status)) |> 
+      filter(!is.na(player_id), player_injury_status %in% c("ACTIVE", "DAY_TO_DAY") | is.na(player_injury_status)) |> 
       pivot_longer(cols = c(ast, stl, blk, tov, pts, ftm, fta, fgm, fga, fg3_m, reb), names_to = "stat", values_to = "value") |> 
       select(competitor_name, player_name, stat, value) |> 
       summarise(value = sum(value, na.rm = TRUE), .by = c(competitor_name, player_name, stat)) |> 
