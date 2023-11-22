@@ -6,7 +6,7 @@ SELECT
   roster.competitor_id,
   roster.competitor_name,
   roster.player_fantasy_id,
-  id_matchup.nba_id,
+  id_matchup.nba_id AS player_id,
   roster.player_name,
   roster.player_team,
   roster.player_injury_status,

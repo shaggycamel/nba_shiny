@@ -34,15 +34,19 @@ server <- function(input, output, session) {
   showPageSpinner(type = 6, caption = data_collection_caption)
   
   # Variables
-  prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
-  cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
   cur_date <<- as.Date(str_extract(as.POSIXct(Sys.time(), tz="NZ"), "\\d{4}-\\d{2}-\\d{2}")) - 1
+  cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
+  prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
   db_con <<- if(Sys.info()["nodename"] == "Olivers-MacBook-Pro.local") dh_createCon("postgres") else dh_createCon("cockroach") 
   
   # Creates & updates datasets:
   if(Sys.info()["nodename"] == "Olivers-MacBook-Pro.local") source(here("data", "base_frames.R")) else load(".RData")
   .load_datasets <- function() walk(list.files(here("data", "app_data_prep"), full.names = TRUE), \(x) source(x, local = TRUE))
   .load_datasets()
+  cur_week <<- df_week_game_count |>    # relies on datasets
+    filter(cur_date >= week_start, cur_date <= week_end) |> 
+    pull(season_week) |> 
+    unique()
   
   # Stop loading page
   hidePageSpinner()
@@ -69,7 +73,7 @@ server <- function(input, output, session) {
     
     # H2H tab
     updateSelectInput(session, "h2h_competitor", choices = unique(df_h2h$competitor_name), selected = "senor_cactus")
-    updateSelectInput(session, "h2h_week", choices = unique(df_schedule$season_week), selected = unique(filter(df_schedule, week_start <= cur_date, week_end >= cur_date)$season_week))
+    updateSelectInput(session, "h2h_week", choices = unique(df_nba_schedule$season_week), selected = unique(filter(df_nba_schedule, week_start <= cur_date, week_end >= cur_date)$season_week))
   })
   
   # Additional H2H filter alteration
@@ -78,6 +82,7 @@ server <- function(input, output, session) {
     updateSelectInput(session, "ex_player", choices = competitor_players)
     updateSelectInput(session, "add_player", choices = setdiff(active_players, competitor_players))
   })
+  
   
 
 
@@ -99,17 +104,22 @@ server <- function(input, output, session) {
 
   output$h2h_plot <- renderPlotly({
     
-    df_h <- df_h2h_prepare(input$h2h_competitor, input$ex_player, input$add_player, input$start_tomorrow)
-    if(input$start_tomorrow) df_h <- mutate(df_h, origin = if_else(us_date == cur_date, "past", origin))
-    if(input$future_only) df_h <- filter(df_h, origin == "future")
-    opp_name <- filter(df_h, league_week == input$h2h_week, competitor_name == input$h2h_competitor)$opponent_name[1]
-   
-    
-    h2h_plt <- bind_rows(
+    if(input$h2h_week < cur_week & input$future_only){
+      plt <- ggplot() +
+        theme_void() +
+        geom_text(aes(x = 0, y = 0, label = "Future only dumbass..."))
+      ggplotly(plt)
+    } else {
+      
+      df_h <- df_h2h_prepare(input$h2h_competitor, input$ex_player, input$add_player, input$future_from_tomorrow)
+      if(input$future_only) df_h <- filter(df_h, origin == "future")
+      opp_name <- filter(df_h, league_week == input$h2h_week, competitor_name == input$h2h_competitor)$opponent_name[1]
+     
+      h2h_plt <- bind_rows(
         filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week),
         filter(df_h, competitor_name == opp_name, league_week == input$h2h_week)
       ) |> 
-      filter(!is.na(player_id)) |> 
+      filter(!is.na(player_id), player_injury_status == "ACTIVE" | is.na(player_injury_status)) |> 
       pivot_longer(cols = c(ast, stl, blk, tov, pts, ftm, fta, fgm, fga, fg3_m, reb), names_to = "stat", values_to = "value") |> 
       select(competitor_name, player_name, stat, value) |> 
       summarise(value = sum(value, na.rm = TRUE), .by = c(competitor_name, player_name, stat)) |> 
@@ -119,7 +129,7 @@ server <- function(input, output, session) {
           filter(t_df, stat %in%  c("fga", "fgm")) |> 
             pivot_wider(names_from = stat, values_from = value) |> 
             arrange(desc(fgm)) |> 
-            mutate(fg_pct = round(fgm / fga, 3)) |> 
+            mutate(fg_pct = round(fgm / fga, 2)) |> 
             summarise(
               competitor_roster = paste0(player_name, " ", fg_pct, " (", round(fgm, 2), "/", round(fga, 2), ")", collapse = "\n"),
               value = sum(fgm) / sum(fga),
@@ -131,7 +141,7 @@ server <- function(input, output, session) {
           filter(t_df, stat %in%  c("fta", "ftm")) |> 
             pivot_wider(names_from = stat, values_from = value) |>
             arrange(desc(ftm)) |> 
-            mutate(ft_pct = round(ftm / fta, 3)) |> 
+            mutate(ft_pct = round(ftm / fta, 2)) |> 
             summarise(
               competitor_roster = paste0(player_name, " ", ft_pct, " (", round(ftm, 2), "/", round(fta, 2), ")", collapse = "\n"),
               value = sum(ftm) / sum(fta),
@@ -143,7 +153,7 @@ server <- function(input, output, session) {
           filter(t_df, stat == "tov") |> 
             arrange(value) |> 
             summarise(
-              competitor_roster = paste(player_name, round(value, 3), collapse = "\n"),
+              competitor_roster = paste(player_name, round(value), collapse = "\n"),
               value = sum(value),
               .by = c(competitor_name, stat)
             ),
@@ -152,47 +162,55 @@ server <- function(input, output, session) {
           filter(t_df, !stat %in% c("fga", "fgm", "fta", "ftm", "tov")) |> 
             arrange(desc(value)) |> 
             summarise(
-              competitor_roster = paste(player_name, round(value, 3), collapse = "\n"),
+              competitor_roster = paste(player_name, round(value), collapse = "\n"),
               value = sum(value),
               .by = c(competitor_name, stat)
             )
         )
       })()
     
-    plt <- ggplot(h2h_plt, aes(x = stat, y = value, fill = competitor_name, text = paste(round(value, 2), "\n\n", competitor_roster))) +
-      geom_col(position = "fill") +
-      geom_hline(yintercept = 0.5) +
-      labs(title = paste0("Week ", input$h2h_week, ": ", str_trim(input$h2h_competitor), " vs ", str_trim(opp_name), x = NULL, y = NULL, fill = NULL)) +
-      theme_bw()
-    
-    ggplotly(plt, tooltip = "text") |> 
-      layout(hovermode = "x")
+      plt <- ggplot(h2h_plt, aes(x = stat, y = value, fill = competitor_name, text = paste(round(value, 2), "\n\n", competitor_roster))) +
+        geom_col(position = "fill") +
+        geom_hline(yintercept = 0.5) +
+        labs(title = paste0("Week ", input$h2h_week, ": ", str_trim(input$h2h_competitor), " vs ", str_trim(opp_name), x = NULL, y = NULL, fill = NULL)) +
+        theme_bw()
+      
+      ggplotly(plt, tooltip = "text") |> 
+        layout(hovermode = "x")
+      
+    }
         
   })
   
   output$game_count_table <- render_gt({
     
-    df_h <- df_h2h_prepare(input$h2h_competitor, input$ex_player, input$add_player, input$start_tomorrow)
-    if(input$start_tomorrow) df_h <- mutate(df_h, origin = if_else(us_date == cur_date, "past", origin))
-    if(input$future_only) df_h <- filter(df_h, origin == "future")
-    opp_name <- filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week)$opponent_name[1]
-
-    df_h2h_week_game_count <- bind_rows(
+    if(input$h2h_week < cur_week & input$future_only){
+      
+      gt(as.data.frame("Future only dumbass..."))
+      
+    } else {
+    
+      df_h <- df_h2h_prepare(input$h2h_competitor, input$ex_player, input$add_player, input$future_from_tomorrow)
+      if(input$future_from_tomorrow) df_h <- mutate(df_h, origin = if_else(us_date == cur_date, "past", origin))
+      if(input$future_only) df_h <- filter(df_h, origin == "future")
+      opp_name <- filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week)$opponent_name[1]
+  
+      df_h2h_week_game_count <- bind_rows(
         filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week),
         filter(df_h, competitor_name == opp_name, league_week == input$h2h_week)
       ) |> 
-      mutate(playing = case_when(
-        !is.na(player_id) & player_injury_status == "OUT" ~ "1*",
-        !is.na(player_id) ~ "1",
+      mutate(play_status = case_when(
+        scheduled_to_play == 1 & player_injury_status == "OUT" ~ "1*",
+         scheduled_to_play == 1 ~ "1",
         .default = NA_character_
       )) |> 
-      pivot_wider(id_cols = c(competitor_id, competitor_name, opponent_id, opponent_name, player_team, player_name), names_from = us_date, values_from = playing) |> 
+      pivot_wider(id_cols = c(competitor_id, competitor_name, opponent_id, opponent_name, player_team, player_name), names_from = us_date, values_from = play_status) |> 
       (\(df){
-
+    
         inner_func <- function(x, nm) filter(x, competitor_name == nm) |>
           mutate(player_team = "Total", player_name = str_trim(nm)) |>
           summarise(across(starts_with("20"), \(x) as.character(sum(x == "1", na.rm = TRUE))), .by = c(player_team, player_name))
-
+    
         bind_rows(
           inner_func(df, opp_name),
           inner_func(df, input$h2h_competitor),
@@ -207,7 +225,7 @@ server <- function(input, output, session) {
           mutate(across(everything(), \(x) ifelse(is.na(as.numeric(x)) | as.numeric(x) <= 10, as.numeric(x), 10))) |>
           summarise(across(everything(), \(x) sum(x, na.rm = TRUE))) |>
           t()
-
+    
         mutate(df, Total = Ttl)
       })() |>
       mutate(Total = if_else(Total == 0 & is.na(player_team), NA, Total)) |>
@@ -253,6 +271,7 @@ server <- function(input, output, session) {
         tab_style(style = cell_text(align = "center"), locations = cells_body(c(starts_with("20"), Total))) |>
         cols_label_with(columns = starts_with("20"), fn = \(x) weekdays(as.Date(x))) |>
         tab_options(column_labels.background.color = "blue")
+    }
 
   }, align = "left")
 
@@ -458,10 +477,10 @@ server <- function(input, output, session) {
   })
   
 # League Game Schedule Analysis -------------------------------------------
-# Uses df_schedule 
+# Uses df_nba_schedule 
   
   # Drop box choices
-  week_drop_box_choices <- unique(paste0("Week: ", df_schedule$season_week, " (", df_schedule$week_start, " to ", df_schedule$week_end, ")"))
+  week_drop_box_choices <- unique(paste0("Week: ", df_nba_schedule$season_week, " (", df_nba_schedule$week_start, " to ", df_nba_schedule$week_end, ")"))
   
   # Update drop box values
   observe({
@@ -470,7 +489,7 @@ server <- function(input, output, session) {
       "week_selection", 
       choices = week_drop_box_choices,
       selected = week_drop_box_choices[
-        distinct(df_schedule, pick(contains("week"))) |>
+        distinct(df_nba_schedule, pick(contains("week"))) |>
           filter(week_start <= cur_date, week_end >= cur_date) |>
           pull(season_week) + 1 # plus one because index starts at 1
       ]

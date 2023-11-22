@@ -41,7 +41,7 @@ body <-
   dashboardBody(
     tabItems(
 
-# News (twitter feed) -----------------------------------------------------
+# News (transaction feed) -----------------------------------------------------
       tabItem(tabName = "news_transactions", 
         box(
           title = paste0("News: NBA transactions made within the last two weeks"),
@@ -64,8 +64,8 @@ body <-
             selectInput("h2h_week", "Week", choices = 0),
             selectInput("ex_player", "Exclude Player", choices = character(0), multiple = TRUE),
             selectInput("add_player", "Add Player", choices = character(0), multiple = TRUE),
-            checkboxInput("start_tomorrow", "Alter from tomorrow"),
-            checkboxInput("future_only", "View future games only")
+            checkboxInput("future_only", "View future games only"),
+            checkboxInput("future_from_tomorrow", "From tomorrow")
           ),
           column(
             width = 10, 

@@ -41,7 +41,7 @@ df_season_segments <<- dh_getQuery(db_con, "season_segments.sql") |>
 # NBA schedule ------------------------------------------------------------
 
 cat("\t- df_schedule\n")
-df_schedule <<- dh_getQuery(db_con, "nba_schedule.sql") |> 
+df_nba_schedule <<- dh_getQuery(db_con, "nba_schedule.sql") |> 
   group_by(slug_season) |> 
   mutate(season_week = if_else(season_week < 30, season_week + 52, season_week)) |> 
   (\(t_df) {
@@ -54,15 +54,22 @@ df_schedule <<- dh_getQuery(db_con, "nba_schedule.sql") |>
   mutate(week_start = min(game_date), week_end = max(game_date)) |> 
   ungroup() |> 
   arrange(season_week) |> 
-  mutate(playing = 1) # used in h2h calculations
+  mutate(scheduled_to_play = 1) # used in h2h calculations
+
+
+# NBA team roster -------------------------------------------------------
+
+cat("\t- df_nba_roster\n")
+df_nba_roster <<- dh_getQuery(db_con, "nba_team_roster.sql")  
 
 
 # Fantasy league schedule -------------------------------------------------
 
 cat("\t- df_fantasy_schedule\n")
-df_fantasy_schedule <<- dh_getQuery(db_con, "SELECT * FROM fty.league_schedule")
+df_fty_schedule <<- dh_getQuery(db_con, "SELECT * FROM fty.league_schedule")
 
 # Fantasy competitor roster -------------------------------------------------------
 
-cat("\t- df_roster\n")
-df_roster <<- dh_getQuery(db_con, "roster.sql") 
+cat("\t- df_fty_roster\n")
+df_fty_roster <<- dh_getQuery(db_con, "fty_team_roster.sql") 
+
