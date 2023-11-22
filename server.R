@@ -27,8 +27,6 @@ if(Sys.info()["user"] == "shiny") source(here("_proj_python.R")) # only init pyt
 
 server <- function(input, output, session) {
   
-  print(Sys.info())
-
 # Constants & Datasets ----------------------------------------------------
 
   # Start loading page
