@@ -26,6 +26,8 @@ if(Sys.info()["user"] == "shiny") source(here("_proj_python.R")) # only init pyt
 # Server ------------------------------------------------------------------
 
 server <- function(input, output, session) {
+  
+  print(Sys.info())
 
 # Constants & Datasets ----------------------------------------------------
 
@@ -40,7 +42,7 @@ server <- function(input, output, session) {
   db_con <<- if(Sys.info()["nodename"] == "Olivers-MacBook-Pro.local") dh_createCon("postgres") else dh_createCon("cockroach") 
   
   # Creates & updates datasets:
-  if(Sys.info()["nodename"] == "Olivers-MacBook-Pro.local") source(here("data", "base_frames.R")) else load(".RData")
+  if(Sys.info()["user"] == "shiny") load(".RData") else source(here("data", "base_frames.R")) 
   .load_datasets <- function() walk(list.files(here("data", "app_data_prep"), full.names = TRUE), \(x) source(x, local = TRUE))
   .load_datasets()
   cur_week <<- df_week_game_count |>    # relies on datasets
