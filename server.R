@@ -40,7 +40,7 @@ server <- function(input, output, session) {
   db_con <<- if(Sys.info()["nodename"] == "Olivers-MacBook-Pro.local") dh_createCon("postgres") else dh_createCon("cockroach") 
   
   # Creates & updates datasets:
-  if(Sys.info()["user"] == "shiny") load(".RData") else source(here("data", "base_frames.R")) 
+  if(Sys.info()["user"] == "shiny") load(".RData") else source(here("data", "base_frames.R"))
   .load_datasets <- function() walk(list.files(here("data", "app_data_prep"), full.names = TRUE), \(x) source(x, local = TRUE))
   .load_datasets()
   cur_week <<- df_week_game_count |>    # relies on datasets
@@ -216,7 +216,8 @@ server <- function(input, output, session) {
           inner_func(df, input$h2h_competitor),
           setNames(as.data.frame(matrix(rep(NA, length(colnames(df))), nrow = 1)), colnames(df)),
           select(filter(df, competitor_name == input$h2h_competitor), starts_with(c("player", "20"))) |> 
-            arrange(player_team, player_name)
+            arrange(player_team, player_name) |> 
+            mutate(across(starts_with("20"), \(x) as.character(x))) # to fix cols stored as list 🤷
         )
       })() |>
       select(-starts_with(c("competitor", "opponent"))) |>
