@@ -120,4 +120,4 @@ df_h2h_prepare <<- function(competitor=NULL, exclude=NULL, add=NULL, from_tomorr
 
 }
 
-df_h2h <<- df_h2h_prepare(competitor = "senor_cactus", from_tomorrow = FALSE)
+df_h2h_og <<- df_h2h_prepare(competitor = "senor_cactus", from_tomorrow = FALSE)

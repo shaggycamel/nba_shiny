@@ -72,20 +72,22 @@ server <- function(input, output, session) {
     updateSelectInput(session, "trend_select_player", choices = active_players)
     
     # H2H tab
-    updateSelectInput(session, "h2h_competitor", choices = unique(df_h2h$competitor_name), selected = "senor_cactus")
+    updateSelectInput(session, "h2h_competitor", choices = unique(df_fty_schedule$competitor_name), selected = "senor_cactus")
     updateSelectInput(session, "h2h_week", choices = unique(df_nba_schedule$season_week), selected = unique(filter(df_nba_schedule, week_start <= cur_date, week_end >= cur_date)$season_week))
   })
   
   # Additional H2H filter alteration
   observe({
-    competitor_players <- sort(unique(filter(df_h2h, competitor_name == input$h2h_competitor, league_week == input$h2h_week)$player_name))
+    competitor_players <- sort(unique(filter(df_h2h_og, competitor_name == input$h2h_competitor, league_week == input$h2h_week)$player_name))
     updateSelectInput(session, "ex_player", choices = competitor_players)
     updateSelectInput(session, "add_player", choices = setdiff(active_players, competitor_players))
   })
   
+  # Reactive H2H data creation
+  df_h2h <- reactive(df_h2h_prepare(input$h2h_competitor, input$ex_player, input$add_player, input$future_from_tomorrow)) |> 
+    bindEvent(input$h2h_competitor, input$ex_player, input$add_player, input$future_from_tomorrow)
   
-
-
+  
 # News Transactions -------------------------------------------------------
 
   output$news_transactions <- renderDT({
@@ -111,7 +113,7 @@ server <- function(input, output, session) {
       ggplotly(plt)
     } else {
       
-      df_h <- df_h2h_prepare(input$h2h_competitor, input$ex_player, input$add_player, input$future_from_tomorrow)
+      df_h <- df_h2h()
       if(input$future_only) df_h <- filter(df_h, origin == "future")
       opp_name <- filter(df_h, league_week == input$h2h_week, competitor_name == input$h2h_competitor)$opponent_name[1]
      
@@ -190,7 +192,7 @@ server <- function(input, output, session) {
       
     } else {
     
-      df_h <- df_h2h_prepare(input$h2h_competitor, input$ex_player, input$add_player, input$future_from_tomorrow)
+      df_h <- df_h2h()
       if(input$future_from_tomorrow) df_h <- mutate(df_h, origin = if_else(us_date == cur_date, "past", origin))
       if(input$future_only) df_h <- filter(df_h, origin == "future")
       opp_name <- filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week)$opponent_name[1]
