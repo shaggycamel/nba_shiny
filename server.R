@@ -556,7 +556,7 @@ server <- function(input, output, session) {
     }
     
     # Notepad
-    if(input$notepad != dh_getQuery(db_con, "SELECT * FROM fty.notepad")$note){
+    if(isTruthy(input$notepad) != isTruthy(dh_getQuery(db_con, "SELECT * FROM fty.notepad")$note)){
       note <- input$notepad
       DBI::dbSendQuery(db_con, "TRUNCATE fty.notepad")
       DBI::dbSendQuery(db_con, glue::glue("INSERT INTO fty.notepad (note) SELECT '{note}'"))
