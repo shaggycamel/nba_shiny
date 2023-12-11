@@ -44,6 +44,7 @@ server <- function(input, output, session) {
   .load_datasets <- function() walk(list.files(here("data", "app_data_prep"), full.names = TRUE), \(x) source(x, local = TRUE))
   .load_datasets()
   cur_week <<- df_week_game_count |>    # relies on datasets
+    mutate(week_end = if_else(week_end - week_start < 6, week_start + 6, week_end)) |> 
     filter(cur_date >= week_start, cur_date <= week_end) |> 
     pull(season_week) |> 
     unique()
@@ -73,7 +74,7 @@ server <- function(input, output, session) {
     
     # H2H tab
     updateSelectInput(session, "h2h_competitor", choices = unique(df_fty_schedule$competitor_name), selected = "senor_cactus")
-    updateSelectInput(session, "h2h_week", choices = unique(df_nba_schedule$season_week), selected = unique(filter(df_nba_schedule, week_start <= cur_date, week_end >= cur_date)$season_week))
+    updateSelectInput(session, "h2h_week", choices = unique(df_nba_schedule$season_week), selected = cur_week)
   })
   
   # Additional H2H filter alteration
@@ -492,8 +493,8 @@ server <- function(input, output, session) {
       "week_selection", 
       choices = week_drop_box_choices,
       selected = week_drop_box_choices[
-        distinct(df_nba_schedule, pick(contains("week"))) |>
-          filter(week_start <= cur_date, week_end >= cur_date) |>
+        distinct(df_nba_schedule, pick(contains("week"))) |> 
+          filter(season_week == cur_week) |>
           pull(season_week) + 1 # plus one because index starts at 1
       ]
     )
@@ -506,6 +507,11 @@ server <- function(input, output, session) {
     tbl_schedule <- tbl_week_games$data[[match(input$week_selection, week_drop_box_choices)]] |>
       mutate(across(ends_with(")"), \(x) as.factor(if_else(as.character(x) == "NULL", "", "1")))) |>
       mutate(across(c(contains("games"), Team), as.factor))
+    
+    ts_names <- str_subset(colnames(tbl_schedule), "\\(")
+    names(ts_names) <- str_sub(ts_names, end = 3)
+    ts_names <- discard(ts_names[c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")], is.na)
+    tbl_schedule <- select(tbl_schedule, Team, all_of(as.vector(ts_names)), contains("games"))
     
     # Present table
     DT::datatable(
