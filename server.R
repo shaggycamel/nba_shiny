@@ -219,7 +219,7 @@ server <- function(input, output, session) {
           inner_func(df, input$h2h_competitor),
           setNames(as.data.frame(matrix(rep(NA, length(colnames(df))), nrow = 1)), colnames(df)),
           select(filter(df, competitor_name == input$h2h_competitor), starts_with(c("player", "20"))) |> 
-            arrange(player_team, player_name) |> 
+            arrange(player_name) |> 
             mutate(across(starts_with("20"), \(x) as.character(x))) # to fix cols stored as list 🤷
         )
       })() |>
@@ -268,6 +268,10 @@ server <- function(input, output, session) {
           style = cell_fill(color = "lightgreen"),
           locations = cells_body(columns = Total, rows = Total == max(Total, na.rm = TRUE))
         ) |>
+        # tab_style(
+        #   style = cell_fill(color = "lightyellow"),
+        #   locations = cells_body(columns = Total, rows = Total == max(Total, na.rm = TRUE))
+        # ) |>        
         tab_style(
           style = list(cell_fill(color = "grey", alpha = 0.5), cell_borders(sides = c("top", "bottom"))),
           locations = cells_body(rows = 3)

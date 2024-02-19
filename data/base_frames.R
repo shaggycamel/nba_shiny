@@ -50,10 +50,11 @@ df_nba_schedule <<- dh_getQuery(db_con, "nba_schedule.sql") |>
       type_season == "Regular Season" ~ season_week - max(filter(t_df, type_season == "Pre Season")$season_week)
     ))
   })() |> 
+  mutate(season_week = if_else(season_week > 17, season_week - 1, season_week)) |> # all star week
   group_by(season_week) |> 
   mutate(week_start = min(game_date), week_end = max(game_date)) |> 
   ungroup() |> 
-  arrange(season_week) |> 
+  arrange(game_date) |> 
   mutate(scheduled_to_play = 1) # used in h2h calculations
 
 

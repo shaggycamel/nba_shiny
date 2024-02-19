@@ -81,7 +81,7 @@ df_h2h_prepare <<- function(competitor=NULL, exclude=NULL, add=NULL, from_tomorr
     ) |> 
     left_join(
       select(df_fty_schedule, -c(season, league_id)),
-      by = join_by(competitor_id, competitor_name, season_week == week),
+      by = join_by(competitor_id, competitor_name, between(game_date, week_start, week_end)),
       relationship = "many-to-many"
     ) |> 
     rename(us_date = game_date, league_week = season_week) |> 
