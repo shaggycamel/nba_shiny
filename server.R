@@ -2,16 +2,17 @@
 
 # Libraries ---------------------------------------------------------------
 
-library(DT)
+library(nba.dataRub)
 library(here)
+library(dplyr)
 library(tidyr)
 library(purrr)
 library(lubridate)
 library(stringr)
-library(nba.dataRub)
 library(tibble)
 library(ggplot2)
 library(plotly)
+library(DT)
 
 # Init files --------------------------------------------------------------
 
@@ -41,8 +42,19 @@ server <- function(input, output, session) {
     unique()
   
   # Maybe get to the point where I place free agents at top of list
-  active_players <<- as.tibble(df_player_log) |> 
-    summarise(avg_min = median(min), .by = c(player_name, free_agent_status)) |> 
+  active_players <<- df_player_log |> 
+    summarise(avg_min = median(min), .by = player_name) |> 
+    arrange(desc(avg_min)) |>
+    pull(player_name)
+  
+  teams <<- df_player_log |> 
+    pull(team_slug) |> 
+    unique() |> 
+    sort()
+  
+  free_agents <<- df_player_log |> 
+    filter(free_agent_status == "ACTIVE") |> 
+    summarise(avg_min = median(min), .by = player_name) |> 
     arrange(desc(avg_min)) |>
     pull(player_name)
     
@@ -55,9 +67,9 @@ server <- function(input, output, session) {
     #   else round(quantile(summarise(group_by(t_df, player_id), min = mean(min, na.rm = TRUE))$min))
     # updateSliderTextInput(session, "overview_minute_filter", choices = seq(from = min_range[["100%"]], to = min_range[["0%"]]), selected = min_range[["75%"]])
     
-    # Player performance tab
-    # updateSelectizeInput(session, "performance_select_player", choices = active_players, server = TRUE)
-    # updatePickerInput(session, "team_filter", choices = sort(unique(df_player_log$team_slug)))
+    # Player Comparison tab
+    updateSelectizeInput(session, "comparison_select_player", choices = active_players, server = TRUE)
+    updatePickerInput(session, "comparison_team_filter", choices = teams)
     
     # Player trend tab
     updateSelectInput(session, "trend_select_player", choices = active_players)
@@ -66,6 +78,37 @@ server <- function(input, output, session) {
     # updateSelectInput(session, "h2h_competitor", choices = unique(df_fty_schedule$competitor_name), selected = "senor_cactus")
     # updateSelectInput(session, "h2h_week", choices = unique(df_nba_schedule$season_week), selected = cur_week)
   })
+  
+
+# NBA Player Comparison -------------------------------------------------------
+
+  # Reactively filter player selection list
+  observe({
+    
+    fa <- free_agents
+    xl_at <- if(length(input$comparison_excels_at_filter) > 0)
+      filter(df_perf_tab, stringr::str_detect(`Excels At`, paste0(filter(stat_selection, formatted_name %in% input$excels_at_filter)$database_name, collapse = "|")))$Player
+    else active_players # base event, when no xl_at is selected
+
+    chs <- if(!input$comparison_free_agent_filter) xl_at
+      else intersect(xl_at, fa)
+    
+    chs <- if(length(input$comparison_team_filter) == 0) chs
+      else intersect(df_player_log |> filter(team_slug %in% input$team_filter) |> pull(player_name), chs)
+
+    updateSelectizeInput(session, "comparison_select_player", choices = chs, server = TRUE)
+  })  
+  
+  # Count how many events a player excels given the selection
+  .calc_xl_at_count <- function(df){
+    df$xl_at_count <- 0
+    for(category in filter(stat_selection, formatted_name %in% input$excels_at_filter, !str_detect(formatted_name, "%"))$database_name){
+      df <- mutate(df, xl_at_count = str_detect(`Excels At`, category) + xl_at_count)
+    }
+    df
+  }  
+  
+  
   
 
 # NBA Player Trend --------------------------------------------------------
