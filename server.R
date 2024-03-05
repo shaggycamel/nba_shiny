@@ -106,8 +106,73 @@ server <- function(input, output, session) {
       df <- mutate(df, xl_at_count = str_detect(`Excels At`, category) + xl_at_count)
     }
     df
-  }  
+  } 
   
+  output$player_comparison_table <- renderDT({
+    
+    df_comparison <<- df_player_log |> 
+      filter(
+        game_date <= cur_date, 
+        game_date >= cur_date - days(15)
+        # game_date >= cur_date - if_else(input$date_range_switch == "Two Weeks", days(15), days(30))
+      ) |>
+      summarise(across(any_of(anl_cols$stat_cols), ~ mean(.x)), .by = c(player_id, player_name)) |>
+      calc_z_pcts() |> 
+      select(-ends_with("_pct")) |> 
+      as.tibble() |> 
+      mutate(across(where(is.numeric), ~ replace_na(.x, 0L))) |> 
+      (\(t_df) {
+        left_join(
+          t_df,
+          {
+            select(t_df, player_id, player_name, any_of(stat_selection$database_name), -min) |> 
+              mutate(across(any_of(stat_selection$database_name[stat_selection$database_name != "tov"]), ~ round(scales::rescale(.x), 2))) |>
+              mutate(tov = round((((tov * -1) - min(tov)) / (max(tov) - min(tov))) + 1, 2)) |>
+              pivot_longer(cols = any_of(stat_selection$database_name), names_to = "stat") |>
+              (\(t_df) {
+                bind_rows(
+                  mutate(slice_max(t_df, value, n = 3, by = c(player_id, player_name), with_ties = FALSE), performance = "Excels At") |> filter(value > 0),
+                  mutate(slice_min(t_df, value, n = 3, by = c(player_id, player_name)), performance = "Weak At")
+                )
+              })() |> 
+              mutate(stat_value = paste0(stat, " (", value, ")")) |> 
+              group_by(player_id, player_name, performance) |> 
+              summarise(stat_value = paste(stat_value, collapse = "<br>"), .groups = "drop") |> 
+              pivot_wider(names_from = performance, values_from = stat_value)
+          },
+          by = join_by(player_name, player_id)
+        )
+      })() |> 
+      select(player_name, any_of(stat_selection$database_name), contains("at"), -ends_with("pct")) |> 
+      arrange(player_name) |> 
+      rename(any_of(setNames(stat_selection$database_name, stat_selection$formatted_name)), Player = player_name) |> 
+      .calc_xl_at_count()
+    
+  #   df <- data.frame(cat = letters[1:5], 
+  #                t1 = c(33, NA, 89, 45, NA),
+  #                t2 = c(NA, NA, 4, NA, 23),
+  #                t3 = c(56, NA, NA, 67, NA),
+  #                t4 = c(NA, NA, 12, 66, NA))
+  # 
+  # uval <- unique(df[!is.na(df)])
+  
+  # filter(df_comparison, Player %in% input$performance_select_player) |> 
+  filter(df_comparison, Player %in% c("LeBron James", "Kyle Lowry")) |>
+    datatable(
+      rownames = FALSE, 
+      options = list(
+        dom = "t",
+        initComplete = JS("function(settings, json) {alert('Done.');}")
+      )
+    ) |> 
+    formatStyle(columns = "Player", backgroundColor = "lightblue") |> 
+    formatCurrency(c(2:4, 7:11), "", digits=1) |> 
+    formatCurrency(5:6, "")
+   # backgroundColor = styleEqual(
+        #   levels = c(NA, uval), 
+        #   c('red', rep('lightgreen', length(uval)))
+        # )
+  })
   
   
 
@@ -191,7 +256,7 @@ server <- function(input, output, session) {
     tbl_schedule <- select(tbl_schedule, Team, contains("games"), all_of(as.vector(ts_names)))
 
     # Present table
-    DT::datatable(
+    datatable(
       tbl_schedule,
       rownames = FALSE,
       class = "cell-border stripe",
