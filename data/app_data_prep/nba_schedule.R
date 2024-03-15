@@ -7,37 +7,24 @@ df_week_game_count <<- df_nba_schedule |>
     week_games_remaining = sum(week_games_remaining), 
     week_games = n(), 
     .by = c(season_week, week_start, week_end, team)
-  )
-
-df_week_game_count <<- left_join(
-    tibble::as.tibble(df_week_game_count),
-    select(df_week_game_count, team, next_week = season_week, following_week_games = week_games) |> 
-      tibble::as.tibble(df_week_game_count),
-      # mutate(next_week = next_week - 1),
-    join_by(team, closest(season_week <= next_week))
-  ) |> 
-  lazy_dt()
+  ) |> (\(t_df) {
+    left_join(
+      t_df,
+      select(t_df, team, next_week = season_week, following_week_games = week_games),
+      join_by(team, closest(season_week < next_week))
+    ) |> 
+    select(-next_week)
+  })()
 
 
-
-tbl_week_games <<- tibble::as_tibble(df_nba_schedule) |> 
-  bind_rows(
-    tibble::as_tibble(df_nba_schedule) |> 
-      filter(weekdays(game_date, abbreviate = TRUE) %in% c("Mon", "Tue")) |> 
-      mutate(season_week = season_week - 1)
-  ) |> 
-  lazy_dt() |>
-  mutate(game_date = paste0(weekdays(game_date, abbreviate = TRUE), " (", format(game_date, "%m/%d"), ")")) |> 
-  select(slug_season, season_week, game_date, team, against) |> 
-  tibble::as_tibble() |>
-  nest_by(slug_season, season_week, .keep = TRUE) |> 
-  mutate(data = list(
-    pivot_wider(data, names_from = game_date, values_from = against, values_fn = list) |> 
-      left_join(
-        tibble::as_tibble(df_week_game_count) |> 
-          select(season_week, team, contains("games"),-week_games)
-      ) |> 
-      select(-slug_season, -season_week) |> 
-      arrange(team) |> 
-      rename_with(~ str_to_title(str_replace_all(.x, "_", " ")))
-  ))
+tbl_week_games <<- df_nba_schedule |> 
+      mutate(game_date = paste0(weekdays(game_date, abbreviate = TRUE), " (", format(game_date, "%m/%d"), ")")) |> 
+      select(slug_season, season_week, game_date, team, against) |> 
+      nest_by(slug_season, season_week, .keep = TRUE) |> 
+      mutate(data = list(
+        pivot_wider(data, names_from = game_date, values_from = against, values_fn = list) |> 
+        left_join(select(df_week_game_count, season_week, team, contains("games"),-week_games)) |> 
+        select(-slug_season, -season_week) |> 
+        arrange(desc(week_games_remaining), team) |> 
+        rename_with(~ str_to_title(str_replace_all(.x, "_", " ")))
+      ))

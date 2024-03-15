@@ -41,23 +41,22 @@ server <- function(input, output, session) {
     pull(season_week) |>
     unique()
   
-  # Maybe get to the point where I place free agents at top of list
-  active_players <<- df_player_log |> 
-    summarise(avg_min = median(min), .by = player_name) |> 
-    arrange(desc(avg_min)) |>
-    pull(player_name)
-  
   teams <<- df_player_log |> 
     pull(team_slug) |> 
     unique() |> 
     sort()
   
-  free_agents <<- df_player_log |> 
-    filter(free_agent_status == "ACTIVE") |> 
-    summarise(avg_min = median(min), .by = player_name) |> 
-    arrange(desc(avg_min)) |>
-    pull(player_name)
-    
+  sort_players_by_min_desc <- function(df) {
+    summarise(df, avg_min = median(min), .by = player_name) |> 
+      arrange(desc(avg_min)) |>
+      pull(player_name)
+  }
+  
+  # Maybe get to the point where I place free agents at top of list
+  active_players <<- sort_players_by_min_desc(df_player_log)
+  free_agents <<- sort_players_by_min_desc(filter(df_player_log, free_agent_status == "ACTIVE"))
+  
+
   observe({
     # Player overview tab
     # t_df <- df_player_log
@@ -87,22 +86,24 @@ server <- function(input, output, session) {
     
     fa <- free_agents
     xl_at <- if(length(input$comparison_excels_at_filter) > 0)
-      filter(df_perf_tab, stringr::str_detect(`Excels At`, paste0(filter(stat_selection, formatted_name %in% input$excels_at_filter)$database_name, collapse = "|")))$Player
+      filter(df_comparison, stringr::str_detect(`Excels At`, paste0(filter(stat_selection, formatted_name %in% input$comparison_excels_at_filter)$database_name, collapse = "|")))$Player
     else active_players # base event, when no xl_at is selected
 
     chs <- if(!input$comparison_free_agent_filter) xl_at
       else intersect(xl_at, fa)
     
+    chs <- intersect(filter(df_comparison, Minutes >= input$comparison_minute_filter)$Player, chs)
+    
     chs <- if(length(input$comparison_team_filter) == 0) chs
-      else intersect(df_player_log |> filter(team_slug %in% input$team_filter) |> pull(player_name), chs)
-
-    updateSelectizeInput(session, "comparison_select_player", choices = chs, server = TRUE)
+      else intersect(df_player_log |> filter(team_slug %in% input$comparison_team_filter) |> pull(player_name), chs)
+    
+    updateSelectizeInput(session, "comparison_select_player", choices = active_players[active_players %in% chs], server = TRUE)
   })  
   
   # Count how many events a player excels given the selection
   .calc_xl_at_count <- function(df){
     df$xl_at_count <- 0
-    for(category in filter(stat_selection, formatted_name %in% input$excels_at_filter, !str_detect(formatted_name, "%"))$database_name){
+    for(category in filter(stat_selection, formatted_name %in% input$comparison_excels_at_filter, !str_detect(formatted_name, "%"))$database_name){
       df <- mutate(df, xl_at_count = str_detect(`Excels At`, category) + xl_at_count)
     }
     df
@@ -113,13 +114,12 @@ server <- function(input, output, session) {
     df_comparison <<- df_player_log |> 
       filter(
         game_date <= cur_date, 
-        game_date >= cur_date - days(15)
-        # game_date >= cur_date - if_else(input$date_range_switch == "Two Weeks", days(15), days(30))
-      ) |>
+        # game_date >= cur_date - days(15)
+        game_date >= cur_date - if_else(input$date_range_switch == "Two Weeks", days(15), days(30))
+      ) |> 
       summarise(across(any_of(anl_cols$stat_cols), ~ mean(.x)), .by = c(player_id, player_name)) |>
-      calc_z_pcts() |> 
-      select(-ends_with("_pct")) |> 
-      as.tibble() |> 
+      calc_z_pcts() |>
+      select(-ends_with("_pct")) |>
       mutate(across(where(is.numeric), ~ replace_na(.x, 0L))) |> 
       (\(t_df) {
         left_join(
@@ -137,7 +137,7 @@ server <- function(input, output, session) {
               })() |> 
               mutate(stat_value = paste0(stat, " (", value, ")")) |> 
               group_by(player_id, player_name, performance) |> 
-              summarise(stat_value = paste(stat_value, collapse = "<br>"), .groups = "drop") |> 
+              summarise(stat_value = paste(stat_value, collapse = "\n"), .groups = "drop") |> 
               pivot_wider(names_from = performance, values_from = stat_value)
           },
           by = join_by(player_name, player_id)
@@ -148,30 +148,44 @@ server <- function(input, output, session) {
       rename(any_of(setNames(stat_selection$database_name, stat_selection$formatted_name)), Player = player_name) |> 
       .calc_xl_at_count()
     
-  #   df <- data.frame(cat = letters[1:5], 
-  #                t1 = c(33, NA, 89, 45, NA),
-  #                t2 = c(NA, NA, 4, NA, 23),
-  #                t3 = c(56, NA, NA, 67, NA),
-  #                t4 = c(NA, NA, 12, 66, NA))
-  # 
-  # uval <- unique(df[!is.na(df)])
+  df_comparison_table <- filter(df_comparison, Player %in% input$comparison_select_player) |> 
+    arrange(factor(Player, levels = input$comparison_select_player))
   
-  # filter(df_comparison, Player %in% input$performance_select_player) |> 
-  filter(df_comparison, Player %in% c("LeBron James", "Kyle Lowry")) |>
+  df_comparison_table |> 
     datatable(
       rownames = FALSE, 
-      options = list(
+      options = lst(
         dom = "t",
-        initComplete = JS("function(settings, json) {alert('Done.');}")
+        columnDefs = list(list(visible = FALSE, targets = which(names(df_comparison_table) == "xl_at_count") - 1))
       )
     ) |> 
     formatStyle(columns = "Player", backgroundColor = "lightblue") |> 
-    formatCurrency(c(2:4, 7:11), "", digits=1) |> 
-    formatCurrency(5:6, "")
-   # backgroundColor = styleEqual(
-        #   levels = c(NA, uval), 
-        #   c('red', rep('lightgreen', length(uval)))
-        # )
+    formatStyle(columns = colnames(df_comparison_table), border = "1px solid #000000") |> 
+    formatCurrency(c(2:4, 7:11), "", digits=1) |>
+    formatCurrency(5:6, "") |>
+    formatStyle(
+      "Turnovers",
+      backgroundColor = styleInterval(min(df_comparison_table$Turnovers) + 0.01, c("lightgreen", "white")),
+    ) |>
+    (\(dt){
+        cols <- c("Minutes", "3-pointers", "Points", "Field Goal Z", "Free Throw Z", "Rebounds", "Assists", "Steals", "Blocks")
+        for(col in cols){
+          dt <- formatStyle(
+            dt,
+            columns = col,
+            backgroundColor = styleInterval(max(df_comparison_table[[col]]) - 0.01, c('white', 'lightgreen'))
+          )
+        }
+        dt
+      })() |> 
+      # NOT WORKING !!! ???
+      formatStyle(
+      columns = which(names(df_comparison_table) == "Excels At") - 1, 
+      valueColumns = which(names(df_comparison_table) == "xl_at_count") - 1,
+      backgroundColor = styleEqual(0:3, c("white", "lightblue1", "dodgerblue", "blue"))
+      )
+    
+    
   })
   
   
@@ -190,8 +204,7 @@ server <- function(input, output, session) {
       ggplotly(plt)
     } else {
       
-      df_trend <- 
-        as.tibble(
+      df_trend <- (
           if(!input$this_season_trend_switch) df_player_log
             else filter(df_player_log, slug_season == cur_season)
         ) |> 
@@ -223,7 +236,7 @@ server <- function(input, output, session) {
 # NBA Schedule Table ------------------------------------------------------
 
   # Drop box choices
-  ss_week <- as.tibble(select(df_nba_schedule, season_week, week_start, week_end))
+  ss_week <- select(df_nba_schedule, season_week, week_start, week_end)
   week_drop_box_choices <- unique(paste0("Week: ", ss_week$season_week, " (", ss_week$week_start, " to ", ss_week$week_end, ")"))
   
   # Update drop box values
@@ -233,7 +246,7 @@ server <- function(input, output, session) {
       "week_selection", 
       choices = week_drop_box_choices,
       selected = week_drop_box_choices[
-        as.tibble(df_nba_schedule) |> 
+        df_nba_schedule |> 
           distinct(pick(contains("week"))) |> 
           filter(season_week == cur_week) |>
           pull(season_week) + 2 # plus for correct index
