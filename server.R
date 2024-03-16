@@ -115,7 +115,7 @@ server <- function(input, output, session) {
       filter(
         game_date <= cur_date, 
         # game_date >= cur_date - days(15)
-        game_date >= cur_date - if_else(input$date_range_switch == "Two Weeks", days(15), days(30))
+        game_date >= cur_date - case_when(input$date_range_switch == "Two Weeks" ~ days(15), input$date_range_switch == "One Month" ~ days(30), .default = days(7))
       ) |> 
       summarise(across(any_of(anl_cols$stat_cols), ~ mean(.x)), .by = c(player_id, player_name)) |>
       calc_z_pcts() |>
@@ -144,48 +144,72 @@ server <- function(input, output, session) {
         )
       })() |> 
       select(player_name, any_of(stat_selection$database_name), contains("at"), -ends_with("pct")) |> 
-      arrange(player_name) |> 
       rename(any_of(setNames(stat_selection$database_name, stat_selection$formatted_name)), Player = player_name) |> 
+      left_join(
+        slice_max(df_player_log, game_date, by = player_name) |> 
+          select(Player = player_name, Team = team_slug, free_agent_status),
+        by = join_by(Player)
+      ) |> 
+      mutate(play_status = str_extract(free_agent_status, "[OUT|DAY|SUS].*")) |> 
+      mutate(play_status = case_when(
+        play_status == "OUT" ~ "(out)",
+        play_status == "SUSPENSION" ~ "(sus)",
+        play_status == "DAY_TO_DAY" ~ "(d2d)",
+        .default = ""
+      )) |> 
+      mutate(
+        Player = paste(Player, play_status),
+        player_colour = case_when(
+          play_status == "(out)" ~ "red",
+          play_status == "(sus)" ~ "pink",
+          play_status == "(d2d)" ~ "pink",
+          .default = "lightblue"
+        )
+      ) |> 
+      relocate(Team, .after = Player) |> 
       .calc_xl_at_count()
     
-  df_comparison_table <- filter(df_comparison, Player %in% input$comparison_select_player) |> 
-    arrange(factor(Player, levels = input$comparison_select_player))
-  
-  df_comparison_table |> 
-    datatable(
-      rownames = FALSE, 
-      options = lst(
-        dom = "t",
-        columnDefs = list(list(visible = FALSE, targets = which(names(df_comparison_table) == "xl_at_count") - 1))
-      )
-    ) |> 
-    formatStyle(columns = "Player", backgroundColor = "lightblue") |> 
-    formatStyle(columns = colnames(df_comparison_table), border = "1px solid #000000") |> 
-    formatCurrency(c(2:4, 7:11), "", digits=1) |>
-    formatCurrency(5:6, "") |>
-    formatStyle(
-      "Turnovers",
-      backgroundColor = styleInterval(min(df_comparison_table$Turnovers) + 0.01, c("lightgreen", "white")),
-    ) |>
-    (\(dt){
-        cols <- c("Minutes", "3-pointers", "Points", "Field Goal Z", "Free Throw Z", "Rebounds", "Assists", "Steals", "Blocks")
-        for(col in cols){
-          dt <- formatStyle(
-            dt,
-            columns = col,
-            backgroundColor = styleInterval(max(df_comparison_table[[col]]) - 0.01, c('white', 'lightgreen'))
-          )
-        }
-        dt
-      })() |> 
-      # NOT WORKING !!! ???
+    df_comparison_table <- filter(df_comparison, Minutes >= input$comparison_minute_filter)
+    if(input$comparison_free_agent_filter) df_comparison_table <- filter(df_comparison_table, !is.na(free_agent_status))
+    if(!is_null(input$comparison_team_filter)) df_comparison_table <- filter(df_comparison_table, Team %in% input$comparison_team_filter)
+    if(!is_null(input$comparison_excels_at_filter)) df_comparison_table <- filter(df_comparison_table, str_detect(`Excels At`, paste0(filter(stat_selection, formatted_name %in% input$comparison_excels_at_filter)$database_name, collapse = "|")))
+    df_comparison_table <- select(df_comparison_table, -ends_with("_status")) |> 
+      arrange(desc(Minutes))
+    
+    df_comparison_table |> 
+      datatable(
+        rownames = FALSE, 
+        options = lst(
+          dom = "t",
+          paging = FALSE,
+          columnDefs = list(list(visible = FALSE, targets = str_which(colnames(df_comparison_table), "_count|_colour") - 1))
+        )
+      ) |> 
+      formatStyle(columns = "Player", valueColumns = "player_colour", backgroundColor = styleEqual(c("red", "pink", "lightblue"), c("red", "pink", "lightblue"))) |> 
+      formatStyle(columns = colnames(df_comparison_table), border = "1px solid #000000") |> 
+      formatCurrency(c(3:5, 8:12), "", digits=1) |>
+      formatCurrency(6:7, "") |>
       formatStyle(
-      columns = which(names(df_comparison_table) == "Excels At") - 1, 
-      valueColumns = which(names(df_comparison_table) == "xl_at_count") - 1,
-      backgroundColor = styleEqual(0:3, c("white", "lightblue1", "dodgerblue", "blue"))
-      )
-    
-    
+        "Turnovers",
+        backgroundColor = styleInterval(min(df_comparison_table$Turnovers) + 0.01, c("lightgreen", "white")),
+      ) |>
+      (\(dt){
+          cols <- c("Minutes", "3-pointers", "Points", "Field Goal Z", "Free Throw Z", "Rebounds", "Assists", "Steals", "Blocks")
+          for(col in cols){
+            dt <- formatStyle(
+              dt,
+              columns = col,
+              backgroundColor = styleInterval(max(df_comparison_table[[col]]) - 0.01, c('white', 'lightgreen'))
+            )
+          }
+          dt
+        })() |> 
+        # NOT WORKING !!! ???
+        formatStyle(
+          columns = which(names(df_comparison_table) == "Excels At") - 1, 
+          valueColumns = which(names(df_comparison_table) == "xl_at_count") - 1,
+          backgroundColor = styleEqual(0:3, c("white", "lightblue1", "dodgerblue", "blue"))
+        )
   })
   
   
@@ -234,7 +258,10 @@ server <- function(input, output, session) {
 
 
 # NBA Schedule Table ------------------------------------------------------
-
+# TODO: Fix addition of Mon/Tue following week.
+  # Add date pin capability
+  
+  
   # Drop box choices
   ss_week <- select(df_nba_schedule, season_week, week_start, week_end)
   week_drop_box_choices <- unique(paste0("Week: ", ss_week$season_week, " (", ss_week$week_start, " to ", ss_week$week_end, ")"))

@@ -13,11 +13,11 @@ source(here::here("_proj_useful.R"))
 
 page_player_comparison <- layout_sidebar(
   sidebar = sidebar(
-    selectInput("comparison_select_player", "Player", multiple = TRUE, choices = character(0)),
+    # selectInput("comparison_select_player", "Player", multiple = TRUE, choices = character(0)),
     pickerInput("comparison_team_filter", "Team", choices = character(0), multiple = TRUE),
     pickerInput("comparison_excels_at_filter", "Excels at", choices = dplyr::filter(stat_selection, !stringr::str_detect(formatted_name, "%"))$formatted_name, multiple = TRUE, options =  list("max-options" = 5)),
     sliderInput("comparison_minute_filter", "Minute", min = 0, max = 50, value = 20, round = TRUE),
-    radioButtons("date_range_switch", NULL, choices = c("Two Weeks", "One Month")),
+    radioButtons("date_range_switch", NULL, choices = c("Seven Days", "Two Weeks", "One Month")),
     checkboxInput("comparison_free_agent_filter", "Free Agents only"),
   ),
   card(full_screen = TRUE, DT::DTOutput("player_comparison_table")),
