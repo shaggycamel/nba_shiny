@@ -11,6 +11,9 @@ source(here::here("_proj_useful.R"))
 
 # Sidebar pages -----------------------------------------------------------
 
+
+# Player Comparison -------------------------------------------------------
+
 page_player_comparison <- layout_sidebar(
   sidebar = sidebar(
     # selectInput("comparison_select_player", "Player", multiple = TRUE, choices = character(0)),
@@ -24,6 +27,9 @@ page_player_comparison <- layout_sidebar(
   fillable = TRUE
 )
 
+
+# Player Trend ------------------------------------------------------------
+
 page_player_trend <- layout_sidebar(
   sidebar = sidebar(
     selectInput("trend_select_stat", "Statistic", choices = dplyr::filter(stat_selection, !stringr::str_detect(formatted_name, "Z"))$formatted_name),
@@ -34,8 +40,14 @@ page_player_trend <- layout_sidebar(
   fillable = TRUE
 )
 
+
+# League Game Schedule ----------------------------------------------------
+
 page_league_game_schedule <- layout_sidebar(
-  sidebar = selectInput("week_selection", "Week", choices = character(0), selectize = FALSE),
+  sidebar = sidebar(
+    selectInput("week_selection", "Week", choices = character(0), selectize = FALSE),
+    dateInput("pin_date_count", "Days From Column")
+  ),
   card(full_screen = TRUE, DT::DTOutput("schedule_table")),
   fillable = TRUE
 )

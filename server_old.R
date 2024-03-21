@@ -508,7 +508,8 @@ server <- function(input, output, session) {
   output$schedule_table <- renderDT({
     
     # Prepare tables to be presented
-    tbl_schedule <- tbl_week_games$data[[match(input$week_selection, week_drop_box_choices)]] |>
+    # tbl_schedule <- tbl_week_games$data[[match(input$week_selection, week_drop_box_choices)]] |>
+    tbl_schedule <- tbl_week_games$data[[19]] |>
       mutate(across(ends_with(")"), \(x) as.factor(if_else(as.character(x) == "NULL", "", "1")))) |>
       mutate(across(c(contains("games"), Team), as.factor))
     

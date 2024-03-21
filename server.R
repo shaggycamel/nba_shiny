@@ -81,25 +81,6 @@ server <- function(input, output, session) {
 
 # NBA Player Comparison -------------------------------------------------------
 
-  # Reactively filter player selection list
-  observe({
-    
-    fa <- free_agents
-    xl_at <- if(length(input$comparison_excels_at_filter) > 0)
-      filter(df_comparison, stringr::str_detect(`Excels At`, paste0(filter(stat_selection, formatted_name %in% input$comparison_excels_at_filter)$database_name, collapse = "|")))$Player
-    else active_players # base event, when no xl_at is selected
-
-    chs <- if(!input$comparison_free_agent_filter) xl_at
-      else intersect(xl_at, fa)
-    
-    chs <- intersect(filter(df_comparison, Minutes >= input$comparison_minute_filter)$Player, chs)
-    
-    chs <- if(length(input$comparison_team_filter) == 0) chs
-      else intersect(df_player_log |> filter(team_slug %in% input$comparison_team_filter) |> pull(player_name), chs)
-    
-    updateSelectizeInput(session, "comparison_select_player", choices = active_players[active_players %in% chs], server = TRUE)
-  })  
-  
   # Count how many events a player excels given the selection
   .calc_xl_at_count <- function(df){
     df$xl_at_count <- 0
@@ -285,15 +266,25 @@ server <- function(input, output, session) {
 
     # Prepare tables to be presented
     tbl_schedule <<- tbl_week_games$data[[match(input$week_selection, week_drop_box_choices)]] |>
-      mutate(across(ends_with(")"), \(x) as.factor(if_else(as.character(x) == "NULL", ".", "1")))) |>
+    # tbl_schedule <<- tbl_week_games$data[[21]] |>
+      mutate(across(ends_with(")"), \(x) if_else(as.character(x) == "NULL", 0, 1))) |>
       mutate(across(c(contains("games"), Team), as.factor))
 
-    ts_names <- str_subset(colnames(tbl_schedule), "\\(")
-    names(ts_names) <- str_sub(ts_names, end = 3)
-    names(ts_names)[length(ts_names)] <- paste0("2_", names(ts_names)[length(ts_names)])
-    names(ts_names)[length(ts_names)-1] <- paste0("2_", names(ts_names)[length(ts_names)-1])
-    ts_names <- discard(ts_names[c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "2_Mon", "2_Tue")], is.na)
-    tbl_schedule <- select(tbl_schedule, Team, contains("games"), all_of(as.vector(ts_names)))
+    ts_names <- tmp_names <- str_subset(colnames(tbl_schedule), "\\(")
+    names(ts_names) <- names(tmp_names) <- str_sub(ts_names, end = 3)
+    for(ix in 1:length(ts_names)){
+      nm <- table(names(tmp_names)[1:ix])[names(tmp_names)[ix]]
+      names(ts_names)[ix] <- paste0(nm[[1]], "_", names(nm))
+      if(nm == 1) wk_th <- ix
+    }
+    ts_names <- discard(ts_names[c("1_Mon", "1_Tue", "1_Wed", "1_Thu", "1_Fri", "1_Sat", "1_Sun", "2_Mon", "2_Tue")], is.na)
+    
+    tbl_schedule <- tbl_schedule |> 
+      rowwise() |> 
+      mutate(`Games From Pin` = sum(c_across(str_subset(ts_names, format(input$pin_date_count, "%m/%d")):ts_names[wk_th])), .before = "Following Week Games") |> 
+      relocate(contains("games"), .after = wk_th + 1) |> 
+      mutate(across(ends_with(")"), \(x) as.factor(if_else(x == 0, ".", "1"))))
+
 
     # Present table
     datatable(
@@ -305,9 +296,9 @@ server <- function(input, output, session) {
     ) |> 
     formatStyle(columns = "Team", backgroundColor = "lightblue") |>
     (\(tb){
-      lvl <- 0:length(unique(tbl_schedule$`Week Games Remaining`))
+      lvl <- 0:length(unique(tbl_schedule$`Games From Pin`))
       col <- c("white", rev(RColorBrewer::brewer.pal(5, "Greens")))[lvl + 1]
-      formatStyle(tb, columns = "Week Games Remaining", backgroundColor = styleEqual(levels = lvl, values = col))
+      formatStyle(tb, columns = "Games From Pin", backgroundColor = styleEqual(levels = lvl, values = col))
     })() |>
     formatStyle(
       columns = "Following Week Games",
