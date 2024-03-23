@@ -22,7 +22,7 @@ source(here("_proj_useful.R"))
 # Server code -------------------------------------------------------------
 
 server <- function(input, output, session) {
-  
+
   # Variables
   cur_date <<- as.Date(str_extract(as.POSIXct(Sys.time(), tz="NZ"), "\\d{4}-\\d{2}-\\d{2}")) - 1
   cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
@@ -74,8 +74,123 @@ server <- function(input, output, session) {
     updateSelectInput(session, "trend_select_player", choices = active_players)
     
     # H2H tab
-    # updateSelectInput(session, "h2h_competitor", choices = unique(df_fty_schedule$competitor_name), selected = "senor_cactus")
-    # updateSelectInput(session, "h2h_week", choices = unique(df_nba_schedule$season_week), selected = cur_week)
+    updateSelectInput(session, "h2h_competitor", choices = unique(df_fty_schedule$competitor_name), selected = "senor_cactus")
+    updateSelectInput(session, "h2h_week", choices = unique(df_nba_schedule$season_week), selected = cur_week)
+  })
+  
+  # Additional H2H filter alteration
+  observe({
+    competitor_players <- sort(unique(filter(df_h2h_og, competitor_name == input$h2h_competitor, league_week == input$h2h_week)$player_name))
+    updateSelectInput(session, "h2h_ex_player", choices = competitor_players)
+    updateSelectInput(session, "h2h_add_player", choices = setdiff(active_players, competitor_players))
+  })
+  
+
+# FTY Head to Head --------------------------------------------------------
+
+  output$h2h_game_table <- renderDT({
+    
+    datatable(
+      as.data.frame("Future only dumbass..."),
+      rownames = FALSE,
+      colnames = "",
+      options = lst(dom = "t", paging = FALSE), 
+    )
+    
+  # if(input$h2h_week < cur_week & input$future_only){
+  #   
+  #   datatable(as.data.frame("Future only dumbass..."))
+  #   
+  # } else {
+  # 
+  #   df_h <- df_h2h()
+  #   if(input$future_from_tomorrow) df_h <- mutate(df_h, origin = if_else(us_date == cur_date, "past", origin))
+  #   if(input$future_only) df_h <- filter(df_h, origin == "future")
+  #   opp_name <- filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week)$opponent_name[1]
+  # 
+  #   df_h2h_week_game_count <- bind_rows(
+  #     filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week),
+  #     filter(df_h, competitor_name == opp_name, league_week == input$h2h_week)
+  #   ) |> 
+  #   mutate(play_status = case_when(
+  #     scheduled_to_play == 1 & player_injury_status == "OUT" ~ "1*",
+  #      scheduled_to_play == 1 ~ "1",
+  #     .default = NA_character_
+  #   )) |> 
+  #   pivot_wider(id_cols = c(competitor_id, competitor_name, opponent_id, opponent_name, player_team, player_name), names_from = us_date, values_from = play_status) |> 
+  #   (\(df){
+  # 
+  #     inner_func <- function(x, nm) filter(x, competitor_name == nm) |>
+  #       mutate(player_team = "Total", player_name = str_trim(nm)) |>
+  #       summarise(across(starts_with("20"), \(x) as.character(sum(x == "1", na.rm = TRUE))), .by = c(player_team, player_name))
+  # 
+  #     bind_rows(
+  #       inner_func(df, opp_name),
+  #       inner_func(df, input$h2h_competitor),
+  #       setNames(as.data.frame(matrix(rep(NA, length(colnames(df))), nrow = 1)), colnames(df)),
+  #       select(filter(df, competitor_name == input$h2h_competitor), starts_with(c("player", "20"))) |> 
+  #         arrange(player_name) |> 
+  #         mutate(across(starts_with("20"), \(x) as.character(x))) # to fix cols stored as list 🤷
+  #     )
+  #   })() |>
+  #   select(-starts_with(c("competitor", "opponent"))) |>
+  #   (\(df){
+  #     Ttl = as.data.frame(t(df)) |>
+  #       mutate(across(everything(), \(x) ifelse(is.na(as.numeric(x)) | as.numeric(x) <= 10, as.numeric(x), 10))) |>
+  #       summarise(across(everything(), \(x) sum(x, na.rm = TRUE))) |>
+  #       t()
+  # 
+  #     mutate(df, Total = Ttl)
+  #   })() |>
+  #   mutate(Total = if_else(Total == 0 & is.na(player_team), NA, Total)) |>
+  #   mutate(season_week = as.numeric(input$h2h_week)) |>
+  #   left_join(
+  #     select(df_week_game_count, season_week, team, following_week_games),
+  #     by = join_by(player_team == team, season_week)
+  #   ) |>
+  #   select(-season_week, next_week = following_week_games)
+  #   df_h2h_week_game_count <- select(df_h2h_week_game_count, starts_with("player"), all_of(sort(str_subset(colnames(df_h2h_week_game_count), "\\d"))), Total, next_week)
+  #   
+  #   gt(df_h2h_week_game_count, rowname_col = "info") |>
+  #     sub_missing(missing_text = "") |>
+  #     (\(t){
+  #       if(any(str_detect(colnames(df_h2h_week_game_count), as.character(cur_date))))
+  #         tab_style(
+  #           t,
+  #           style = list(cell_fill(color = "lightblue1"), cell_text(weight = "bold"), cell_borders(sides = c("left", "right"))),
+  #           locations = cells_body(columns = as.character(cur_date))
+  #         )
+  #       else t
+  #     })() |>
+  #     tab_style_body(
+  #       style = cell_fill(color = "pink", alpha = 0.5),
+  #       columns = starts_with("20"),
+  #       fn = \(x) str_detect(x, "\\*") | as.numeric(x) > 10
+  #     ) |>
+  #     tab_style(style = cell_fill(color = "pink", alpha = 0.5), locations = cells_body(columns = next_week, rows = next_week < 3)) |> 
+  #     tab_style(style = cell_borders(sides = c("left", "right")), locations = cells_body(columns = c(starts_with("20"), Total))) |>
+  #     tab_style(
+  #       style = list(cell_text(weight = "bold"), cell_borders(sides = c("left", "right"))),
+  #       locations = cells_body(columns = Total)
+  #     ) |>
+  #     tab_style(style = cell_text(weight = "bold"), locations = cells_body(columns = player_name, rows = player_name == input$h2h_competitor)) |>
+  #     tab_style(
+  #       style = cell_fill(color = "lightgreen"),
+  #       locations = cells_body(columns = Total, rows = Total == max(Total, na.rm = TRUE))
+  #     ) |>
+  #     # tab_style(
+  #     #   style = cell_fill(color = "lightyellow"),
+  #     #   locations = cells_body(columns = Total, rows = Total == max(Total, na.rm = TRUE))
+  #     # ) |>        
+  #     tab_style(
+  #       style = list(cell_fill(color = "grey", alpha = 0.5), cell_borders(sides = c("top", "bottom"))),
+  #       locations = cells_body(rows = 3)
+  #     ) |>
+  #     tab_style(style = cell_text(align = "center"), locations = cells_body(c(starts_with("20"), Total))) |>
+  #     cols_label_with(columns = starts_with("20"), fn = \(x) weekdays(as.Date(x))) |>
+  #     tab_options(column_labels.background.color = "blue")
+  #   }
+
   })
   
 
@@ -192,8 +307,92 @@ server <- function(input, output, session) {
           backgroundColor = styleEqual(0:3, c("white", "lightblue1", "dodgerblue", "blue"))
         )
   })
+
+
+# NBA Schedule Table ------------------------------------------------------
   
+  # Drop box choices
+  ss_week <- select(df_nba_schedule, season_week, week_start, week_end)
+  week_drop_box_choices <- unique(paste0("Week: ", ss_week$season_week, " (", ss_week$week_start, " to ", ss_week$week_end, ")"))
   
+  # Update drop box values
+  observe({
+    updateSelectInput(
+      session, 
+      "week_selection", 
+      choices = week_drop_box_choices,
+      selected = week_drop_box_choices[
+        df_nba_schedule |> 
+          distinct(pick(contains("week"))) |> 
+          filter(season_week == cur_week) |>
+          pull(season_week) + 1 # plus for correct index
+      ]
+    )
+  })
+  
+  observeEvent(input$week_selection, {
+    
+    selected_week_dates <<- as.vector(str_extract_all(input$week_selection, "\\d{4}-\\d{2}-\\d{2}", simplify = TRUE))
+    date_input_value <- cur_date
+    if(input$pin_date < selected_week_dates[1]) date_input_value <- selected_week_dates[1]
+    if(input$pin_date > selected_week_dates[2]) date_input_value <- selected_week_dates[2]
+    updateDateInput(session, "pin_date", value = date_input_value, min = selected_week_dates[1], max = selected_week_dates[2])
+    
+  })
+
+  output$schedule_table <- renderDT({
+
+    # Prepare tables to be presented
+    # tbl_schedule <<- tbl_week_games$data[[24]] |>
+    tbl_schedule <<- tbl_week_games$data[[match(input$week_selection, week_drop_box_choices)+1]] |>
+      mutate(across(ends_with(")"), \(x) if_else(as.character(x) == "NULL", 0, 1))) |>
+      mutate(across(c(contains("games"), Team), as.factor))
+   
+    ts_names <- tmp_names <- str_subset(colnames(tbl_schedule), "\\(")
+    names(ts_names) <- names(tmp_names) <- str_sub(ts_names, end = 3)
+
+    # Add condition for where years aren't equal
+    for(ix in 1:length(ts_names)){
+      nm <- table(names(tmp_names)[1:ix])[names(tmp_names)[ix]]
+      names(ts_names)[ix] <- paste0(nm[[1]], "_", names(nm))
+      if(as.Date(paste0(year(selected_week_dates[1]), "/", str_extract(tmp_names[ix], "\\d{2}/\\d{2}"))) == selected_week_dates[2]){
+        wk_th <- ix
+      }
+    }
+    ts_names <- discard(ts_names[c("1_Mon", "1_Tue", "1_Wed", "1_Thu", "1_Fri", "1_Sat", "1_Sun", "2_Mon", "2_Tue")], is.na)
+    
+    tbl_schedule <- tbl_schedule |> 
+      rowwise() |> 
+      mutate(
+        `Games From Pin` = sum(c_across(str_subset(ts_names, format(input$pin_date, "%m/%d")):ts_names[wk_th])), 
+        .before = "Following Week Games"
+      ) |> 
+      relocate(contains("games"), .after = wk_th + 1) |> 
+      mutate(across(ends_with(")"), \(x) as.factor(if_else(x == 0, ".", "1"))))
+
+    # Present table
+    datatable(
+      tbl_schedule,
+      rownames = FALSE,
+      class = "cell-border stripe",
+      options = list(paging = FALSE, autoWidth = TRUE, dom = 't', scrollX = TRUE),
+      filter = list(position = "top", clear = FALSE),
+    ) |> 
+    formatStyle(columns = "Team", backgroundColor = "lightblue") |>
+    formatStyle(columns = str_subset(ts_names, format(input$pin_date, "%m/%d")), backgroundColor = "lightyellow") |>
+    (\(tb){
+      lvl <- 0:length(unique(tbl_schedule$`Games From Pin`))
+      col <- c("white", rev(RColorBrewer::brewer.pal(5, "Greens")))[lvl + 1]
+      formatStyle(tb, columns = "Games From Pin", backgroundColor = styleEqual(levels = lvl, values = col))
+    })() |>
+    formatStyle(
+      columns = "Following Week Games",
+      backgroundColor = styleEqual(levels = 0:tail(levels(tbl_schedule$`Following Week Games`), 1), values = rev(RColorBrewer::brewer.pal(length(0:tail(levels(tbl_schedule$`Following Week Games`), 1)), "Greens")))
+    ) |> 
+    formatStyle(columns = (length(tbl_schedule)-1):length(tbl_schedule), backgroundColor = "lightgrey")
+    
+  })
+
 
 # NBA Player Trend --------------------------------------------------------
 
@@ -235,77 +434,6 @@ server <- function(input, output, session) {
       
         ggplotly(plt)
     }
-  })
-
-
-# NBA Schedule Table ------------------------------------------------------
-# TODO: Fix addition of Mon/Tue following week.
-  # Add date pin capability
-  
-  
-  # Drop box choices
-  ss_week <- select(df_nba_schedule, season_week, week_start, week_end)
-  week_drop_box_choices <- unique(paste0("Week: ", ss_week$season_week, " (", ss_week$week_start, " to ", ss_week$week_end, ")"))
-  
-  # Update drop box values
-  observe({
-    updateSelectInput(
-      session, 
-      "week_selection", 
-      choices = week_drop_box_choices,
-      selected = week_drop_box_choices[
-        df_nba_schedule |> 
-          distinct(pick(contains("week"))) |> 
-          filter(season_week == cur_week) |>
-          pull(season_week) + 2 # plus for correct index
-      ]
-    )
-  })  
-
-  output$schedule_table <- renderDT({
-
-    # Prepare tables to be presented
-    tbl_schedule <<- tbl_week_games$data[[match(input$week_selection, week_drop_box_choices)]] |>
-    # tbl_schedule <<- tbl_week_games$data[[21]] |>
-      mutate(across(ends_with(")"), \(x) if_else(as.character(x) == "NULL", 0, 1))) |>
-      mutate(across(c(contains("games"), Team), as.factor))
-
-    ts_names <- tmp_names <- str_subset(colnames(tbl_schedule), "\\(")
-    names(ts_names) <- names(tmp_names) <- str_sub(ts_names, end = 3)
-    for(ix in 1:length(ts_names)){
-      nm <- table(names(tmp_names)[1:ix])[names(tmp_names)[ix]]
-      names(ts_names)[ix] <- paste0(nm[[1]], "_", names(nm))
-      if(nm == 1) wk_th <- ix
-    }
-    ts_names <- discard(ts_names[c("1_Mon", "1_Tue", "1_Wed", "1_Thu", "1_Fri", "1_Sat", "1_Sun", "2_Mon", "2_Tue")], is.na)
-    
-    tbl_schedule <- tbl_schedule |> 
-      rowwise() |> 
-      mutate(`Games From Pin` = sum(c_across(str_subset(ts_names, format(input$pin_date_count, "%m/%d")):ts_names[wk_th])), .before = "Following Week Games") |> 
-      relocate(contains("games"), .after = wk_th + 1) |> 
-      mutate(across(ends_with(")"), \(x) as.factor(if_else(x == 0, ".", "1"))))
-
-
-    # Present table
-    datatable(
-      tbl_schedule,
-      rownames = FALSE,
-      class = "cell-border stripe",
-      options = list(paging = FALSE, autoWidth = TRUE, dom = 't', scrollX = TRUE),
-      filter = list(position = "top", clear = FALSE),
-    ) |> 
-    formatStyle(columns = "Team", backgroundColor = "lightblue") |>
-    (\(tb){
-      lvl <- 0:length(unique(tbl_schedule$`Games From Pin`))
-      col <- c("white", rev(RColorBrewer::brewer.pal(5, "Greens")))[lvl + 1]
-      formatStyle(tb, columns = "Games From Pin", backgroundColor = styleEqual(levels = lvl, values = col))
-    })() |>
-    formatStyle(
-      columns = "Following Week Games",
-      backgroundColor = styleEqual(levels = 0:tail(levels(tbl_schedule$`Following Week Games`), 1), values = rev(RColorBrewer::brewer.pal(length(0:tail(levels(tbl_schedule$`Following Week Games`), 1)), "Greens")))
-    ) |> 
-    formatStyle(columns = (length(tbl_schedule)-1):length(tbl_schedule), backgroundColor = "lightgrey")
-    
   })
   
 }

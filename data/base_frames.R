@@ -65,17 +65,17 @@ df_nba_schedule <- df_nba_schedule |>
 
 # NBA team roster -------------------------------------------------------
 
-# cat("\t- df_nba_roster\n")
-# df_nba_roster <<- dh_getQuery(db_con, "nba_team_roster.sql")  
+cat("\t- df_nba_roster\n")
+df_nba_roster <<- dh_getQuery(db_con, "nba_team_roster.sql")
 
 
 # Fantasy league schedule -------------------------------------------------
 
-# cat("\t- df_fantasy_schedule\n")
-# df_fty_schedule <<- dh_getQuery(db_con, "SELECT * FROM fty.league_schedule")
+cat("\t- df_fantasy_schedule\n")
+df_fty_schedule <<- dh_getQuery(db_con, "SELECT * FROM fty.league_schedule")
 
 # Fantasy competitor roster -------------------------------------------------------
 
-# cat("\t- df_fty_roster\n")
-# df_fty_roster <<- dh_getQuery(db_con, "fty_team_roster.sql") 
+cat("\t- df_fty_roster\n")
+df_fty_roster <<- dh_getQuery(db_con, "fty_team_roster.sql")
 

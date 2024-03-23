@@ -36,7 +36,7 @@ tbl_week_games <<- df_nba_schedule |>
   mutate(data = list(
     data |> 
       pivot_wider(names_from = game_day_date, values_from = against, values_fn = list) |> 
-      left_join(select(df_week_game_count, season_week, team, contains("games"), -starts_with("week_games"))) |> 
+      left_join(select(df_week_game_count, season_week, team, contains("games"), -starts_with("week_games")), by = join_by(season_week, team)) |> 
       select(-slug_season, -season_week) |> 
       rename_with(\(x) str_to_title(str_replace_all(x, "_", " ")))
   ))
