@@ -3,21 +3,13 @@
 # Libraries ---------------------------------------------------------------
 
 library(nba.dataRub)
-library(shiny)
 library(here)
 library(dplyr)
 library(tidyr)
 library(purrr)
 library(lubridate)
 library(stringr)
-library(tibble)
 library(ggplot2)
-library(plotly)
-library(DT)
-
-# Init files --------------------------------------------------------------
-
-source(here("_proj_useful.R"))
 
 
 # Server code -------------------------------------------------------------
@@ -25,7 +17,8 @@ source(here("_proj_useful.R"))
 server <- function(input, output, session) {
 
   # Variables
-  cur_date <<- as.Date(str_extract(as.POSIXct(Sys.time(), tz="NZ"), "\\d{4}-\\d{2}-\\d{2}")) - 1
+  # cur_date <<- as.Date(str_extract(as.POSIXct(Sys.time(), tz="NZ"), "\\d{4}-\\d{2}-\\d{2}")) - 1
+  cur_date <<- as.Date("2024-03-01")
   cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
   prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
   db_con <<- dh_createCon("postgres")
@@ -36,11 +29,12 @@ server <- function(input, output, session) {
   .load_datasets()
   
   # Extra variable that relies on datasets
-  cur_week <<- df_week_game_count |>
-    mutate(week_end = if_else(week_end - week_start < 6, week_start + 6, week_end)) |>
-    filter(cur_date >= week_start, cur_date <= week_end) |>
-    pull(season_week) |>
-    unique()
+  # cur_week <<- df_week_game_count |>
+  #   mutate(week_end = if_else(week_end - week_start < 6, week_start + 6, week_end)) |>
+  #   filter(cur_date >= week_start, cur_date <= week_end) |>
+  #   pull(season_week) |>
+  #   unique()
+  cur_week <<- 18
   
   teams <<- df_player_log |> 
     pull(team_slug) |> 
@@ -95,104 +89,112 @@ server <- function(input, output, session) {
   
   output$h2h_game_table <- renderDT({
     
-  if(input$h2h_week < cur_week & input$future_only){
-
-    datatable(
-      as.data.frame("Future only dumbass..."),
-      rownames = FALSE,
-      colnames = "",
-      options = lst(dom = "t", paging = FALSE), 
-    )
-
-  } else {
-
-    df_h <- df_h2h()
-    if(input$h2h_future_from_tomorrow) df_h <- mutate(df_h, origin = if_else(us_date == cur_date, "past", origin))
-    if(input$h2h_future_only) df_h <- filter(df_h, origin == "future")
-    opp_name <- filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week)$opponent_name[1]
-
-    df_h2h_week_game_count <- bind_rows(
-      filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week),
-      filter(df_h, competitor_name == opp_name, league_week == input$h2h_week)
-    ) |>
-    mutate(play_status = case_when(
-      scheduled_to_play == 1 & player_injury_status == "OUT" ~ "1*",
-       scheduled_to_play == 1 ~ "1",
-      .default = NA_character_
-    )) |>
-    pivot_wider(id_cols = c(competitor_id, competitor_name, opponent_id, opponent_name, player_team, player_name), names_from = us_date, values_from = play_status) |>
-    (\(df){
-
-      inner_func <- function(x, nm) filter(x, competitor_name == nm) |>
-        mutate(player_team = "Total", player_name = str_trim(nm)) |>
-        summarise(across(starts_with("20"), \(x) as.character(sum(x == "1", na.rm = TRUE))), .by = c(player_team, player_name))
-
-      bind_rows(
-        inner_func(df, opp_name),
-        inner_func(df, input$h2h_competitor),
-        setNames(as.data.frame(matrix(rep(NA, length(colnames(df))), nrow = 1)), colnames(df)),
-        select(filter(df, competitor_name == input$h2h_competitor), starts_with(c("player", "20"))) |>
-          arrange(player_name) |>
-          mutate(across(starts_with("20"), \(x) as.character(x))) # to fix cols stored as list 🤷
+    if(input$h2h_week < cur_week & input$h2h_future_only){
+  
+      datatable(
+        as.data.frame("Future only dumbass..."),
+        rownames = FALSE,
+        colnames = "",
+        options = lst(dom = "t", paging = FALSE), 
       )
-    })() |>
-    select(-starts_with(c("competitor", "opponent"))) |>
-    (\(df){
-      Ttl = as.data.frame(t(df)) |>
-        mutate(across(everything(), \(x) ifelse(is.na(as.numeric(x)) | as.numeric(x) <= 10, as.numeric(x), 10))) |>
-        summarise(across(everything(), \(x) sum(x, na.rm = TRUE))) |>
-        t()
-
-      mutate(df, Total = Ttl)
-    })() |>
-    mutate(Total = if_else(Total == 0 & is.na(player_team), NA, Total)) |>
-    mutate(season_week = as.numeric(input$h2h_week)) |>
-    left_join(
-      select(df_week_game_count, season_week, team, following_week_games),
-      by = join_by(player_team == team, season_week)
-    ) |>
-    select(-season_week, next_week = following_week_games)
-    df_h2h_week_game_count <- select(df_h2h_week_game_count, starts_with("player"), all_of(sort(str_subset(colnames(df_h2h_week_game_count), "\\d"))), Total, next_week)
-
-    gt(df_h2h_week_game_count, rowname_col = "info") |>
-      sub_missing(missing_text = "") |>
-      (\(t){
-        if(any(str_detect(colnames(df_h2h_week_game_count), as.character(cur_date))))
-          tab_style(
-            t,
-            style = list(cell_fill(color = "lightblue1"), cell_text(weight = "bold"), cell_borders(sides = c("left", "right"))),
-            locations = cells_body(columns = as.character(cur_date))
-          )
-        else t
+  
+    } else {
+  
+      df_h <- df_h2h()
+      
+      if(input$h2h_future_from_tomorrow) df_h <- mutate(df_h, origin = if_else(us_date == cur_date, "past", origin))
+      if(input$h2h_future_only) df_h <- filter(df_h, origin == "future")
+      opp_name <- filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week)$opponent_name[1]
+  
+      df_h2h_week_game_count <- bind_rows(
+        filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week),
+        filter(df_h, competitor_name == opp_name, league_week == input$h2h_week)
+      ) |>
+      mutate(play_status = case_when(
+        scheduled_to_play == 1 & player_injury_status == "OUT" ~ "1*",
+         scheduled_to_play == 1 ~ "1",
+        .default = NA_character_
+      )) |>
+      pivot_wider(id_cols = c(competitor_id, competitor_name, opponent_id, opponent_name, player_team, player_name), names_from = us_date, values_from = play_status) |>
+      (\(df){
+  
+        inner_func <- function(x, nm) filter(x, competitor_name == nm) |>
+          mutate(player_team = "Total", player_name = str_trim(nm)) |>
+          summarise(across(starts_with("20"), \(x) as.character(sum(x == "1", na.rm = TRUE))), .by = c(player_team, player_name))
+  
+        bind_rows(
+          inner_func(df, opp_name),
+          inner_func(df, input$h2h_competitor),
+          setNames(as.data.frame(matrix(rep(NA, length(colnames(df))), nrow = 1)), colnames(df)),
+          select(filter(df, competitor_name == input$h2h_competitor), starts_with(c("player", "20"))) |>
+            arrange(player_name) |>
+            mutate(across(starts_with("20"), \(x) as.character(x))) # to fix cols stored as list 🤷
+        )
       })() |>
-      tab_style_body(
-        style = cell_fill(color = "pink", alpha = 0.5),
-        columns = starts_with("20"),
-        fn = \(x) str_detect(x, "\\*") | as.numeric(x) > 10
+      select(-starts_with(c("competitor", "opponent"))) |>
+      (\(df){
+        Ttl = as.data.frame(t(df)) |>
+          mutate(across(everything(), \(x) ifelse(is.na(as.numeric(x)) | as.numeric(x) <= 10, as.numeric(x), 10))) |>
+          summarise(across(everything(), \(x) sum(x, na.rm = TRUE))) |>
+          t()
+  
+        mutate(df, Total = Ttl)
+      })() |>
+      mutate(Total = if_else(Total == 0 & is.na(player_team), NA, Total)) |>
+      mutate(season_week = as.numeric(input$h2h_week)) |>
+      left_join(
+        select(df_week_game_count, season_week, team, following_week_games),
+        by = join_by(player_team == team, season_week)
       ) |>
-      tab_style(style = cell_fill(color = "pink", alpha = 0.5), locations = cells_body(columns = next_week, rows = next_week < 3)) |>
-      tab_style(style = cell_borders(sides = c("left", "right")), locations = cells_body(columns = c(starts_with("20"), Total))) |>
-      tab_style(
-        style = list(cell_text(weight = "bold"), cell_borders(sides = c("left", "right"))),
-        locations = cells_body(columns = Total)
-      ) |>
-      tab_style(style = cell_text(weight = "bold"), locations = cells_body(columns = player_name, rows = player_name == input$h2h_competitor)) |>
-      tab_style(
-        style = cell_fill(color = "lightgreen"),
-        locations = cells_body(columns = Total, rows = Total == max(Total, na.rm = TRUE))
-      ) |>
-      # tab_style(
-      #   style = cell_fill(color = "lightyellow"),
-      #   locations = cells_body(columns = Total, rows = Total == max(Total, na.rm = TRUE))
-      # ) |>
-      tab_style(
-        style = list(cell_fill(color = "grey", alpha = 0.5), cell_borders(sides = c("top", "bottom"))),
-        locations = cells_body(rows = 3)
-      ) |>
-      tab_style(style = cell_text(align = "center"), locations = cells_body(c(starts_with("20"), Total))) |>
-      cols_label_with(columns = starts_with("20"), fn = \(x) weekdays(as.Date(x))) |>
-      tab_options(column_labels.background.color = "blue")
-    }
+      select(-season_week, next_week = following_week_games)
+      df_h2h_week_game_count <- select(df_h2h_week_game_count, starts_with("player"), all_of(sort(str_subset(colnames(df_h2h_week_game_count), "\\d"))), Total, next_week)
+      
+      # GAME COUNT IS WRONG
+      max_game_count <- max(df_h2h_week_game_count$Total, na.rm = TRUE)
+      df_h2h_week_game_count |> 
+        mutate(across(starts_with("20"), \(x) na_if(x, "NULL"))) |> 
+        mutate(across(starts_with("20"), \(x) case_when(
+          str_detect(x, "c") & str_detect(x, "\\*") ~ str_extract(x, "1\\*"),
+          str_detect(x, "c") ~ str_extract(x, "1"),
+          .default = x
+        ))) |>
+        tibble::rowid_to_column() |> 
+        datatable(
+          rownames = FALSE, 
+          escape = FALSE,
+          style = "default",
+          options = lst(
+            dom = "t", 
+            paging = FALSE, 
+            ordering = FALSE,
+            columnDefs = list(list(visible = FALSE, targets = "rowid")),
+            initComplete = JS(
+              "function(settings, json) {",
+              "$(this.api().table().header()).css({'background-color': 'blue', 'color': 'white'});",
+              "}"
+            )
+          )
+        ) |> 
+        formatStyle(colnames(df_h2h_week_game_count), border = "1px solid #000") |> 
+        formatStyle("rowid", target = "row", backgroundColor = styleEqual(3, "grey")) |> 
+        formatStyle("Total", target = "cell", backgroundColor = styleEqual(max_game_count, "lightgreen")) |> 
+        (\(dt){
+          cols <- str_subset(colnames(df_h2h_week_game_count), "20")
+          
+          for(col in cols){
+            dt <- formatStyle(
+              dt,
+              columns = col,
+              target = "cell",
+              backgroundColor = styleEqual(c("1", "1*"), c("white", "pink"))
+            )
+          }
+          
+          if (cur_date %in% cols) dt <- formatStyle(dt, as.character(cur_date), target = "cell", backgroundColor = styleEqual("1*", "pink", default = "lightblue"))
+          dt
+        })() 
+
+      }
 
   })
   
@@ -215,7 +217,7 @@ server <- function(input, output, session) {
         game_date <= cur_date, 
         # game_date >= cur_date - days(15)
         game_date >= cur_date - case_when(input$date_range_switch == "Two Weeks" ~ days(15), input$date_range_switch == "One Month" ~ days(30), .default = days(7))
-      ) |> 
+      ) |>
       summarise(across(any_of(anl_cols$stat_cols), ~ mean(.x)), .by = c(player_id, player_name)) |>
       calc_z_pcts() |>
       select(-ends_with("_pct")) |>
@@ -278,6 +280,7 @@ server <- function(input, output, session) {
     df_comparison_table |> 
       datatable(
         rownames = FALSE, 
+        escape = FALSE,
         options = lst(
           dom = "t",
           paging = FALSE,

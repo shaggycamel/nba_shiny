@@ -2,11 +2,8 @@
 
 # Libraries ---------------------------------------------------------------
 
-library(shiny)
 library(shinyWidgets)
 library(bslib)
-
-source(here::here("_proj_useful.R"))
 
 
 # Sidebar pages -----------------------------------------------------------
@@ -21,7 +18,7 @@ page_h2h <- layout_sidebar(
     checkboxInput("h2h_future_only", "Future games only"),
     checkboxInput("h2h_future_from_tomorrow", "From tomorrow")
   ),
-  card(full_screen = TRUE, DT::DTOutput("h2h_game_table")),
+  card(full_screen = TRUE, DTOutput("h2h_game_table")),
   fillable = TRUE
 )
 
@@ -35,7 +32,7 @@ page_player_comparison <- layout_sidebar(
     radioButtons("date_range_switch", NULL, choices = c("Seven Days", "Two Weeks", "One Month")),
     checkboxInput("comparison_free_agent_filter", "Free Agents only"),
   ),
-  card(full_screen = TRUE, DT::DTOutput("player_comparison_table")),
+  card(full_screen = TRUE, DTOutput("player_comparison_table")),
   fillable = TRUE
 )
 
@@ -47,7 +44,7 @@ page_league_game_schedule <- layout_sidebar(
     selectInput("week_selection", "Week", choices = character(0), selectize = FALSE),
     dateInput("pin_date", "Pinned Date")
   ),
-  card(full_screen = TRUE, DT::DTOutput("schedule_table")),
+  card(full_screen = TRUE, DTOutput("schedule_table")),
   fillable = TRUE
 )
 
@@ -60,7 +57,7 @@ page_player_trend <- layout_sidebar(
     selectInput("trend_select_player", "Player", multiple = TRUE, choices = character(0)),
     checkboxInput("this_season_trend_switch", "This year only", value = FALSE)
   ),
-  card(full_screen = TRUE, plotly::plotlyOutput("player_trend_plot")),
+  card(full_screen = TRUE, plotlyOutput("player_trend_plot")),
   fillable = TRUE
 )
 
