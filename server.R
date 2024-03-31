@@ -11,6 +11,8 @@ library(lubridate)
 library(stringr)
 library(ggplot2)
 
+library(magrittr) # DELETE
+
 
 # Server code -------------------------------------------------------------
 
@@ -105,17 +107,17 @@ server <- function(input, output, session) {
       if(input$h2h_future_from_tomorrow) df_h <- mutate(df_h, origin = if_else(us_date == cur_date, "past", origin))
       if(input$h2h_future_only) df_h <- filter(df_h, origin == "future")
       opp_name <- filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week)$opponent_name[1]
-  
+      
       df_h2h_week_game_count <- bind_rows(
         filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week),
         filter(df_h, competitor_name == opp_name, league_week == input$h2h_week)
-      ) |>
+      ) |> 
       mutate(play_status = case_when(
         scheduled_to_play == 1 & player_injury_status == "OUT" ~ "1*",
          scheduled_to_play == 1 ~ "1",
         .default = NA_character_
-      )) |>
-      pivot_wider(id_cols = c(competitor_id, competitor_name, opponent_id, opponent_name, player_team, player_name), names_from = us_date, values_from = play_status) |>
+      )) |> 
+      pivot_wider(id_cols = c(competitor_id, competitor_name, opponent_id, opponent_name, player_team, player_name), names_from = us_date, values_from = play_status) |> 
       (\(df){
   
         inner_func <- function(x, nm) filter(x, competitor_name == nm) |>
@@ -128,7 +130,7 @@ server <- function(input, output, session) {
           setNames(as.data.frame(matrix(rep(NA, length(colnames(df))), nrow = 1)), colnames(df)),
           select(filter(df, competitor_name == input$h2h_competitor), starts_with(c("player", "20"))) |>
             arrange(player_name) |>
-            mutate(across(starts_with("20"), \(x) as.character(x))) # to fix cols stored as list 🤷
+            mutate(across(starts_with("20"), \(x) as.character(x)))
         )
       })() |>
       select(-starts_with(c("competitor", "opponent"))) |>
@@ -147,18 +149,12 @@ server <- function(input, output, session) {
         by = join_by(player_team == team, season_week)
       ) |>
       select(-season_week, next_week = following_week_games)
-      df_h2h_week_game_count <- select(df_h2h_week_game_count, starts_with("player"), all_of(sort(str_subset(colnames(df_h2h_week_game_count), "\\d"))), Total, next_week)
       
-      # GAME COUNT IS WRONG
+      df_h2h_week_game_count <- select(df_h2h_week_game_count, starts_with("player"), all_of(sort(str_subset(colnames(df_h2h_week_game_count), "\\d"))), Total, `Next Week` = next_week, Team = player_team, Player = player_name) |> 
+        rename_with(.fn = \(x) format(as.Date(x), "%a (%m/%d)"), .cols = starts_with("20"))
+      
       max_game_count <- max(df_h2h_week_game_count$Total, na.rm = TRUE)
-      df_h2h_week_game_count |> 
-        mutate(across(starts_with("20"), \(x) na_if(x, "NULL"))) |> 
-        mutate(across(starts_with("20"), \(x) case_when(
-          str_detect(x, "c") & str_detect(x, "\\*") ~ str_extract(x, "1\\*"),
-          str_detect(x, "c") ~ str_extract(x, "1"),
-          .default = x
-        ))) |>
-        tibble::rowid_to_column() |> 
+      tibble::rowid_to_column(df_h2h_week_game_count) |> 
         datatable(
           rownames = FALSE, 
           escape = FALSE,
@@ -170,7 +166,7 @@ server <- function(input, output, session) {
             columnDefs = list(list(visible = FALSE, targets = "rowid")),
             initComplete = JS(
               "function(settings, json) {",
-              "$(this.api().table().header()).css({'background-color': 'blue', 'color': 'white'});",
+                "$(this.api().table().header()).css({'background-color': 'blue', 'color': 'white'});",
               "}"
             )
           )
@@ -179,7 +175,7 @@ server <- function(input, output, session) {
         formatStyle("rowid", target = "row", backgroundColor = styleEqual(3, "grey")) |> 
         formatStyle("Total", target = "cell", backgroundColor = styleEqual(max_game_count, "lightgreen")) |> 
         (\(dt){
-          cols <- str_subset(colnames(df_h2h_week_game_count), "20")
+          cols <- str_subset(colnames(df_h2h_week_game_count), "\\(")
           
           for(col in cols){
             dt <- formatStyle(
@@ -190,7 +186,7 @@ server <- function(input, output, session) {
             )
           }
           
-          if (cur_date %in% cols) dt <- formatStyle(dt, as.character(cur_date), target = "cell", backgroundColor = styleEqual("1*", "pink", default = "lightblue"))
+          if (format(cur_date, "%a (%m/%d)") %in% cols) dt <- formatStyle(dt, format(cur_date, "%a (%m/%d)"), target = "cell", backgroundColor = styleEqual("1*", "pink", default = "lightblue"))
           dt
         })() 
 

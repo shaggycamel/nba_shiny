@@ -5,7 +5,8 @@
 # Assigns stats to player's most recent team (within one season)
 df_rolling_stats <<- df_player_log |> 
   arrange(game_date) |> 
-  mutate(across(any_of(anl_cols$stat_cols), \(x) slider::slide_period_dbl(x, game_date, "day", ~ mean(.x, na.rm = TRUE), .before = 15, .after = -1)), .by = player_id) |> 
+  mutate(across(any_of(anl_cols$stat_cols), \(x) slider::slide_period_dbl(x, game_date, "day", ~ mean(.x, na.rm = TRUE), .before = 15, .after = -1)), .by = player_id) |>
+  filter(game_date < cur_date) |> 
   mutate(across(any_of(anl_cols$stat_cols), \(x) coalesce(x, 0))) |> 
   select(-c(slug_season, year_season, season_type, year_season_type, free_agent_status, game_id, wl)) |> 
   mutate(origin = "past") |> 
