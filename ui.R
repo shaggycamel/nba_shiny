@@ -4,6 +4,7 @@
 
 library(shinyWidgets)
 library(bslib)
+library(readr)
 
 
 # Sidebar pages -----------------------------------------------------------
@@ -16,9 +17,15 @@ page_h2h <- layout_sidebar(
     selectInput("h2h_ex_player", "Exclude Player", choices = character(0), multiple = TRUE),
     selectInput("h2h_add_player", "Add Player", choices = character(0), multiple = TRUE),
     checkboxInput("h2h_future_only", "Future games only"),
-    checkboxInput("h2h_future_from_tomorrow", "From tomorrow")
+    checkboxInput("h2h_future_from_tomorrow", "From tomorrow"),
+    selectInput("h2h_hl_player", "Highlight Player", choices = character(0), multiple = TRUE),
   ),
-  card(full_screen = TRUE, DTOutput("h2h_game_table")),
+  card(
+    height = 1600,
+    fill = FALSE,
+    card(full_screen = TRUE, min_height = 200, max_height = 800, plotlyOutput("h2h_stat_plot")),
+    card(full_screen = TRUE, min_height = 200, max_height = 800, DTOutput("h2h_game_table"))
+  ),
   fillable = TRUE
 )
 
@@ -58,7 +65,36 @@ page_player_trend <- layout_sidebar(
     checkboxInput("this_season_trend_switch", "This year only", value = FALSE)
   ),
   card(full_screen = TRUE, plotlyOutput("player_trend_plot")),
-  fillable = TRUE
+  fillable = TRUE,
+)
+
+
+# Draft Assistance --------------------------------------------------------
+
+page_draft <- layout_sidebar(
+  sidebar = sidebar(
+    selectInput("draft_stat", "Statistic", choices = dplyr::filter(stat_selection, !stringr::str_detect(formatted_name, "%"))$formatted_name),
+    sliderTextInput("draft_min_filter", "Limit Minutes", choices = 0), # updated dynamically in server.R
+    sliderInput("draft_top_n", "Top N Players", min = 10, max = 20, value = 15, ticks = FALSE),
+    checkboxInput("draft_scale_minutes", "Scale by Minutes"),
+    switchInput("draft_tot_avg_toggle", value = TRUE, onLabel = "Total", offLabel = "Average", size = "small")
+  ),
+  card(full_screen = TRUE, plotlyOutput("draft_stat_plot")),
+  fillable = TRUE,
+)
+
+
+# News Transactions -------------------------------------------------------
+
+page_news <- card(full_screen = TRUE, DTOutput("news_transactions"))
+
+
+# Info page ---------------------------------------------------------------
+
+page_info <- card(
+  h5("Data Update Frequency"),
+  p(read_lines(here("data", "help_descriptions", "data_refresh.txt"))),
+  br(),
 )
 
 
@@ -67,8 +103,16 @@ page_player_trend <- layout_sidebar(
 ui <- page_navbar(
   title = "NBA Fantasy",
   nav_spacer(),
+  # nav_panel("Fty League", page_fty_league),
   nav_panel("Head to Head", page_h2h),
   nav_panel("Player Comparison", page_player_comparison),
   nav_panel("Game Schedule", page_league_game_schedule),
-  nav_panel("Player Trend", page_player_trend)
+  nav_panel("Player Trend", page_player_trend),
+  nav_menu(
+    "Misc.", 
+    nav_panel("Draft", page_draft),
+    nav_panel("News", page_news),
+    nav_panel("Info", page_info),
+    align = "left"
+  )
 )

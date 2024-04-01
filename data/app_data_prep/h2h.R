@@ -52,7 +52,7 @@ df_past <<- df_fty_roster |>
 df_h2h_prepare <<- function(competitor=NULL, exclude=NULL, add=NULL, from_tomorrow=NULL){
 
   c_id <- unique(filter(df_fty_schedule, competitor_name == competitor)$competitor_id)
-  
+
   # PRE-FUTURE
   df_future_pre <- df_fty_roster |> 
     mutate(
@@ -66,11 +66,10 @@ df_h2h_prepare <<- function(competitor=NULL, exclude=NULL, add=NULL, from_tomorr
     select(-c(timestamp, us_date, dow, league_week, starts_with("opponent"))) |> 
     bind_rows(
       filter(df_player_log, player_name %in% add) |>
-        slice_max(order_by = game_date) |>
+        slice_max(order_by = game_date, by = player_name) |>
         select(player_id, player_fantasy_id = fty_id, player_name, player_team = team_slug) |> 
         mutate(season = cur_season, competitor_id = c_id, competitor_name = competitor)
     )
-  
   
   # FUTURE
   df_future <- left_join(
