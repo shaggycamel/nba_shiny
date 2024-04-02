@@ -1,7 +1,6 @@
 
 suppressMessages({
   library(nba.dataRub)
-  library(dtplyr)
   library(stringr)
 })
 
@@ -74,8 +73,15 @@ df_nba_roster <<- dh_getQuery(db_con, "nba_team_roster.sql")
 cat("\t- df_fantasy_schedule\n")
 df_fty_schedule <<- dh_getQuery(db_con, "SELECT * FROM fty.league_schedule")
 
+
 # Fantasy competitor roster -------------------------------------------------------
 
 cat("\t- df_fty_roster\n")
 df_fty_roster <<- dh_getQuery(db_con, "fty_team_roster.sql")
 
+
+# Fantasy Box Score -------------------------------------------------------
+
+cat("\t- df_fty_box_score\n")
+df_fty_box_score <<- dh_getQuery(db_con, "fty_box_score.sql") |> 
+  dplyr::relocate(starts_with("competitor"), .before = matchup)

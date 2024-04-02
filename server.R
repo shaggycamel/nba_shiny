@@ -3,30 +3,39 @@
 # Libraries ---------------------------------------------------------------
 
 library(nba.dataRub)
-library(here)
 library(dplyr)
 library(tidyr)
 library(purrr)
 library(lubridate)
 library(stringr)
 library(ggplot2)
+library(plotly)
+library(shinycssloaders)
 
-library(magrittr) # DELETE
+
+# Initialisation files ----------------------------------------------------
+
+# only init python if running in shiny
+if(Sys.info()["user"] == "shiny") source(here("_proj_python.R")) 
 
 
 # Server code -------------------------------------------------------------
 
 server <- function(input, output, session) {
+  
+  # Start loading page
+  data_collection_caption <- "Processing data, one minute..."
+  showPageSpinner(type = 6, caption = data_collection_caption)
 
   # Variables
   # cur_date <<- as.Date(str_extract(as.POSIXct(Sys.time(), tz="NZ"), "\\d{4}-\\d{2}-\\d{2}")) - 1
   cur_date <<- as.Date("2024-02-26")
   cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
   prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
-  db_con <<- dh_createCon("postgres")
+  db_con <<- if(Sys.info()["nodename"] == "Olivers-MacBook-Pro.local") dh_createCon("postgres") else dh_createCon("cockroach") 
   
   # Data Frames
-  source(here("data", "base_frames.R"))
+  if(Sys.info()["user"] == "shiny") load(".RData") else source(here("data", "base_frames.R"))
   .load_datasets <- function() walk(list.files(here("data", "app_data_prep"), full.names = TRUE), \(x) source(x, local = TRUE))
   .load_datasets()
   
@@ -42,6 +51,12 @@ server <- function(input, output, session) {
     pull(team_slug) |> 
     unique() |> 
     sort()
+  
+  # Stop loading page
+  hidePageSpinner()
+  
+
+# Set Server Side Dynamic Menus -------------------------------------------
   
   sort_players_by_min_desc <- function(df) {
     summarise(df, avg_min = median(min), .by = player_name) |> 
@@ -82,6 +97,29 @@ server <- function(input, output, session) {
 
 # FTY League Overview -------------------------------------------------
 
+league_ov_plt <- df_fty_box_score |> 
+    left_join(
+      df_fty_box_score |> 
+        select(competitor_id, matchup, all_of(anl_cols$h2h_cols)) |> 
+        mutate(across(anl_cols$h2h_cols, \(x) percent_rank(x)), .by = matchup) |> 
+        rowwise() |> 
+        mutate(overall_performance = sum(c_across(anl_cols$h2h_cols))) |> 
+        select(competitor_id, matchup, overall_performance),
+      by = join_by(competitor_id, matchup)
+    )
+  
+(league_ov_plt |> 
+  ggplot(aes(x = matchup, y = overall_performance, colour = competitor_abbrev)) +
+  ggbump::geom_bump(linewidth = 0.5) +
+  geom_point(size = 3) +
+  theme_bw()) |> 
+  ggplotly() |> 
+  rangeslider(
+    start = max(league_ov_plt$matchup) - 5.1,
+    end = max(league_ov_plt$matchup) + 0.1,
+    range = list(min(league_ov_plt$matchup) - 0.2, max(league_ov_plt$matchup) + 0.2)
+  )
+  
 
   
 
@@ -274,7 +312,7 @@ server <- function(input, output, session) {
           }
           
           if (format(cur_date, "%a (%m/%d)") %in% cols) dt <- formatStyle(dt, format(cur_date, "%a (%m/%d)"), target = "cell", backgroundColor = styleEqual("1*", "pink", default = "lightyellow"))
-          if (length(input$h2h_hl_player) > 0) dt <- formatStyle(dt, "Player", target = "row", backgroundColor = styleEqual(input$h2h_hl_player, rep("slategray1", length(input$h2h_hl_player))))
+          if (length(input$h2h_hl_player) > 0) dt <- formatStyle(dt, "Player", target = "row", backgroundColor = styleEqual(input$h2h_hl_player, rep("azure", length(input$h2h_hl_player))))
 
           dt
         })() 
@@ -504,7 +542,7 @@ server <- function(input, output, session) {
 
 # NBA Player Trend --------------------------------------------------------
 
-  output$player_trend_plot <- plotly::renderPlotly({
+  output$player_trend_plot <- renderPlotly({
     
     trend_selected_stat <- sym(filter(stat_selection, formatted_name == input$trend_select_stat)$database_name)
     
