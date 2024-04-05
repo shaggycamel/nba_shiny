@@ -97,31 +97,26 @@ server <- function(input, output, session) {
 
 # FTY League Overview -------------------------------------------------
 
-league_ov_plt <- df_fty_box_score |> 
-    left_join(
-      df_fty_box_score |> 
-        select(competitor_id, matchup, all_of(anl_cols$h2h_cols)) |> 
-        mutate(across(anl_cols$h2h_cols, \(x) percent_rank(x)), .by = matchup) |> 
-        rowwise() |> 
-        mutate(overall_performance = sum(c_across(anl_cols$h2h_cols))) |> 
-        select(competitor_id, matchup, overall_performance),
-      by = join_by(competitor_id, matchup)
-    )
-  
-(league_ov_plt |> 
-  ggplot(aes(x = matchup, y = overall_performance, colour = competitor_abbrev)) +
-  ggbump::geom_bump(linewidth = 0.5) +
-  geom_point(size = 3) +
-  theme_bw()) |> 
-  ggplotly() |> 
-  rangeslider(
-    start = max(league_ov_plt$matchup) - 5.1,
-    end = max(league_ov_plt$matchup) + 0.1,
-    range = list(min(league_ov_plt$matchup) - 0.2, max(league_ov_plt$matchup) + 0.2)
-  )
-  
+  output$fty_league_overview_rank_plot <- renderPlotly({
+    
+    (
+      df_fty_league_overview |> 
+        ggplot(aes(x = matchup, y = !!sym(input$fty_lg_ov_cat), colour = competitor_name)) +
+        ggbump::geom_bump(linewidth = 0.5) +
+        geom_point(size = 3) +
+        scale_x_discrete(breaks = NULL) +
+        labs(title = "Competitor Category Ranking", x = "Matchup Period", y = db_to_fmt_stat_name[[input$fty_lg_ov_cat]]) +
+        theme_bw()
+    ) |>
+      ggplotly() |>
+      rangeslider(
+        start = max(df_fty_league_overview$matchup) - 5.1,
+        end = max(df_fty_league_overview$matchup) + 0.1,
+        range = list(min(df_fty_league_overview$matchup) - 0.2, max(df_fty_league_overview$matchup) + 0.2)
+      )
+    
+  })
 
-  
 
 # FTY Head to Head --------------------------------------------------------
 
@@ -132,10 +127,11 @@ league_ov_plt <- df_fty_box_score |>
   output$h2h_stat_plot <- renderPlotly({
     
     if(input$h2h_week < cur_week & input$h2h_future_only){
-      plt <- ggplot() +
-        theme_void() +
-        geom_text(aes(x = 0, y = 0, label = "Future only dumbass..."))
-      ggplotly(plt)
+      ggplotly((
+        ggplot() +
+          theme_void() +
+          geom_text(aes(x = 0, y = 0, label = "Future only dumbass..."))
+      ))
     } else {
       
       df_h <- df_h2h()
@@ -196,14 +192,15 @@ league_ov_plt <- df_fty_box_score |>
         )
       })()
 
-      plt <- ggplot(h2h_plt, aes(x = stat, y = value, fill = competitor_name, text = paste(round(value, 2), "\n\n", competitor_roster))) +
-        geom_col(position = "fill") +
-        geom_hline(yintercept = 0.5) +
-        labs(title = paste0("Week ", input$h2h_week, ": ", str_trim(input$h2h_competitor), " vs ", str_trim(opp_name), x = NULL, y = NULL, fill = NULL)) +
-        theme_bw()
-
-      ggplotly(plt, tooltip = "text") |>
-        layout(hovermode = "x")
+      (
+        ggplot(h2h_plt, aes(x = stat, y = value, fill = competitor_name, text = paste(round(value, 2), "\n\n", competitor_roster))) +
+          geom_col(position = "fill") +
+          geom_hline(yintercept = 0.5) +
+          labs(title = paste0("Week ", input$h2h_week, ": ", str_trim(input$h2h_competitor), " vs ", str_trim(opp_name), x = NULL, y = NULL, fill = NULL)) +
+          theme_bw()
+      ) |> 
+        ggplotly(tooltip = "text") |>
+          layout(hovermode = "x")
 
     }
         
@@ -327,7 +324,7 @@ league_ov_plt <- df_fty_box_score |>
   # Count how many events a player excels given the selection
   .calc_xl_at_count <- function(df){
     df$xl_at_count <- 0
-    for(category in filter(stat_selection, formatted_name %in% input$comparison_excels_at_filter, !str_detect(formatted_name, "%"))$database_name){
+    for(category in filter(stat_selection, formatted_name %in% input$excels_at_filter, !str_detect(formatted_name, "%"))$database_name){
       df <- mutate(df, xl_at_count = str_detect(`Excels At`, category) + xl_at_count)
     }
     df
@@ -544,14 +541,14 @@ league_ov_plt <- df_fty_box_score |>
 
   output$player_trend_plot <- renderPlotly({
     
-    trend_selected_stat <- sym(filter(stat_selection, formatted_name == input$trend_select_stat)$database_name)
+    trend_selected_stat <- sym(input$trend_select_stat)
     
     if(is.null(input$trend_select_player)){
-      plt <- ggplot() +
-        theme_void() +
-        geom_text(aes(x = 0, y = 0, label = "Select players"))
-      
-      ggplotly(plt)
+      ggplotly((
+        ggplot() +
+          theme_void() +
+          geom_text(aes(x = 0, y = 0, label = "Select players"))
+      ))
     } else {
       
       df_trend <- (
@@ -568,17 +565,17 @@ league_ov_plt <- df_fty_box_score |>
         (\(df) bind_rows(df, summarise(df, game_date = max(game_date) + 1, .by = c(player_name, year_season))))() |> 
         mutate(player_name = factor(player_name, input$trend_select_player))
       
-      plt <- ggplot(df_trend, aes(x = game_date, colour = player_name)) +
-        geom_point(aes(y = {{ trend_selected_stat }}), alpha = 0.2) +
-        geom_line(aes(y = smooth)) +
-        scale_x_date(name = NULL, breaks = df_season_segments$mid_date, labels = df_season_segments$year_season_type) +
-        geom_vline(xintercept = as.numeric(df_season_segments$begin_date), colour = "grey") +
-        ylim(0, NA) +
-        labs(title = input$trend_select_stat, x = NULL, y = NULL) +
-        theme_bw() +
-        theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
-      
-        ggplotly(plt)
+      ggplotly((
+        ggplot(df_trend, aes(x = game_date, colour = player_name)) +
+          geom_point(aes(y = {{ trend_selected_stat }}), alpha = 0.2) +
+          geom_line(aes(y = smooth)) +
+          scale_x_date(name = NULL, breaks = df_season_segments$mid_date, labels = df_season_segments$year_season_type) +
+          geom_vline(xintercept = as.numeric(df_season_segments$begin_date), colour = "grey") +
+          ylim(0, NA) +
+          labs(title = db_to_fmt_stat_name[[input$trend_select_stat]], x = NULL, y = NULL) +
+          theme_bw() +
+          theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+      ))
     }
   })
 
@@ -601,9 +598,10 @@ league_ov_plt <- df_fty_box_score |>
     df_overview <- filter(df_overview, min >= as.numeric(input$draft_min_filter))
 
     # Scale by minutes (if selected)
-    if(input$draft_scale_minutes) df_overview <- mutate(df_overview, across(all_of(stat_selection$database_name), ~ .x / min))
+    if(input$draft_scale_minutes) df_overview <- mutate(df_overview, across(all_of(stat_selection$database_name[-c(1,2)]), ~ .x / min))
+    
     # Create df for plot
-    df_overview <- map(str_subset(stat_selection$database_name, "_pct", negate = TRUE), ~ {
+    df_overview <- map(str_subset(stat_selection$database_name, "_pct|_cat", negate = TRUE), ~ {
 
       col = sym(.x)
 
@@ -621,21 +619,24 @@ league_ov_plt <- df_fty_box_score |>
       }
 
     }) |>
-      set_names(filter(stat_selection, !str_detect(formatted_name, "%"))$formatted_name) |>
+      set_names(filter(stat_selection, !str_detect(database_name, "_pct|_cat"))$formatted_name) |>
       bind_rows(.id = "stat") |>
       mutate(top_cat_count = n(), .by = player_name) |>
       mutate(top_cats = paste(stat, collapse = ", "), .by = player_name)
-
+    
     # Stat selection and render plot
-    plt <- filter(df_overview, stat == input$draft_stat) |>
-      ggplot(aes(x = value, y = if(input$draft_stat == "Turnovers") reorder(player_name, -value) else reorder(player_name, value), fill = ordered(top_cat_count), text = top_cats)) +
-      geom_col() +
-      guides(fill = guide_legend(title = "Other Category Count", reverse=TRUE)) +
-      labs(title = paste0("Previous Seasion (", prev_season, "): ", ifelse(input$draft_tot_avg_toggle, "Total", "Average"), " ", input$draft_stat, ifelse(input$draft_scale_minutes, " Scaled", "")), x = NULL, y = NULL) +
-      theme_bw()
-
-    ggplotly(plt, tooltip = "text") |>
-      reverse_legend_labels()
+    (
+      ggplot(
+        filter(df_overview, stat == input$draft_stat),
+        aes(x = value, y = if(input$draft_stat == "Turnovers") reorder(player_name, -value) else reorder(player_name, value), fill = ordered(top_cat_count), text = top_cats)
+      ) + 
+        geom_col() +
+        guides(fill = guide_legend(title = "Other Category Count", reverse=TRUE)) +
+        labs(title = paste0("Previous Seasion (", prev_season, "): ", ifelse(input$draft_tot_avg_toggle, "Total", "Average"), " ", input$draft_stat, ifelse(input$draft_scale_minutes, " Scaled", "")), x = NULL, y = NULL) +
+        theme_bw()
+    ) |> 
+      ggplotly(tooltip = "text") |>
+        reverse_legend_labels()
 
   })
 

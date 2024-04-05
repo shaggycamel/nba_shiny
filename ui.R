@@ -7,18 +7,45 @@ library(bslib)
 library(readr)
 
 
+
 # Sidebar pages -----------------------------------------------------------
+# FTY League Overview -----------------------------------------------------
+
+page_fty_league_overview <- layout_sidebar(
+  sidebar = sidebar(pickerInput("fty_lg_ov_cat", "Category", choices = discard_at(fmt_to_db_stat_name, "Minutes"))),
+  card(full_screen = TRUE, plotlyOutput("fty_league_overview_rank_plot")),
+  fillable = TRUE
+)
+
+
 # Head to Head ------------------------------------------------------------
 
 page_h2h <- layout_sidebar(
   sidebar = sidebar(
     selectInput("h2h_competitor", "Competitor", choices = character(0)),
     selectInput("h2h_week", "Week", choices = 0),
-    selectInput("h2h_ex_player", "Exclude Player", choices = character(0), multiple = TRUE),
-    selectInput("h2h_add_player", "Add Player", choices = character(0), multiple = TRUE),
-    checkboxInput("h2h_future_only", "Future games only"),
-    checkboxInput("h2h_future_from_tomorrow", "From tomorrow"),
+    selectInput("h2h_ex_player", "Exclude", choices = character(0), multiple = TRUE),
+    selectInput("h2h_add_player", "Add", choices = character(0), multiple = TRUE),
+    layout_columns(
+      checkboxInput("h2h_future_only", "Future"),
+      checkboxInput("h2h_future_from_tomorrow", "Tmrw")      
+    ),
     selectInput("h2h_hl_player", "Highlight Player", choices = character(0), multiple = TRUE),
+    selectInput( ## NOT WORKING AS INTENDED
+      "h2h_log_config", 
+      "Log Filter Config", 
+      choices = list(
+        "Reset" = list(
+          "h2h_competitor" = "senor_cactus",
+          "h2h_week" = cur_week,
+          "h2h_ex_player" = NULL,
+          "h2h_add_player" = NULL,
+          "h2h_future_only" = FALSE,
+          "h2h_future_from_tomorrow" = FALSE,
+          "h2h_hl_player" = NULL
+        )
+      )
+    )
   ),
   card(
     height = 1600,
@@ -34,7 +61,7 @@ page_h2h <- layout_sidebar(
 page_player_comparison <- layout_sidebar(
   sidebar = sidebar(
     pickerInput("comparison_team_filter", "Team", choices = character(0), multiple = TRUE),
-    pickerInput("comparison_excels_at_filter", "Excels at", choices = dplyr::filter(stat_selection, !stringr::str_detect(formatted_name, "%"))$formatted_name, multiple = TRUE, options =  list("max-options" = 5)),
+    pickerInput("comparison_excels_at_filter", "Excels at", choices = discard(fmt_to_db_stat_name, \(x) str_detect(x, "_pct|_cat")), multiple = TRUE, options =  list("max-options" = 5)),
     sliderInput("comparison_minute_filter", "Minute", min = 0, max = 50, value = 20, round = TRUE),
     radioButtons("date_range_switch", NULL, choices = c("Seven Days", "Two Weeks", "One Month")),
     checkboxInput("comparison_free_agent_filter", "Free Agents only"),
@@ -60,7 +87,7 @@ page_league_game_schedule <- layout_sidebar(
 
 page_player_trend <- layout_sidebar(
   sidebar = sidebar(
-    selectInput("trend_select_stat", "Statistic", choices = dplyr::filter(stat_selection, !stringr::str_detect(formatted_name, "Z"))$formatted_name),
+    selectInput("trend_select_stat", "Statistic", choices = discard(fmt_to_db_stat_name, \(x) str_detect(x, "_z|_cat"))),
     selectInput("trend_select_player", "Player", multiple = TRUE, choices = character(0)),
     checkboxInput("this_season_trend_switch", "This year only", value = FALSE)
   ),
@@ -73,7 +100,7 @@ page_player_trend <- layout_sidebar(
 
 page_draft <- layout_sidebar(
   sidebar = sidebar(
-    selectInput("draft_stat", "Statistic", choices = dplyr::filter(stat_selection, !stringr::str_detect(formatted_name, "%"))$formatted_name),
+    selectInput("draft_stat", "Statistic", choices = filter(stat_selection, !str_detect(database_name, "_pct|_cat"))$formatted_name),
     sliderTextInput("draft_min_filter", "Limit Minutes", choices = 0), # updated dynamically in server.R
     sliderInput("draft_top_n", "Top N Players", min = 10, max = 20, value = 15, ticks = FALSE),
     checkboxInput("draft_scale_minutes", "Scale by Minutes"),
@@ -103,7 +130,7 @@ page_info <- card(
 ui <- page_navbar(
   title = "NBA Fantasy",
   nav_spacer(),
-  # nav_panel("Fty League", page_fty_league),
+  nav_panel("Fantasy Overview", page_fty_league_overview),
   nav_panel("Head to Head", page_h2h),
   nav_panel("Player Comparison", page_player_comparison),
   nav_panel("Game Schedule", page_league_game_schedule),

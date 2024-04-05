@@ -5,6 +5,8 @@
 stat_selection <- 
   tibble::tribble(
     ~formatted_name, ~database_name,
+    "All Nine Categories", "nine_cat",
+    "Top Five Categories", "five_cat",
      "Minutes", "min",
      "3-pointers", "fg3_m",
      "Points", "pts",
@@ -18,6 +20,10 @@ stat_selection <-
      "Blocks", "blk",
      "Turnovers", "tov"
   )
+
+# Useful lists of stat names
+fmt_to_db_stat_name <- magrittr::`%$%`(stat_selection, purrr::map(setNames(database_name, formatted_name), \(x) as.vector(x)))
+db_to_fmt_stat_name <- magrittr::`%$%`(stat_selection, purrr::map(setNames(formatted_name, database_name), \(x) as.vector(x)))
 
 # Analysis columns
 anl_cols <- list(
