@@ -5,9 +5,7 @@
 library(nba.dataRub)
 library(dplyr)
 library(tidyr)
-library(purrr)
 library(lubridate)
-library(stringr)
 library(ggplot2)
 library(plotly)
 library(shinycssloaders)
@@ -32,7 +30,7 @@ server <- function(input, output, session) {
   cur_date <<- as.Date("2024-02-26")
   cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
   prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
-  db_con <<- if(Sys.info()["nodename"] == "Olivers-MacBook-Pro.local") dh_createCon("postgres") else dh_createCon("cockroach") 
+  db_con <<- if(Sys.info()["user"] == "fred") dh_createCon("postgres") else dh_createCon("cockroach") 
   
   # Data Frames
   if(Sys.info()["user"] == "shiny") load(".RData") else source(here("data", "base_frames.R"))
@@ -267,11 +265,13 @@ server <- function(input, output, session) {
       ) |>
       select(-season_week, next_week = following_week_games)
       
-      df_h2h_week_game_count <- select(df_h2h_week_game_count, starts_with("player"), all_of(sort(str_subset(colnames(df_h2h_week_game_count), "\\d"))), Total, `Next Week` = next_week, Team = player_team, Player = player_name) |> 
+      df_h2h_week_game_count_tbl <- select(df_h2h_week_game_count, starts_with("player"), all_of(sort(str_subset(colnames(df_h2h_week_game_count), "\\d"))), Total, `Next Week` = next_week, Team = player_team, Player = player_name) |> 
         rename_with(.fn = \(x) format(as.Date(x), "%a (%m/%d)"), .cols = starts_with("20"))
       
-      max_game_count <- max(df_h2h_week_game_count$Total, na.rm = TRUE)
-      tibble::rowid_to_column(df_h2h_week_game_count) |> 
+      max_game_count <- max(df_h2h_week_game_count_tbl$Total, na.rm = TRUE)
+      min_next_week_game_count <- min(df_h2h_week_game_count_tbl$`Next Week`, na.rm = TRUE)
+      
+      tibble::rowid_to_column(df_h2h_week_game_count_tbl) |> 
         datatable(
           rownames = FALSE, 
           escape = FALSE,
@@ -288,12 +288,13 @@ server <- function(input, output, session) {
             )
           )
         ) |> 
-        formatStyle(colnames(df_h2h_week_game_count), border = "1px solid #000") |> 
+        formatStyle(colnames(df_h2h_week_game_count_tbl), border = "1px solid #000") |> 
         formatStyle("rowid", target = "row", backgroundColor = styleEqual(3, "grey")) |> 
         formatStyle("Total", target = "cell", backgroundColor = styleEqual(max_game_count, "lightgreen")) |> 
+        formatStyle(c("Team", "Player"), backgroundColor = "azure") |> 
+        formatStyle("Next Week", target = "cell", backgroundColor = styleEqual(min_next_week_game_count, "pink")) |>
         (\(dt){
-          cols <- str_subset(colnames(df_h2h_week_game_count), "\\(")
-          
+          cols <- str_subset(colnames(df_h2h_week_game_count_tbl), "\\(")
           for(col in cols){
             dt <- formatStyle(
               dt,
@@ -324,8 +325,8 @@ server <- function(input, output, session) {
   # Count how many events a player excels given the selection
   .calc_xl_at_count <- function(df){
     df$xl_at_count <- 0
-    for(category in filter(stat_selection, formatted_name %in% input$excels_at_filter, !str_detect(formatted_name, "%"))$database_name){
-      df <- mutate(df, xl_at_count = str_detect(`Excels At`, category) + xl_at_count)
+    for(category in filter(stat_selection, database_name %in% input$comparison_excels_at_filter, !str_detect(formatted_name, "%"))$database_name){
+      df$xl_at_count <- str_detect(df$`Excels At`, category) + df$xl_at_count
     }
     df
   } 
@@ -393,7 +394,7 @@ server <- function(input, output, session) {
     df_comparison_table <- filter(df_comparison, Minutes >= input$comparison_minute_filter)
     if(input$comparison_free_agent_filter) df_comparison_table <- filter(df_comparison_table, !is.na(free_agent_status))
     if(!is_null(input$comparison_team_filter)) df_comparison_table <- filter(df_comparison_table, Team %in% input$comparison_team_filter)
-    if(!is_null(input$comparison_excels_at_filter)) df_comparison_table <- filter(df_comparison_table, str_detect(`Excels At`, paste0(filter(stat_selection, formatted_name %in% input$comparison_excels_at_filter)$database_name, collapse = "|")))
+    if(!is_null(input$comparison_excels_at_filter)) df_comparison_table <- filter(df_comparison_table, str_detect(`Excels At`, paste0(filter(stat_selection, database_name %in% input$comparison_excels_at_filter)$database_name, collapse = "|")))
     df_comparison_table <- select(df_comparison_table, -ends_with("_status")) |> 
       arrange(desc(Minutes))
     
@@ -405,7 +406,7 @@ server <- function(input, output, session) {
         options = lst(
           dom = "t",
           paging = FALSE,
-          columnDefs = list(list(visible = FALSE, targets = str_which(colnames(df_comparison_table), "_count|_colour") - 1)),
+          # columnDefs = list(list(visible = FALSE, targets = str_which(colnames(df_comparison_table), "_count|_colour") - 1)),
           initComplete = JS(
             "function(settings, json) {",
               "$(this.api().table().header()).css({'background-color': 'blue', 'color': 'white'});",
@@ -413,7 +414,7 @@ server <- function(input, output, session) {
           )
         )
       ) |> 
-      formatStyle(columns = "Player", valueColumns = "player_colour", backgroundColor = styleEqual(c("red", "pink", "lightblue"), c("red", "pink", "lightblue"))) |> 
+      formatStyle(columns = "Player", valueColumns = "player_colour", backgroundColor = styleEqual(c("red", "pink", "azure"), c("red", "pink", "azure"))) |> 
       formatStyle(columns = colnames(df_comparison_table), border = "1px solid #000000") |> 
       formatCurrency(c(3:5, 8:12), "", digits=1) |>
       formatCurrency(6:7, "") |>
@@ -421,6 +422,12 @@ server <- function(input, output, session) {
         "Turnovers",
         backgroundColor = styleInterval(min(df_comparison_table$Turnovers) + 0.01, c("lightgreen", "white")),
       ) |>
+      # NOT WORKING... WHY???
+      # formatStyle(
+      #   columns = "Excels At",
+      #   valueColumns = "xl_at_count",
+      #   backgroundColor = styleEqual(0:3, c("black", "cornsilk2", "cornsilk1", "wheat"))
+      # ) |> 
       (\(dt){
           cols <- c("Minutes", "3-pointers", "Points", "Field Goal Z", "Free Throw Z", "Rebounds", "Assists", "Steals", "Blocks")
           for(col in cols){
@@ -431,13 +438,7 @@ server <- function(input, output, session) {
             )
           }
           dt
-        })() |> 
-        # NOT WORKING !!! ???
-        formatStyle(
-          columns = "Excels At", 
-          valueColumns = "xl_at_count",
-          backgroundColor = styleEqual(0:3, c("white", "lightblue1", "dodgerblue", "blue"))
-        )
+        })()
   })
 
 

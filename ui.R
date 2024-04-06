@@ -48,10 +48,10 @@ page_h2h <- layout_sidebar(
     )
   ),
   card(
-    height = 1600,
+    height = 1200,
     fill = FALSE,
-    card(full_screen = TRUE, min_height = 200, max_height = 800, plotlyOutput("h2h_stat_plot")),
-    card(full_screen = TRUE, min_height = 200, max_height = 800, DTOutput("h2h_game_table"))
+    card(full_screen = TRUE, min_height = 200, max_height = 600, plotlyOutput("h2h_stat_plot")),
+    card(full_screen = TRUE, min_height = 200, max_height = 600, DTOutput("h2h_game_table"))
   ),
   fillable = TRUE
 )
@@ -141,5 +141,11 @@ ui <- page_navbar(
     nav_panel("News", page_news),
     nav_panel("Info", page_info),
     align = "left"
+  ),
+  theme = bs_theme(
+    version = 5,
+    preset = "shiny",
+    bg = "#FFFFFF",
+    fg = "#333333"
   )
 )

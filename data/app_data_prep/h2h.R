@@ -99,7 +99,6 @@ df_h2h_prepare <<- function(competitor=NULL, exclude=NULL, add=NULL, from_tomorr
       by = join_by(player_id, us_date == game_date)
     )
    
-  
   if(from_tomorrow){
     df_h2h <- df_h2h |> 
       anti_join(
