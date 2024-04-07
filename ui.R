@@ -1,155 +1,147 @@
 
+
 # Libraries ---------------------------------------------------------------
 
-library(shiny)
-library(shinydashboard)
 library(shinyWidgets)
-source(here::here("_proj_useful.R"))
+library(bslib)
+library(readr)
 
-# ui ----------------------------------------------------------------------
 
-# Header
-header <- dashboardHeader(title = "Fantasy NBA")
-  
-# Sidebar
-sidebar <- dashboardSidebar(
-  sidebarMenu(
-    menuItem("News", tabName = "news_transactions", icon = icon("newspaper")),
-    menuItem("Head to Head", tabName = "head_to_head", icon = icon("chess")),
-    menuItem("Player Overview", tabName = "player_overview", icon = icon("chart-bar")),
-    menuItem("Player Comparison", tabName = "player_comparison", icon = icon("basketball")),
-    menuItem("League Game Schedule", tabName = "league_game_schedule", icon = icon("calendar-days")),
-    menuItem("Player Trend", tabName = "player_trend", icon = icon("chart-line")),
-    textAreaInput(inputId = "notepad", label = NULL, value = character(0), height = "100px", resize = "vertical"),
-    fixedPanel(
-      dropdownButton(
-        inputId = "watch_list_button", 
-        label = "Watch List",
-        icon = icon("plus"),
-        tooltip = TRUE,
-        up = TRUE,
-        selectInput(inputId = "watch_list", label = "Watch List", choices = 0, multiple = TRUE)
-      ), 
-      left=30, 
-      bottom = 180
-    )
+
+# Sidebar pages -----------------------------------------------------------
+# FTY League Overview -----------------------------------------------------
+
+page_fty_league_overview <- layout_sidebar(
+  sidebar = sidebar(pickerInput("fty_lg_ov_cat", "Category", choices = discard_at(fmt_to_db_stat_name, "Minutes"))),
+  card(full_screen = TRUE, plotlyOutput("fty_league_overview_rank_plot")),
+  fillable = TRUE
+)
+
+
+# Head to Head ------------------------------------------------------------
+
+page_h2h <- layout_sidebar(
+  sidebar = sidebar(
+    layout_columns(
+      selectInput("h2h_competitor", "Competitor", choices = character(0)),
+      selectInput("h2h_week", "Week", choices = 0) 
+    ),
+    layout_columns(
+      selectInput("h2h_ex_player", "Exclude", choices = character(0), multiple = TRUE),
+      selectInput("h2h_add_player", "Add", choices = character(0), multiple = TRUE, width = "400px"),
+    ),
+    layout_columns(
+      checkboxInput("h2h_future_only", "Future"),
+      checkboxInput("h2h_future_from_tomorrow", "Tmrw")      
+    ),
+    selectInput("h2h_hl_player", "Highlight Player", choices = character(0), multiple = TRUE),
+    selectInput("h2h_log_config", "Log Filter Config", choices = ls_log_config, size = 4, selectize = FALSE),
+    actionButton("h2h_snapshot_config", "Snapshot config")
+  ),
+  card(
+    height = 1200,
+    fill = FALSE,
+    card(full_screen = TRUE, min_height = 200, max_height = 600, plotlyOutput("h2h_stat_plot")),
+    card(full_screen = TRUE, min_height = 200, max_height = 600, DTOutput("h2h_game_table"))
+  ),
+  fillable = TRUE, 
+  tags$style(
+    type="text/css",
+    ".selectize-dropdown-content{width: 200px;background-color: #FFFFFF;align: right;}"
   )
 )
-    
-# Body
-body <- 
-  dashboardBody(
-    tabItems(
 
-# News (transaction feed) -----------------------------------------------------
-      tabItem(tabName = "news_transactions", 
-        box(
-          title = paste0("News: NBA transactions made within the last two weeks"),
-          width = NULL,
-          height = 600,
-          status = "primary", 
-          solidHeader = TRUE,
-          style = "overflow-x: scroll",
-          DT::DTOutput("news_transactions", height = 530))
-      ),
+# Player Comparison -------------------------------------------------------
 
+page_player_comparison <- layout_sidebar(
+  sidebar = sidebar(
+    pickerInput("comparison_team_filter", "Team", choices = character(0), multiple = TRUE),
+    pickerInput("comparison_excels_at_filter", "Excels at", choices = discard(fmt_to_db_stat_name, \(x) str_detect(x, "_pct|_cat")), multiple = TRUE, options =  list("max-options" = 5)),
+    sliderInput("comparison_minute_filter", "Minute", min = 0, max = 50, value = 20, round = TRUE),
+    radioButtons("date_range_switch", NULL, choices = c("Seven Days", "Two Weeks", "One Month")),
+    checkboxInput("comparison_free_agent_filter", "Free Agents only"),
+  ),
+  card(full_screen = TRUE, DTOutput("player_comparison_table")),
+  fillable = TRUE
+)
 
-# Head 2 Head -------------------------------------------------------------
-
-      tabItem(tabName = "head_to_head",
-        fluidRow(
-          column(
-            width = 2, 
-            selectInput("h2h_competitor", "Competitor", choices = character(0)),
-            selectInput("h2h_week", "Week", choices = 0),
-            selectInput("ex_player", "Exclude Player", choices = character(0), multiple = TRUE),
-            selectInput("add_player", "Add Player", choices = character(0), multiple = TRUE),
-            checkboxInput("future_only", "View future games only"),
-            checkboxInput("future_from_tomorrow", "From tomorrow")
-          ),
-          column(
-            width = 10, 
-            plotly::plotlyOutput("h2h_plot", height = 650),
-            gt::gt_output("game_count_table")
-          ),
-          
-        )
-      ),
-
-# Player Overview ---------------------------------------------------------
-
-      tabItem(tabName = "player_overview",
-        fluidRow(
-          column(
-            width = 4,
-            selectInput("overview_select_stat", "Statistic", choices = dplyr::filter(stat_selection, !stringr::str_detect(formatted_name, "%"))$formatted_name),
-            sliderTextInput("overview_minute_filter", "Limit Minutes", choices = 0), # updated dynamically in server.R
-            sliderInput("overview_slider_top_n", "Top N Players", min = 10, max = 20, value = 15, ticks = FALSE),
-            switchInput("tot_avg_toggle", onLabel = "Total", offLabel = "Average", size = "small"),
-            checkboxInput("this_season_overview_switch", "This year only", value = TRUE),
-            checkboxInput("overview_scale_by_minutes", "Scale by Minutes"),
-            checkboxInput("overview_free_agent_filter", "Only Show Non-Injured Free Agents")
-          ),
-        
-          # Plot
-          column(width = 8, plotly::plotlyOutput("player_overview_plot", height = 600)) # unsure how to make height dynamic, as in = "100%"
-        )
-      ),
-     
-
-# Player Performance ------------------------------------------------------
-
-      tabItem(tabName = "player_comparison",
-        fluidRow(
-          column(
-            width = 2, 
-            radioButtons("date_range_switch", "Range", choices = c("Two Weeks", "One Month")),
-            checkboxInput("performance_free_agent_filter", "Non injured Free Agents"),
-            pickerInput("team_filter", "Team filter", choices = character(0), multiple = TRUE),
-            pickerInput("excels_at_filter", "Excels At (one or more) filter", choices = dplyr::filter(stat_selection, !stringr::str_detect(formatted_name, "%"))$formatted_name, multiple = TRUE, options =  list("max-options" = 5)),
-            selectInput("performance_select_player", "Player", multiple = TRUE, choices = character(0)),
-          ),
-        
-          # Table
-          column(width = 10, gt::gt_output("player_comparison_table"))
-        )
-      ),
 
 # League Game Schedule ----------------------------------------------------
 
-      tabItem(tabName = "league_game_schedule",
-        fluidRow(
-          column(
-            width = 3, 
-            selectInput("week_selection", "Week", choices = character(0), selectize = FALSE)
-          ),
-        
-          # Table
-          column(width = 9, DT::DTOutput("schedule_table"))
-        ) 
-      ),
-      
+page_league_game_schedule <- layout_sidebar(
+  sidebar = sidebar(
+    selectInput("week_selection", "Week", choices = character(0), selectize = FALSE),
+    dateInput("pin_date", "Pinned Date")
+  ),
+  card(full_screen = TRUE, DTOutput("schedule_table")),
+  fillable = TRUE
+)
+
 
 # Player Trend ------------------------------------------------------------
 
-      tabItem(tabName = "player_trend",
-        fluidRow(
-          column(
-            width = 4, 
-            selectInput("trend_select_stat", "Statistic", choices = dplyr::filter(stat_selection, !stringr::str_detect(formatted_name, "Z"))$formatted_name),
-            selectInput("trend_select_player", "Player", multiple = TRUE, choices = character(0)),
-            checkboxInput("this_season_trend_switch", "This year only", value = FALSE)
-          ),
-        
-          # Plot
-          column(width = 8, plotOutput("player_trend_plot", height = 600)) # unsure how to make height dynamic, as in = "100%"
-        )
-      )
-    ),
+page_player_trend <- layout_sidebar(
+  sidebar = sidebar(
+    selectInput("trend_select_stat", "Statistic", choices = discard(fmt_to_db_stat_name, \(x) str_detect(x, "_z|_cat"))),
+    selectInput("trend_select_player", "Player", multiple = TRUE, choices = character(0)),
+    checkboxInput("this_season_trend_switch", "This year only", value = FALSE)
+  ),
+  card(full_screen = TRUE, plotlyOutput("player_trend_plot")),
+  fillable = TRUE,
+)
+
+
+# Draft Assistance --------------------------------------------------------
+
+page_draft <- layout_sidebar(
+  sidebar = sidebar(
+    selectInput("draft_stat", "Statistic", choices = filter(stat_selection, !str_detect(database_name, "_pct|_cat"))$formatted_name),
+    sliderTextInput("draft_min_filter", "Limit Minutes", choices = 0), # updated dynamically in server.R
+    sliderInput("draft_top_n", "Top N Players", min = 10, max = 20, value = 15, ticks = FALSE),
+    checkboxInput("draft_scale_minutes", "Scale by Minutes"),
+    switchInput("draft_tot_avg_toggle", value = TRUE, onLabel = "Total", offLabel = "Average", size = "small")
+  ),
+  card(full_screen = TRUE, plotlyOutput("draft_stat_plot")),
+  fillable = TRUE,
+)
+
+
+# News Transactions -------------------------------------------------------
+
+page_news <- card(full_screen = TRUE, DTOutput("news_transactions"))
+
+
+# Info page ---------------------------------------------------------------
+
+page_info <- card(
+  h5("Data Update Frequency"),
+  p(read_lines(here("data", "help_descriptions", "data_refresh.txt"))),
+  br(),
+)
+
+
+# Main UI -----------------------------------------------------------------
+
+ui <- page_navbar(
+  title = "NBA Fantasy",
+  nav_spacer(),
+  nav_panel("Fantasy Overview", page_fty_league_overview),
+  nav_panel("Head to Head", page_h2h),
+  nav_panel("Player Comparison", page_player_comparison),
+  nav_panel("Game Schedule", page_league_game_schedule),
+  nav_panel("Player Trend", page_player_trend),
+  nav_menu(
+    "Misc.", 
+    nav_panel("Draft", page_draft),
+    nav_panel("News", page_news),
+    nav_panel("Info", page_info),
+    align = "left"
+  ),
+  theme = bs_theme(
+    version = 5,
+    preset = "shiny",
+    # bg = "#FFFFFF",
+    # # fg = "#333333"
+    # fg = "#FFFFFF"
   )
-
-
-# Instantiate page --------------------------------------------------------
-
-ui <- dashboardPage(header, sidebar, body)
-
+)
