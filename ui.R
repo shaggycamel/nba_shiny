@@ -22,30 +22,21 @@ page_fty_league_overview <- layout_sidebar(
 
 page_h2h <- layout_sidebar(
   sidebar = sidebar(
-    selectInput("h2h_competitor", "Competitor", choices = character(0)),
-    selectInput("h2h_week", "Week", choices = 0),
-    selectInput("h2h_ex_player", "Exclude", choices = character(0), multiple = TRUE),
-    selectInput("h2h_add_player", "Add", choices = character(0), multiple = TRUE),
+    layout_columns(
+      selectInput("h2h_competitor", "Competitor", choices = character(0)),
+      selectInput("h2h_week", "Week", choices = 0) 
+    ),
+    layout_columns(
+      selectInput("h2h_ex_player", "Exclude", choices = character(0), multiple = TRUE),
+      selectInput("h2h_add_player", "Add", choices = character(0), multiple = TRUE, width = "400px"),
+    ),
     layout_columns(
       checkboxInput("h2h_future_only", "Future"),
       checkboxInput("h2h_future_from_tomorrow", "Tmrw")      
     ),
     selectInput("h2h_hl_player", "Highlight Player", choices = character(0), multiple = TRUE),
-    selectInput( ## NOT WORKING AS INTENDED
-      "h2h_log_config", 
-      "Log Filter Config", 
-      choices = list(
-        "Reset" = list(
-          "h2h_competitor" = "senor_cactus",
-          "h2h_week" = cur_week,
-          "h2h_ex_player" = NULL,
-          "h2h_add_player" = NULL,
-          "h2h_future_only" = FALSE,
-          "h2h_future_from_tomorrow" = FALSE,
-          "h2h_hl_player" = NULL
-        )
-      )
-    )
+    selectInput("h2h_log_config", "Log Filter Config", choices = ls_log_config, size = 4, selectize = FALSE),
+    actionButton("h2h_snapshot_config", "Snapshot config")
   ),
   card(
     height = 1200,
@@ -53,7 +44,11 @@ page_h2h <- layout_sidebar(
     card(full_screen = TRUE, min_height = 200, max_height = 600, plotlyOutput("h2h_stat_plot")),
     card(full_screen = TRUE, min_height = 200, max_height = 600, DTOutput("h2h_game_table"))
   ),
-  fillable = TRUE
+  fillable = TRUE, 
+  tags$style(
+    type="text/css",
+    ".selectize-dropdown-content{width: 200px;background-color: #FFFFFF;align: right;}"
+  )
 )
 
 # Player Comparison -------------------------------------------------------
@@ -145,7 +140,8 @@ ui <- page_navbar(
   theme = bs_theme(
     version = 5,
     preset = "shiny",
-    bg = "#FFFFFF",
-    fg = "#333333"
+    # bg = "#FFFFFF",
+    # # fg = "#333333"
+    # fg = "#FFFFFF"
   )
 )

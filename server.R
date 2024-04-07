@@ -86,7 +86,7 @@ server <- function(input, output, session) {
   
   # Additional H2H filter alteration
   observe({
-    competitor_players <- sort(filter(slice_max(df_h2h_og, us_date, by = competitor_id), competitor_name == input$h2h_competitor)$player_name)
+    competitor_players <- sort(filter(slice_max(df_h2h_og, us_date, by = competitor_id), competitor_name == str_squish(input$h2h_competitor))$player_name)
     updateSelectInput(session, "h2h_ex_player", choices = competitor_players)
     updateSelectInput(session, "h2h_add_player", choices = setdiff(active_players, competitor_players))
     updateSelectInput(session, "h2h_hl_player", choices = competitor_players)
@@ -119,8 +119,40 @@ server <- function(input, output, session) {
 # FTY Head to Head --------------------------------------------------------
 
   # Reactive H2H data creation
-  df_h2h <- reactive(df_h2h_prepare(input$h2h_competitor, input$h2h_ex_player, input$h2h_add_player, input$h2h_future_from_tomorrow)) |> 
+  df_h2h <- reactive(df_h2h_prepare(str_squish(input$h2h_competitor), input$h2h_ex_player, input$h2h_add_player, input$h2h_future_from_tomorrow)) |> 
     bindEvent(input$h2h_competitor, input$h2h_ex_player, input$h2h_add_player, input$h2h_future_from_tomorrow)
+  
+  observe({
+    
+    t_ls_pre <- map(str_split(input$h2h_log_config, ";"), \(x) str_split(x, "="))[[1]]
+    t_ls <- lst()
+    for(el in t_ls_pre) t_ls[el[1]] <- el[2]
+    for(el in names(t_ls)){
+      if(str_detect(t_ls[[el]], "TRUE|FALSE"))
+        t_ls[[el]] = as.logical(t_ls[[el]])
+      else if(str_detect(t_ls[[el]], "\\d+"))
+        t_ls[[el]] = as.numeric(t_ls[[el]])
+      else if(str_detect(t_ls[[el]], ", "))
+        t_ls[[el]] = str_split_1(t_ls[[el]], ", ")
+    } 
+    
+    print(t_ls)
+    
+    chk_boxes <- c("h2h_future_only", "h2h_future_from_tomorrow")
+    walk(chk_boxes, \(x) updateCheckboxInput(session, x, value = t_ls[[x]]))
+    walk(setdiff(names(t_ls), chk_boxes), \(x) updateSelectInput(session, x, selected = t_ls[[x]]))
+    
+  }) |> 
+    bindEvent(input$h2h_log_config, ignoreInit = TRUE)
+  
+  observe({
+    el_cfg <- paste0("h2h_competitor=", str_squish(input$h2h_competitor), ";h2h_week=", input$h2h_week, ";h2h_ex_player=", toString(input$h2h_ex_player), ";h2h_add_player=", toString(input$h2h_add_player), ";h2h_future_only=", input$h2h_future_only, ";h2h_future_from_tomorrow=", input$h2h_future_from_tomorrow, ";h2h_hl_player=", toString(input$h2h_hl_player))
+    ls_log_config[paste0("config_", input$h2h_snapshot_config)] <<- el_cfg
+    ls_log_config <<- ls_log_config[!duplicated(unlist(ls_log_config, use.names = FALSE))]
+    updateSelectInput(session, "h2h_log_config", choices = ls_log_config)
+  }) |> 
+    bindEvent(input$h2h_snapshot_config, ignoreInit = TRUE)
+  
   
   output$h2h_stat_plot <- renderPlotly({
     
@@ -134,10 +166,10 @@ server <- function(input, output, session) {
       
       df_h <- df_h2h()
       if(input$h2h_future_only) df_h <- filter(df_h, origin == "future")
-      opp_name <- filter(df_h, league_week == input$h2h_week, competitor_name == input$h2h_competitor)$opponent_name[1]
+      opp_name <- filter(df_h, league_week == input$h2h_week, competitor_name == str_squish(input$h2h_competitor))$opponent_name[1]
 
       h2h_plt <<- bind_rows(
-        filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week),
+        filter(df_h, competitor_name == str_squish(input$h2h_competitor), league_week == input$h2h_week),
         filter(df_h, competitor_name == opp_name, league_week == input$h2h_week)
       ) |>
       filter(!is.na(player_id), player_injury_status %in% c("ACTIVE", "DAY_TO_DAY") | is.na(player_injury_status)) |>
@@ -194,7 +226,7 @@ server <- function(input, output, session) {
         ggplot(h2h_plt, aes(x = stat, y = value, fill = competitor_name, text = paste(round(value, 2), "\n\n", competitor_roster))) +
           geom_col(position = "fill") +
           geom_hline(yintercept = 0.5) +
-          labs(title = paste0("Week ", input$h2h_week, ": ", str_trim(input$h2h_competitor), " vs ", str_trim(opp_name), x = NULL, y = NULL, fill = NULL)) +
+          labs(title = paste0("Week ", input$h2h_week, ": ", str_squish(input$h2h_competitor), " vs ", str_trim(opp_name), x = NULL, y = NULL, fill = NULL)) +
           theme_bw()
       ) |> 
         ggplotly(tooltip = "text") |>
@@ -221,10 +253,10 @@ server <- function(input, output, session) {
       df_h <- df_h2h()
       if(input$h2h_future_from_tomorrow) df_h <- mutate(df_h, origin = if_else(us_date == cur_date, "past", origin))
       if(input$h2h_future_only) df_h <- filter(df_h, origin == "future")
-      opp_name <- filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week)$opponent_name[1]
+      opp_name <- filter(df_h, competitor_name == str_squish(input$h2h_competitor), league_week == input$h2h_week)$opponent_name[1]
       
       df_h2h_week_game_count <- bind_rows(
-        filter(df_h, competitor_name == input$h2h_competitor, league_week == input$h2h_week),
+        filter(df_h, competitor_name == str_squish(input$h2h_competitor), league_week == input$h2h_week),
         filter(df_h, competitor_name == opp_name, league_week == input$h2h_week)
       ) |> 
       mutate(play_status = case_when(
@@ -241,9 +273,9 @@ server <- function(input, output, session) {
   
         bind_rows(
           inner_func(df, opp_name),
-          inner_func(df, input$h2h_competitor),
+          inner_func(df, str_squish(input$h2h_competitor)),
           setNames(as.data.frame(matrix(rep(NA, length(colnames(df))), nrow = 1)), colnames(df)),
-          select(filter(df, competitor_name == input$h2h_competitor), starts_with(c("player", "20"))) |>
+          select(filter(df, competitor_name == str_squish(input$h2h_competitor)), starts_with(c("player", "20"))) |>
             arrange(player_name) |>
             mutate(across(starts_with("20"), \(x) as.character(x)))
         )
@@ -310,7 +342,7 @@ server <- function(input, output, session) {
           }
           
           if (format(cur_date, "%a (%m/%d)") %in% cols) dt <- formatStyle(dt, format(cur_date, "%a (%m/%d)"), target = "cell", backgroundColor = styleEqual("1*", "pink", default = "lightyellow"))
-          if (length(input$h2h_hl_player) > 0) dt <- formatStyle(dt, "Player", target = "row", backgroundColor = styleEqual(input$h2h_hl_player, rep("azure", length(input$h2h_hl_player))))
+          if (length(input$h2h_hl_player) > 0) dt <- formatStyle(dt, "Player", target = "row", backgroundColor = styleEqual(input$h2h_hl_player, rep("#54FF9F", length(input$h2h_hl_player))))
 
           dt
         })() 

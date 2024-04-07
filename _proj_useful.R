@@ -31,6 +31,9 @@ anl_cols <- list(
   h2h_cols = c("fg_pct", "fg3_m", "ft_pct", "reb", "ast", "stl", "blk", "tov", "pts")
 )
 
+# Log config init object
+ls_log_config <- list("reset" = paste0("h2h_competitor=senor_cactus;h2h_week=", cur_week, ";h2h_ex_player=;h2h_add_player=;h2h_future_only=FALSE;h2h_future_from_tomorrow=FALSE;h2h_hl_player="))
+
 
 # Custom Functions --------------------------------------------------------
 
