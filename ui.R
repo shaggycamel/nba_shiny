@@ -12,7 +12,7 @@ library(readr)
 # FTY League Overview -----------------------------------------------------
 
 page_fty_league_overview <- layout_sidebar(
-  sidebar = sidebar(pickerInput("fty_lg_ov_cat", "Category", choices = discard_at(fmt_to_db_stat_name, "Minutes"))),
+  sidebar = selectInput("fty_lg_ov_cat", "Category", choices = discard_at(fmt_to_db_stat_name, "Minutes")),
   card(full_screen = TRUE, plotlyOutput("fty_league_overview_rank_plot")),
   fillable = TRUE
 )
@@ -35,7 +35,7 @@ page_h2h <- layout_sidebar(
       checkboxInput("h2h_future_from_tomorrow", "Tmrw")      
     ),
     selectInput("h2h_hl_player", "Highlight Player", choices = character(0), multiple = TRUE),
-    selectInput("h2h_log_config", "Log Filter Config", choices = ls_log_config, size = 4, selectize = FALSE),
+    selectInput("h2h_log_config", "Log Filter Config", choices = character(0), size = 4, selectize = FALSE),
     actionButton("h2h_snapshot_config", "Snapshot config")
   ),
   card(
@@ -55,8 +55,8 @@ page_h2h <- layout_sidebar(
 
 page_player_comparison <- layout_sidebar(
   sidebar = sidebar(
-    pickerInput("comparison_team_filter", "Team", choices = character(0), multiple = TRUE),
-    pickerInput("comparison_excels_at_filter", "Excels at", choices = discard(fmt_to_db_stat_name, \(x) str_detect(x, "_pct|_cat")), multiple = TRUE, options =  list("max-options" = 5)),
+    selectInput("comparison_team_filter", "Team", choices = character(0), multiple = TRUE),
+    selectizeInput("comparison_excels_at_filter", "Excels at", choices = discard(fmt_to_db_stat_name, \(x) str_detect(x, "_pct|_cat")), options = list(maxItems = 5, onInitialize = I('function() { this.setValue(""); }'))),
     sliderInput("comparison_minute_filter", "Minute", min = 0, max = 50, value = 20, round = TRUE),
     radioButtons("date_range_switch", NULL, choices = c("Seven Days", "Two Weeks", "One Month")),
     checkboxInput("comparison_free_agent_filter", "Free Agents only"),
@@ -139,9 +139,8 @@ ui <- page_navbar(
   ),
   theme = bs_theme(
     version = 5,
-    preset = "shiny",
-    # bg = "#FFFFFF",
-    # # fg = "#333333"
-    # fg = "#FFFFFF"
+    preset = "litera",
+    primary = "#133DEF"
   )
 )
+

@@ -44,6 +44,8 @@ server <- function(input, output, session) {
   #   pull(season_week) |>
   #   unique()
   cur_week <<- 18
+  ls_log_config <- list("reset" = paste0("h2h_competitor=senor_cactus;h2h_week=", cur_week, ";h2h_ex_player=;h2h_add_player=;h2h_future_only=FALSE;h2h_future_from_tomorrow=FALSE;h2h_hl_player="))
+  updateSelectInput(session, "h2h_log_config", choices = ls_log_config)
   
   teams <<- df_player_log |> 
     pull(team_slug) |> 
@@ -74,7 +76,7 @@ server <- function(input, output, session) {
     updateSliderTextInput(session, "draft_min_filter", choices = seq(from = min_range[["100%"]], to = min_range[["0%"]]), selected = min_range[["75%"]])
     
     # Player Comparison tab
-    updatePickerInput(session, "comparison_team_filter", choices = teams)
+    updateSelectInput(session, "comparison_team_filter", choices = teams)
     
     # Player trend tab
     updateSelectInput(session, "trend_select_player", choices = active_players)
@@ -135,8 +137,6 @@ server <- function(input, output, session) {
       else if(str_detect(t_ls[[el]], ", "))
         t_ls[[el]] = str_split_1(t_ls[[el]], ", ")
     } 
-    
-    print(t_ls)
     
     chk_boxes <- c("h2h_future_only", "h2h_future_from_tomorrow")
     walk(chk_boxes, \(x) updateCheckboxInput(session, x, value = t_ls[[x]]))
@@ -438,7 +438,7 @@ server <- function(input, output, session) {
         options = lst(
           dom = "t",
           paging = FALSE,
-          # columnDefs = list(list(visible = FALSE, targets = str_which(colnames(df_comparison_table), "_count|_colour") - 1)),
+          columnDefs = list(list(visible = FALSE, targets = str_which(colnames(df_comparison_table), "_count|_colour") - 1)),
           initComplete = JS(
             "function(settings, json) {",
               "$(this.api().table().header()).css({'background-color': 'blue', 'color': 'white'});",

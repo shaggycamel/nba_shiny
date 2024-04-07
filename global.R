@@ -14,8 +14,3 @@ library(stringr)
 source(here("_proj_useful.R"))
 
 
-
-
-# DELETE ------------------------------------------------------------------
-
-cur_week <<- 18
