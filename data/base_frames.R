@@ -49,7 +49,7 @@ minus_wk <- df_nba_schedule |>
   pull(season_week) |> 
   max()
   
-df_nba_schedule <- df_nba_schedule |> 
+df_nba_schedule <<- df_nba_schedule |> 
   mutate(season_week = case_when(
     type_season == "Pre Season" ~ 0,
     type_season == "Regular Season" ~ season_week - minus_wk
