@@ -15,6 +15,7 @@ library(shinycssloaders)
 
 # only init python if running in shiny
 if(Sys.info()["user"] == "shiny") source(here("_proj_python.R")) 
+source(here("_proj_useful.R"))
 
 
 # Server code -------------------------------------------------------------
@@ -44,8 +45,6 @@ server <- function(input, output, session) {
   #   pull(season_week) |>
   #   unique()
   cur_week <<- 18
-  ls_log_config <- list("reset" = paste0("h2h_competitor=senor_cactus;h2h_week=", cur_week, ";h2h_ex_player=;h2h_add_player=;h2h_future_only=FALSE;h2h_future_from_tomorrow=FALSE;h2h_hl_player="))
-  updateSelectInput(session, "h2h_log_config", choices = ls_log_config)
   
   teams <<- df_player_log |> 
     pull(team_slug) |> 
@@ -67,28 +66,38 @@ server <- function(input, output, session) {
   # Maybe get to the point where I place free agents at top of list
   active_players <<- sort_players_by_min_desc(df_player_log)
   free_agents <<- sort_players_by_min_desc(filter(df_player_log, free_agent_status == "ACTIVE"))
+  fty_competitor_list <- magrittr::`%$%`(df_fty_base, map(setNames(competitor_id, competitor_name_clean), \(x) as.vector(x)))
+  ls_log_config <- list("reset" = paste0("h2h_competitor=senor_cactus;h2h_week=", cur_week, ";h2h_ex_player=;h2h_add_player=;h2h_future_only=FALSE;h2h_future_from_tomorrow=FALSE;h2h_hl_player="))
   
 
+# Init app filter list creation -------------------------------------------
+
+  # Player Comparison tab
+  updateSelectInput(session, "comparison_team_filter", choices = teams)
+  
+  # Player trend tab
+  updateSelectInput(session, "trend_select_player", choices = active_players)
+  
+  # H2H tab
+  updateSelectInput(session, "h2h_competitor", choices = fty_competitor_list, selected = "senor_cactus")
+  updateSelectInput(session, "h2h_week", choices = unique(df_nba_schedule$season_week), selected = cur_week)  
+  updateSelectInput(session, "h2h_log_config", choices = ls_log_config)
+  
+
+# On-going filter list alteration -----------------------------------------
+
+# ADD BIND EVENT
   observe({
     # Draft Assistance tab
     min_range <- if(input$draft_tot_avg_toggle) round(quantile(summarise(group_by(df_player_log, player_id), min = sum(min, na.rm = TRUE))$min))
       else round(quantile(summarise(group_by(df_player_log, player_id), min = mean(min, na.rm = TRUE))$min))
     updateSliderTextInput(session, "draft_min_filter", choices = seq(from = min_range[["100%"]], to = min_range[["0%"]]), selected = min_range[["75%"]])
-    
-    # Player Comparison tab
-    updateSelectInput(session, "comparison_team_filter", choices = teams)
-    
-    # Player trend tab
-    updateSelectInput(session, "trend_select_player", choices = active_players)
-    
-    # H2H tab
-    updateSelectInput(session, "h2h_competitor", choices = unique(df_fty_schedule$competitor_name), selected = "senor_cactus")
-    updateSelectInput(session, "h2h_week", choices = unique(df_nba_schedule$season_week), selected = cur_week)
   })
-  
+ 
+# ADD BIND EVENT 
   # Additional H2H filter alteration
   observe({
-    competitor_players <- sort(filter(slice_max(df_h2h_og, us_date, by = competitor_id), competitor_name == str_squish(input$h2h_competitor))$player_name)
+    competitor_players <- sort(filter(slice_max(df_h2h_og, us_date, by = competitor_id), competitor_id == input$h2h_competitor)$player_name)
     updateSelectInput(session, "h2h_ex_player", choices = competitor_players)
     updateSelectInput(session, "h2h_add_player", choices = setdiff(active_players, competitor_players))
     updateSelectInput(session, "h2h_hl_player", choices = competitor_players)
@@ -101,6 +110,7 @@ server <- function(input, output, session) {
     
     (
       df_fty_league_overview |> 
+        left_join(select(df_fty_base, competitor_id, competitor_name), by = join_by(competitor_id)) |> 
         ggplot(aes(x = matchup, y = !!sym(input$fty_lg_ov_cat), colour = competitor_name)) +
         ggbump::geom_bump(linewidth = 0.5) +
         geom_point(size = 3) +
@@ -120,8 +130,10 @@ server <- function(input, output, session) {
 
 # FTY Head to Head --------------------------------------------------------
 
+  # UPTOOOO HEREEREEE
+  
   # Reactive H2H data creation
-  df_h2h <- reactive(df_h2h_prepare(str_squish(input$h2h_competitor), input$h2h_ex_player, input$h2h_add_player, input$h2h_future_from_tomorrow)) |> 
+  df_h2h <- reactive(df_h2h_prepare(input$h2h_competitor, input$h2h_ex_player, input$h2h_add_player, input$h2h_future_from_tomorrow)) |> 
     bindEvent(input$h2h_competitor, input$h2h_ex_player, input$h2h_add_player, input$h2h_future_from_tomorrow)
   
   observe({
