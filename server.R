@@ -45,14 +45,7 @@ server <- function(input, output, session) {
   #   pull(season_week) |>
   #   unique()
   cur_week <<- 18
-  
-  teams <<- df_player_log |> 
-    pull(team_slug) |> 
-    unique() |> 
-    sort()
-  
-  # Stop loading page
-  hidePageSpinner()
+  teams <<- sort(unique(df_player_log$team_slug))
   
 
 # Set Server Side Dynamic Menus -------------------------------------------
@@ -66,7 +59,8 @@ server <- function(input, output, session) {
   # Maybe get to the point where I place free agents at top of list
   active_players <<- sort_players_by_min_desc(df_player_log)
   free_agents <<- sort_players_by_min_desc(filter(df_player_log, free_agent_status == "ACTIVE"))
-  fty_competitor_list <- magrittr::`%$%`(df_fty_base, map(setNames(competitor_id, competitor_name_clean), \(x) as.vector(x)))
+  ls_fty_name_to_cid <- magrittr::`%$%`(df_fty_base, map(setNames(competitor_id, competitor_name), \(x) as.vector(x)))
+  ls_fty_cid_to_name <- magrittr::`%$%`(df_fty_base, map(setNames(competitor_name, competitor_id), \(x) as.vector(x)))
   ls_log_config <- list("reset" = paste0("h2h_competitor=senor_cactus;h2h_week=", cur_week, ";h2h_ex_player=;h2h_add_player=;h2h_future_only=FALSE;h2h_future_from_tomorrow=FALSE;h2h_hl_player="))
   
 
@@ -79,10 +73,12 @@ server <- function(input, output, session) {
   updateSelectInput(session, "trend_select_player", choices = active_players)
   
   # H2H tab
-  updateSelectInput(session, "h2h_competitor", choices = fty_competitor_list, selected = "senor_cactus")
-  updateSelectInput(session, "h2h_week", choices = unique(df_nba_schedule$season_week), selected = cur_week)  
+  updateSelectInput(session, "h2h_competitor", choices = ls_fty_name_to_cid, selected = 5)
+  updateSelectInput(session, "h2h_week", choices = unique(df_nba_schedule$season_week)[-1], selected = cur_week)  
   updateSelectInput(session, "h2h_log_config", choices = ls_log_config)
-  
+ 
+  # Stop loading page
+  hidePageSpinner() 
 
 # On-going filter list alteration -----------------------------------------
 
@@ -101,16 +97,17 @@ server <- function(input, output, session) {
     updateSelectInput(session, "h2h_ex_player", choices = competitor_players)
     updateSelectInput(session, "h2h_add_player", choices = setdiff(active_players, competitor_players))
     updateSelectInput(session, "h2h_hl_player", choices = competitor_players)
+    # Is it possible to highlight newly added players? - Can they be included in list?
   })
   
 
 # FTY League Overview -------------------------------------------------
 
   output$fty_league_overview_rank_plot <- renderPlotly({
-    
+
     (
-      df_fty_league_overview |> 
-        left_join(select(df_fty_base, competitor_id, competitor_name), by = join_by(competitor_id)) |> 
+      df_fty_league_overview |>
+        left_join(select(df_fty_base, competitor_id, competitor_name), by = join_by(competitor_id)) |>
         ggplot(aes(x = matchup, y = !!sym(input$fty_lg_ov_cat), colour = competitor_name)) +
         ggbump::geom_bump(linewidth = 0.5) +
         geom_point(size = 3) +
@@ -123,8 +120,9 @@ server <- function(input, output, session) {
         start = max(df_fty_league_overview$matchup) - 5.1,
         end = max(df_fty_league_overview$matchup) + 0.1,
         range = list(min(df_fty_league_overview$matchup) - 0.2, max(df_fty_league_overview$matchup) + 0.2)
-      )
-    
+      ) |> 
+      config(displayModeBar = FALSE)
+
   })
 
 
@@ -133,7 +131,7 @@ server <- function(input, output, session) {
   # UPTOOOO HEREEREEE
   
   # Reactive H2H data creation
-  df_h2h <- reactive(df_h2h_prepare(input$h2h_competitor, input$h2h_ex_player, input$h2h_add_player, input$h2h_future_from_tomorrow)) |> 
+  df_h2h <- reactive(df_h2h_prepare(as.numeric(input$h2h_competitor), input$h2h_ex_player, input$h2h_add_player, input$h2h_future_from_tomorrow)) |> 
     bindEvent(input$h2h_competitor, input$h2h_ex_player, input$h2h_add_player, input$h2h_future_from_tomorrow)
   
   observe({
@@ -167,7 +165,7 @@ server <- function(input, output, session) {
   
   
   output$h2h_stat_plot <- renderPlotly({
-    
+
     if(input$h2h_week < cur_week & input$h2h_future_only){
       ggplotly((
         ggplot() +
@@ -175,19 +173,19 @@ server <- function(input, output, session) {
           geom_text(aes(x = 0, y = 0, label = "Future only dumbass..."))
       ))
     } else {
-      
+
       df_h <- df_h2h()
       if(input$h2h_future_only) df_h <- filter(df_h, origin == "future")
-      opp_name <- filter(df_h, league_week == input$h2h_week, competitor_name == str_squish(input$h2h_competitor))$opponent_name[1]
+      opp_id <- filter(df_h, league_week == input$h2h_week, competitor_id == as.numeric(input$h2h_competitor))$opponent_id[1]
 
       h2h_plt <<- bind_rows(
-        filter(df_h, competitor_name == str_squish(input$h2h_competitor), league_week == input$h2h_week),
-        filter(df_h, competitor_name == opp_name, league_week == input$h2h_week)
+        filter(df_h, competitor_id == as.numeric(input$h2h_competitor), league_week == input$h2h_week),
+        filter(df_h, competitor_id == opp_id, league_week == input$h2h_week)
       ) |>
       filter(!is.na(player_id), player_injury_status %in% c("ACTIVE", "DAY_TO_DAY") | is.na(player_injury_status)) |>
       pivot_longer(cols = c(ast, stl, blk, tov, pts, ftm, fta, fgm, fga, fg3_m, reb), names_to = "stat", values_to = "value") |>
-      select(competitor_name, player_name, stat, value) |>
-      summarise(value = sum(value, na.rm = TRUE), .by = c(competitor_name, player_name, stat)) |>
+      select(competitor_id, player_name, stat, value) |>
+      summarise(value = sum(value, na.rm = TRUE), .by = c(competitor_id, player_name, stat)) |>
       (\(t_df){
         bind_rows(
           # fg_pct
@@ -198,7 +196,7 @@ server <- function(input, output, session) {
             summarise(
               competitor_roster = paste0(player_name, " ", fg_pct, " (", round(fgm, 2), "/", round(fga, 2), ")", collapse = "\n"),
               value = sum(fgm) / sum(fga),
-              .by = competitor_name
+              .by = competitor_id
             ) |>
             mutate(stat = "fg_pct"),
 
@@ -210,7 +208,7 @@ server <- function(input, output, session) {
             summarise(
               competitor_roster = paste0(player_name, " ", ft_pct, " (", round(ftm, 2), "/", round(fta, 2), ")", collapse = "\n"),
               value = sum(ftm) / sum(fta),
-              .by = competitor_name
+              .by = competitor_id
             ) |>
             mutate(stat = "ft_pct"),
 
@@ -220,7 +218,7 @@ server <- function(input, output, session) {
             summarise(
               competitor_roster = paste(player_name, round(value), collapse = "\n"),
               value = sum(value),
-              .by = c(competitor_name, stat)
+              .by = c(competitor_id, stat)
             ),
 
           # the rest
@@ -229,65 +227,70 @@ server <- function(input, output, session) {
             summarise(
               competitor_roster = paste(player_name, round(value), collapse = "\n"),
               value = sum(value),
-              .by = c(competitor_name, stat)
+              .by = c(competitor_id, stat)
             )
         )
-      })()
+      })() |> 
+      mutate(competitor_name = str_replace_all(competitor_id, unlist(ls_fty_cid_to_name))) |> 
+      mutate(competitor_name = ordered(competitor_name, c(ls_fty_cid_to_name[opp_id], ls_fty_cid_to_name[input$h2h_competitor])))
+      
 
       (
         ggplot(h2h_plt, aes(x = stat, y = value, fill = competitor_name, text = paste(round(value, 2), "\n\n", competitor_roster))) +
           geom_col(position = "fill") +
           geom_hline(yintercept = 0.5) +
-          labs(title = paste0("Week ", input$h2h_week, ": ", str_squish(input$h2h_competitor), " vs ", str_trim(opp_name), x = NULL, y = NULL, fill = NULL)) +
+          scale_fill_brewer(type = "qual", palette = "Set2") +
+          labs(title = paste0("Week ", input$h2h_week, ": ", ls_fty_cid_to_name[input$h2h_competitor], " vs ", ls_fty_cid_to_name[opp_id], x = NULL, y = NULL, fill = NULL)) +
           theme_bw()
-      ) |> 
+      ) |>
         ggplotly(tooltip = "text") |>
-          layout(hovermode = "x")
+        layout(hovermode = "x") |> 
+        config(displayModeBar = FALSE)
 
     }
-        
-  }) 
+
+  })
   
   
   output$h2h_game_table <- renderDT({
     
     if(input$h2h_week < cur_week & input$h2h_future_only){
-  
+
       datatable(
         as.data.frame("Future only dumbass..."),
         rownames = FALSE,
         colnames = "",
-        options = lst(dom = "t", paging = FALSE), 
+        options = lst(dom = "t", paging = FALSE),
       )
-  
+
     } else {
-  
+
       df_h <- df_h2h()
       if(input$h2h_future_from_tomorrow) df_h <- mutate(df_h, origin = if_else(us_date == cur_date, "past", origin))
       if(input$h2h_future_only) df_h <- filter(df_h, origin == "future")
-      opp_name <- filter(df_h, competitor_name == str_squish(input$h2h_competitor), league_week == input$h2h_week)$opponent_name[1]
-      
+      opp_id <- filter(df_h, competitor_id == as.numeric(input$h2h_competitor), league_week == input$h2h_week)$opponent_id[1]
+
       df_h2h_week_game_count <- bind_rows(
-        filter(df_h, competitor_name == str_squish(input$h2h_competitor), league_week == input$h2h_week),
-        filter(df_h, competitor_name == opp_name, league_week == input$h2h_week)
-      ) |> 
+        filter(df_h, competitor_id == as.numeric(input$h2h_competitor), league_week == input$h2h_week),
+        filter(df_h, competitor_id == opp_id, league_week == input$h2h_week)
+      ) |>
       mutate(play_status = case_when(
         scheduled_to_play == 1 & player_injury_status == "OUT" ~ "1*",
          scheduled_to_play == 1 ~ "1",
         .default = NA_character_
-      )) |> 
-      pivot_wider(id_cols = c(competitor_id, competitor_name, opponent_id, opponent_name, player_team, player_name), names_from = us_date, values_from = play_status) |> 
+      )) |>
+      pivot_wider(id_cols = c(competitor_id, opponent_id, player_team, player_name), names_from = us_date, values_from = play_status) |>
       (\(df){
-  
-        inner_func <- function(x, nm) filter(x, competitor_name == nm) |>
+
+        inner_func <- function(x, nm) filter(x, competitor_id == nm) |>
           mutate(player_team = "Total", player_name = str_trim(nm)) |>
           summarise(across(starts_with("20"), \(x) as.character(sum(x == "1", na.rm = TRUE))), .by = c(player_team, player_name))
-  
+
         bind_rows(
-          inner_func(df, opp_name),
-          inner_func(df, str_squish(input$h2h_competitor)),
+          inner_func(df, opp_id),
+          inner_func(df, as.numeric(input$h2h_competitor)),
           setNames(as.data.frame(matrix(rep(NA, length(colnames(df))), nrow = 1)), colnames(df)),
-          select(filter(df, competitor_name == str_squish(input$h2h_competitor)), starts_with(c("player", "20"))) |>
+          select(filter(df, competitor_id == as.numeric(input$h2h_competitor)), starts_with(c("player", "20"))) |>
             arrange(player_name) |>
             mutate(across(starts_with("20"), \(x) as.character(x)))
         )
@@ -298,7 +301,7 @@ server <- function(input, output, session) {
           mutate(across(everything(), \(x) ifelse(is.na(as.numeric(x)) | as.numeric(x) <= 10, as.numeric(x), 10))) |>
           summarise(across(everything(), \(x) sum(x, na.rm = TRUE))) |>
           t()
-  
+
         mutate(df, Total = Ttl)
       })() |>
       mutate(Total = if_else(Total == 0 & is.na(player_team), NA, Total)) |>
@@ -308,21 +311,23 @@ server <- function(input, output, session) {
         by = join_by(player_team == team, season_week)
       ) |>
       select(-season_week, next_week = following_week_games)
-      
-      df_h2h_week_game_count_tbl <- select(df_h2h_week_game_count, starts_with("player"), all_of(sort(str_subset(colnames(df_h2h_week_game_count), "\\d"))), Total, `Next Week` = next_week, Team = player_team, Player = player_name) |> 
-        rename_with(.fn = \(x) format(as.Date(x), "%a (%m/%d)"), .cols = starts_with("20"))
-      
+
+      df_h2h_week_game_count_tbl <- select(df_h2h_week_game_count, starts_with("player"), all_of(sort(str_subset(colnames(df_h2h_week_game_count), "\\d"))), Total, `Next Week` = next_week, Team = player_team, Player = player_name) |>
+        rename_with(.fn = \(x) format(as.Date(x), "%a (%d/%m)"), .cols = starts_with("20")) |> 
+        mutate(Player = str_replace_all(Player, unlist(ls_fty_cid_to_name)))
+
       max_game_count <- max(df_h2h_week_game_count_tbl$Total, na.rm = TRUE)
       min_next_week_game_count <- min(df_h2h_week_game_count_tbl$`Next Week`, na.rm = TRUE)
       
-      tibble::rowid_to_column(df_h2h_week_game_count_tbl) |> 
+
+      tibble::rowid_to_column(df_h2h_week_game_count_tbl) |>
         datatable(
-          rownames = FALSE, 
+          rownames = FALSE,
           escape = FALSE,
           style = "default",
           options = lst(
-            dom = "t", 
-            paging = FALSE, 
+            dom = "t",
+            paging = FALSE,
             ordering = FALSE,
             columnDefs = list(list(visible = FALSE, targets = "rowid")),
             initComplete = JS(
@@ -331,12 +336,12 @@ server <- function(input, output, session) {
               "}"
             )
           )
-        ) |> 
-        formatStyle(colnames(df_h2h_week_game_count_tbl), border = "1px solid #000") |> 
-        formatStyle("rowid", target = "row", backgroundColor = styleEqual(3, "grey")) |> 
-        formatStyle("Total", target = "cell", backgroundColor = styleEqual(max_game_count, "lightgreen")) |> 
-        formatStyle(c("Team", "Player"), backgroundColor = "azure") |> 
-        formatStyle("Next Week", target = "cell", backgroundColor = styleEqual(min_next_week_game_count, "pink")) |>
+        ) |>
+        formatStyle(colnames(df_h2h_week_game_count_tbl), border = "1px solid #000") |>
+        formatStyle("rowid", target = "row", backgroundColor = styleEqual(3, "grey")) |>
+        formatStyle("Total", target = "cell", backgroundColor = styleEqual(max_game_count, "lightgreen")) |>
+        formatStyle(c("Team", "Player"), backgroundColor = "azure") |>
+        formatStyle("Next Week", target = "cell", backgroundColor = styleEqual(min_next_week_game_count, "#FFBBFF")) |>
         (\(dt){
           cols <- str_subset(colnames(df_h2h_week_game_count_tbl), "\\(")
           for(col in cols){
@@ -345,19 +350,19 @@ server <- function(input, output, session) {
               columns = col,
               target = "cell",
               backgroundColor = styleInterval(10, c(NA, "pink"))
-            ) |> 
+            ) |>
             formatStyle(
-              columns = col, 
+              columns = col,
               target = "cell",
               backgroundColor = styleEqual("1*", "pink")
             )
           }
-          
-          if (format(cur_date, "%a (%m/%d)") %in% cols) dt <- formatStyle(dt, format(cur_date, "%a (%m/%d)"), target = "cell", backgroundColor = styleEqual("1*", "pink", default = "lightyellow"))
+
+          if (format(cur_date, "%a (%d/%m)") %in% cols) dt <- formatStyle(dt, format(cur_date, "%a (%d/%m)"), target = "cell", backgroundColor = styleEqual("1*", "pink", default = "lightyellow"))
           if (length(input$h2h_hl_player) > 0) dt <- formatStyle(dt, "Player", target = "row", backgroundColor = styleEqual(input$h2h_hl_player, rep("#54FF9F", length(input$h2h_hl_player))))
 
           dt
-        })() 
+        })()
 
       }
 
@@ -376,22 +381,22 @@ server <- function(input, output, session) {
   } 
   
   output$player_comparison_table <- renderDT({
-    
-    df_comparison <<- df_player_log |> 
+
+    df_comparison <<- df_player_log |>
       filter(
-        game_date <= cur_date, 
+        game_date <= cur_date,
         # game_date >= cur_date - days(15)
         game_date >= cur_date - case_when(input$date_range_switch == "Two Weeks" ~ days(15), input$date_range_switch == "One Month" ~ days(30), .default = days(7))
       ) |>
       summarise(across(any_of(anl_cols$stat_cols), ~ mean(.x)), .by = c(player_id, player_name)) |>
       calc_z_pcts() |>
       select(-ends_with("_pct")) |>
-      mutate(across(where(is.numeric), ~ replace_na(.x, 0L))) |> 
+      mutate(across(where(is.numeric), ~ replace_na(.x, 0L))) |>
       (\(t_df) {
         left_join(
           t_df,
           {
-            select(t_df, player_id, player_name, any_of(stat_selection$database_name), -min) |> 
+            select(t_df, player_id, player_name, any_of(stat_selection$database_name), -min) |>
               mutate(across(any_of(stat_selection$database_name[stat_selection$database_name != "tov"]), ~ round(scales::rescale(.x), 2))) |>
               mutate(tov = round((((tov * -1) - min(tov)) / (max(tov) - min(tov))) + 1, 2)) |>
               pivot_longer(cols = any_of(stat_selection$database_name), names_to = "stat") |>
@@ -400,29 +405,29 @@ server <- function(input, output, session) {
                   mutate(slice_max(t_df, value, n = 3, by = c(player_id, player_name), with_ties = FALSE), performance = "Excels At") |> filter(value > 0),
                   mutate(slice_min(t_df, value, n = 3, by = c(player_id, player_name)), performance = "Weak At")
                 )
-              })() |> 
-              mutate(stat_value = paste0(stat, " (", value, ")")) |> 
-              group_by(player_id, player_name, performance) |> 
-              summarise(stat_value = paste(stat_value, collapse = "\n"), .groups = "drop") |> 
+              })() |>
+              mutate(stat_value = paste0(stat, " (", value, ")")) |>
+              group_by(player_id, player_name, performance) |>
+              summarise(stat_value = paste(stat_value, collapse = "\n"), .groups = "drop") |>
               pivot_wider(names_from = performance, values_from = stat_value)
           },
           by = join_by(player_name, player_id)
         )
-      })() |> 
-      select(player_name, any_of(stat_selection$database_name), contains("at"), -ends_with("pct")) |> 
-      rename(any_of(setNames(stat_selection$database_name, stat_selection$formatted_name)), Player = player_name) |> 
+      })() |>
+      select(player_name, any_of(stat_selection$database_name), contains("at"), -ends_with("pct")) |>
+      rename(any_of(setNames(stat_selection$database_name, stat_selection$formatted_name)), Player = player_name) |>
       left_join(
-        slice_max(df_player_log, game_date, by = player_name) |> 
+        slice_max(df_player_log, game_date, by = player_name) |>
           select(Player = player_name, Team = team_slug, free_agent_status),
         by = join_by(Player)
-      ) |> 
-      mutate(play_status = str_extract(free_agent_status, "[OUT|DAY|SUS].*")) |> 
+      ) |>
+      mutate(play_status = str_extract(free_agent_status, "[OUT|DAY|SUS].*")) |>
       mutate(play_status = case_when(
         play_status == "OUT" ~ "(out)",
         play_status == "SUSPENSION" ~ "(sus)",
         play_status == "DAY_TO_DAY" ~ "(d2d)",
         .default = ""
-      )) |> 
+      )) |>
       mutate(
         Player = paste(Player, play_status),
         player_colour = case_when(
@@ -431,20 +436,20 @@ server <- function(input, output, session) {
           play_status == "(d2d)" ~ "pink",
           .default = "azure"
         )
-      ) |> 
-      relocate(Team, .after = Player) |> 
+      ) |>
+      relocate(Team, .after = Player) |>
       .calc_xl_at_count()
-    
+
     df_comparison_table <- filter(df_comparison, Minutes >= input$comparison_minute_filter)
     if(input$comparison_free_agent_filter) df_comparison_table <- filter(df_comparison_table, !is.na(free_agent_status))
     if(!is_null(input$comparison_team_filter)) df_comparison_table <- filter(df_comparison_table, Team %in% input$comparison_team_filter)
     if(!is_null(input$comparison_excels_at_filter)) df_comparison_table <- filter(df_comparison_table, str_detect(`Excels At`, paste0(filter(stat_selection, database_name %in% input$comparison_excels_at_filter)$database_name, collapse = "|")))
-    df_comparison_table <- select(df_comparison_table, -ends_with("_status")) |> 
+    df_comparison_table <- select(df_comparison_table, -ends_with("_status")) |>
       arrange(desc(Minutes))
-    
-    df_comparison_table |> 
+
+    df_comparison_table |>
       datatable(
-        rownames = FALSE, 
+        rownames = FALSE,
         escape = FALSE,
         style = "default",
         options = lst(
@@ -457,21 +462,22 @@ server <- function(input, output, session) {
             "}"
           )
         )
-      ) |> 
-      formatStyle(columns = "Player", valueColumns = "player_colour", backgroundColor = styleEqual(c("red", "pink", "azure"), c("red", "pink", "azure"))) |> 
-      formatStyle(columns = colnames(df_comparison_table), border = "1px solid #000000") |> 
+      ) |>
+      formatStyle(columns = "Player", valueColumns = "player_colour", backgroundColor = styleEqual(c("red", "pink", "azure"), c("red", "pink", "azure"))) |>
+      formatStyle(columns = colnames(df_comparison_table), border = "1px solid #000000") |>
       formatCurrency(c(3:5, 8:12), "", digits=1) |>
       formatCurrency(6:7, "") |>
       formatStyle(
         "Turnovers",
         backgroundColor = styleInterval(min(df_comparison_table$Turnovers) + 0.01, c("lightgreen", "white")),
       ) |>
+      formatStyle(columns = c("Excels At", "Weak At"), fontSize = "80%") |> 
       # NOT WORKING... WHY???
       # formatStyle(
       #   columns = "Excels At",
       #   valueColumns = "xl_at_count",
       #   backgroundColor = styleEqual(0:3, c("black", "cornsilk2", "cornsilk1", "wheat"))
-      # ) |> 
+      # ) |>
       (\(dt){
           cols <- c("Minutes", "3-pointers", "Points", "Field Goal Z", "Free Throw Z", "Rebounds", "Assists", "Steals", "Blocks")
           for(col in cols){
@@ -507,7 +513,7 @@ server <- function(input, output, session) {
     )
   })
   
-  observeEvent(input$week_selection, {
+  observe({
     
     selected_week_dates <<- as.vector(str_extract_all(input$week_selection, "\\d{4}-\\d{2}-\\d{2}", simplify = TRUE))
     date_input_value <- cur_date
@@ -515,7 +521,8 @@ server <- function(input, output, session) {
     if(input$pin_date > selected_week_dates[2]) date_input_value <- selected_week_dates[2]
     updateDateInput(session, "pin_date", value = date_input_value, min = selected_week_dates[1], max = selected_week_dates[2])
     
-  })
+  }) |> 
+    bindEvent(input$week_selection)
 
   output$schedule_table <- renderDT({
 
@@ -524,7 +531,7 @@ server <- function(input, output, session) {
     tbl_schedule <<- tbl_week_games$data[[match(input$week_selection, week_drop_box_choices)+1]] |>
       mutate(across(ends_with(")"), \(x) if_else(as.character(x) == "NULL", 0, 1))) |>
       mutate(across(c(contains("games"), Team), as.factor))
-   
+
     ts_names <- tmp_names <- str_subset(colnames(tbl_schedule), "\\(")
     names(ts_names) <- names(tmp_names) <- str_sub(ts_names, end = 3)
 
@@ -537,14 +544,14 @@ server <- function(input, output, session) {
       }
     }
     ts_names <- discard(ts_names[c("1_Mon", "1_Tue", "1_Wed", "1_Thu", "1_Fri", "1_Sat", "1_Sun", "2_Mon", "2_Tue")], is.na)
-    
-    tbl_schedule <- tbl_schedule |> 
-      rowwise() |> 
+
+    tbl_schedule <- tbl_schedule |>
+      rowwise() |>
       mutate(
-        `Games From Pin` = sum(c_across(str_subset(ts_names, format(input$pin_date, "%m/%d")):ts_names[wk_th])), 
+        `Games From Pin` = sum(c_across(str_subset(ts_names, format(input$pin_date, "%m/%d")):ts_names[wk_th])),
         .before = "Following Week Games"
-      ) |> 
-      relocate(contains("games"), .after = wk_th + 1) |> 
+      ) |>
+      relocate(contains("games"), .after = wk_th + 1) |>
       mutate(across(ends_with(")"), \(x) as.factor(if_else(x == 0, ".", "1"))))
 
     # Present table
@@ -554,9 +561,9 @@ server <- function(input, output, session) {
       class = "cell-border stripe",
       style = "default",
       options = list(
-        paging = FALSE, 
-        autoWidth = TRUE, 
-        dom = 't', 
+        paging = FALSE,
+        autoWidth = TRUE,
+        dom = 't',
         scrollX = TRUE,
         initComplete = JS(
           "function(settings, json) {",
@@ -565,7 +572,7 @@ server <- function(input, output, session) {
         )
       ),
       filter = list(position = "top", clear = FALSE),
-    ) |> 
+    ) |>
     formatStyle(columns = "Team", backgroundColor = "azure") |>
     formatStyle(columns = str_subset(ts_names, format(input$pin_date, "%m/%d")), backgroundColor = "lightyellow") |>
     (\(tb){
@@ -576,18 +583,18 @@ server <- function(input, output, session) {
     formatStyle(
       columns = "Following Week Games",
       backgroundColor = styleEqual(levels = 0:tail(levels(tbl_schedule$`Following Week Games`), 1), values = rev(RColorBrewer::brewer.pal(length(0:tail(levels(tbl_schedule$`Following Week Games`), 1)), "Greens")))
-    ) |> 
+    ) |>
     formatStyle(columns = (length(tbl_schedule)-1):length(tbl_schedule), backgroundColor = "lightgrey")
-    
+
   })
 
 
 # NBA Player Trend --------------------------------------------------------
 
   output$player_trend_plot <- renderPlotly({
-    
+
     trend_selected_stat <- sym(input$trend_select_stat)
-    
+
     if(is.null(input$trend_select_player)){
       ggplotly((
         ggplot() +
@@ -595,21 +602,21 @@ server <- function(input, output, session) {
           geom_text(aes(x = 0, y = 0, label = "Select players"))
       ))
     } else {
-      
+
       df_trend <- (
           if(!input$this_season_trend_switch) df_player_log
             else filter(df_player_log, slug_season == cur_season)
-        ) |> 
+        ) |>
         filter(player_name %in% input$trend_select_player) |>
-        arrange(game_date) |> 
+        arrange(game_date) |>
         mutate(
           day_sequence = as.integer((game_date - min(game_date)) + 1),
-          smooth = loess(replace_na({{ trend_selected_stat }}, 0) ~ day_sequence)$fitted, 
+          smooth = loess(replace_na({{ trend_selected_stat }}, 0) ~ day_sequence)$fitted,
           .by = c(year_season, player_name)
-        ) |> 
-        (\(df) bind_rows(df, summarise(df, game_date = max(game_date) + 1, .by = c(player_name, year_season))))() |> 
+        ) |>
+        (\(df) bind_rows(df, summarise(df, game_date = max(game_date) + 1, .by = c(player_name, year_season))))() |>
         mutate(player_name = factor(player_name, input$trend_select_player))
-      
+
       ggplotly((
         ggplot(df_trend, aes(x = game_date, colour = player_name)) +
           geom_point(aes(y = {{ trend_selected_stat }}), alpha = 0.2) +
@@ -631,9 +638,9 @@ server <- function(input, output, session) {
 
     # Stat calc
     stat_calc <- if(input$draft_tot_avg_toggle) getFunction("sum") else getFunction("mean")
-    df_overview <- df_player_log |> 
+    df_overview <- df_player_log |>
       filter(
-        slug_season == prev_season, 
+        slug_season == prev_season,
         !(is.na(player_id) | is.na(player_name))
       ) |>
       summarise(across(any_of(anl_cols$stat_cols), \(x) stat_calc(x, na.rm = TRUE)), .by = c(player_id, player_name)) |>
@@ -644,7 +651,7 @@ server <- function(input, output, session) {
 
     # Scale by minutes (if selected)
     if(input$draft_scale_minutes) df_overview <- mutate(df_overview, across(all_of(stat_selection$database_name[-c(1,2)]), ~ .x / min))
-    
+
     # Create df for plot
     df_overview <- map(str_subset(stat_selection$database_name, "_pct|_cat", negate = TRUE), ~ {
 
@@ -668,47 +675,51 @@ server <- function(input, output, session) {
       bind_rows(.id = "stat") |>
       mutate(top_cat_count = n(), .by = player_name) |>
       mutate(top_cats = paste(stat, collapse = ", "), .by = player_name)
-    
+
     # Stat selection and render plot
     (
       ggplot(
         filter(df_overview, stat == input$draft_stat),
         aes(x = value, y = if(input$draft_stat == "Turnovers") reorder(player_name, -value) else reorder(player_name, value), fill = ordered(top_cat_count), text = top_cats)
-      ) + 
+      ) +
         geom_col() +
         guides(fill = guide_legend(title = "Other Category Count", reverse=TRUE)) +
         labs(title = paste0("Previous Seasion (", prev_season, "): ", ifelse(input$draft_tot_avg_toggle, "Total", "Average"), " ", input$draft_stat, ifelse(input$draft_scale_minutes, " Scaled", "")), x = NULL, y = NULL) +
         theme_bw()
-    ) |> 
+    ) |>
       ggplotly(tooltip = "text") |>
-        reverse_legend_labels()
+      reverse_legend_labels() |> 
+      config(displayModeBar = FALSE)
 
   })
 
   
+  
 # News Transactions -------------------------------------------------------
 
-    output$news_transactions <- renderDT(
-    datatable(
-      df_news,
-      rownames = FALSE,
-      class = "cell-border stripe",
-      style = "default",
-      filter = list(position = "top", clear = FALSE),
-      options = list(
-        paging = FALSE, 
-        autoWidth = TRUE, 
-        dom = 't', 
-        scrollX = TRUE,
-        initComplete = JS(
-          "function(settings, json) {",
-            "$(this.api().table().header()).css({'background-color': 'blue', 'color': 'white'});",
-          "}"
+    output$news_transactions <- renderDT({
+      df_t <- rename_with(df_news, \(x) str_to_title(str_replace(x, "_", " ")))
+      
+      datatable(
+        df_t,
+        rownames = FALSE,
+        class = "cell-border stripe",
+        style = "default",
+        filter = list(position = "top", clear = FALSE),
+        options = list(
+          paging = FALSE,
+          autoWidth = TRUE,
+          dom = 't',
+          scrollX = TRUE,
+          initComplete = JS(
+            "function(settings, json) {",
+              "$(this.api().table().header()).css({'background-color': 'blue', 'color': 'white'});",
+            "}"
+          )
         )
-      )
-    ) |> 
-    formatStyle(columns = colnames(df_news), background = "white", color = "black")
-  )
+      ) |>
+      formatStyle(columns = colnames(df_t), background = "white", color = "black")
+  })
 
 }
 
