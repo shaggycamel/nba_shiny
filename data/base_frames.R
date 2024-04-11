@@ -70,24 +70,8 @@ df_nba_roster <<- dh_getQuery(db_con, "sql/nba_team_roster.sql")
 
 # Fantasy Base object -----------------------------------------------------
 
-df_fty_base <- dh_getQuery(db_con, "sql/fty_league_info.sql") |> 
-  mutate(across(
-    matches("r_name|_abbrev"), 
-    \(x){
-      textclean::replace_emoji(x) |> 
-        textclean::replace_emoticon() |> 
-        str_remove_all("<.+>") |> 
-        str_squish() 
-    }, 
-    .names = "{.col}_clean"
-  )) 
-  # select(
-  #   season, 
-  #   league_id, 
-  #   competitor_id, 
-  #   competitor_abbrev = competitor_abbrev_clean, 
-  #   competitor_name = competitor_name_clean
-  # )
+cat("\t- df_fantasy_base\n")
+df_fty_base <- dh_getQuery(db_con, "sql/fty_league_info.sql")
 
 
 # Fantasy league schedule -------------------------------------------------

@@ -61,7 +61,8 @@ server <- function(input, output, session) {
   free_agents <<- sort_players_by_min_desc(filter(df_player_log, free_agent_status == "ACTIVE"))
   ls_fty_name_to_cid <- magrittr::`%$%`(df_fty_base, map(setNames(competitor_id, competitor_name), \(x) as.vector(x)))
   ls_fty_cid_to_name <- magrittr::`%$%`(df_fty_base, map(setNames(competitor_name, competitor_id), \(x) as.vector(x)))
-  ls_log_config <- list("reset" = paste0("h2h_competitor=senor_cactus;h2h_week=", cur_week, ";h2h_ex_player=;h2h_add_player=;h2h_future_only=FALSE;h2h_future_from_tomorrow=FALSE;h2h_hl_player="))
+  ls_log_config <- list("reset" = paste0("h2h_competitor=5;h2h_week=", cur_week, ";h2h_ex_player=;h2h_add_player=;h2h_future_only=FALSE;h2h_future_from_tomorrow=FALSE;h2h_hl_player="))
+  # Alter h2h_competitor part of string when have a way
   
 
 # Init app filter list creation -------------------------------------------
@@ -82,15 +83,14 @@ server <- function(input, output, session) {
 
 # On-going filter list alteration -----------------------------------------
 
-# ADD BIND EVENT
   observe({
     # Draft Assistance tab
     min_range <- if(input$draft_tot_avg_toggle) round(quantile(summarise(group_by(df_player_log, player_id), min = sum(min, na.rm = TRUE))$min))
       else round(quantile(summarise(group_by(df_player_log, player_id), min = mean(min, na.rm = TRUE))$min))
     updateSliderTextInput(session, "draft_min_filter", choices = seq(from = min_range[["100%"]], to = min_range[["0%"]]), selected = min_range[["75%"]])
-  })
+  }) |> 
+    bindEvent(input$draft_tot_avg_toggle)
  
-# ADD BIND EVENT 
   # Additional H2H filter alteration
   observe({
     competitor_players <- sort(filter(slice_max(df_h2h_og, us_date, by = competitor_id), competitor_id == input$h2h_competitor)$player_name)
@@ -98,7 +98,8 @@ server <- function(input, output, session) {
     updateSelectInput(session, "h2h_add_player", choices = setdiff(active_players, competitor_players))
     updateSelectInput(session, "h2h_hl_player", choices = competitor_players)
     # Is it possible to highlight newly added players? - Can they be included in list?
-  })
+  }) |> 
+    bindEvent(input$h2h_competitor)
   
 
 # FTY League Overview -------------------------------------------------
@@ -128,8 +129,6 @@ server <- function(input, output, session) {
 
 # FTY Head to Head --------------------------------------------------------
 
-  # UPTOOOO HEREEREEE
-  
   # Reactive H2H data creation
   df_h2h <- reactive(df_h2h_prepare(as.numeric(input$h2h_competitor), input$h2h_ex_player, input$h2h_add_player, input$h2h_future_from_tomorrow)) |> 
     bindEvent(input$h2h_competitor, input$h2h_ex_player, input$h2h_add_player, input$h2h_future_from_tomorrow)
@@ -231,10 +230,9 @@ server <- function(input, output, session) {
             )
         )
       })() |> 
-      mutate(competitor_name = str_replace_all(competitor_id, unlist(ls_fty_cid_to_name))) |> 
+      mutate(competitor_name = map_chr(competitor_id, \(x) ls_fty_cid_to_name[[x]])) |> 
       mutate(competitor_name = ordered(competitor_name, c(ls_fty_cid_to_name[opp_id], ls_fty_cid_to_name[input$h2h_competitor])))
       
-
       (
         ggplot(h2h_plt, aes(x = stat, y = value, fill = competitor_name, text = paste(round(value, 2), "\n\n", competitor_roster))) +
           geom_col(position = "fill") +
