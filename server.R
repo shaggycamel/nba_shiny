@@ -2,7 +2,6 @@
 
 # Libraries ---------------------------------------------------------------
 
-library(nba.dataRub)
 library(dplyr)
 library(tidyr)
 library(lubridate)
@@ -22,17 +21,46 @@ source(here("_proj_useful.R"))
 
 server <- function(input, output, session) {
   
+# Login -------------------------------------------------------------------
+  
+  bindEvent(observe({
+    if(input$fty_league_select != "")
+      updateSelectInput(inputId = "fty_competitor_select", choices = filter(df_fty_base, league_name == input$fty_league_select)$competitor_name)
+  }), input$fty_league_select)
+  
+  bindEvent(observe({
+    if(input$fty_competitor_select != ""){
+      fty_parameters_met = TRUE
+      removeModal()
+    }
+  }), input$fty_dash_init)
+  
+  showModal(
+    modalDialog(
+      selectizeInput(
+        "fty_league_select", 
+        label = NULL, 
+        choices = unique(df_fty_base$league_name),
+        options = list(placeholder = "Select Fantasy League", onInitialize = I("function(){this.setValue('');}"))
+      ),
+      selectizeInput(
+        "fty_competitor_select", 
+        label = NULL, 
+        choices = character(0),
+        options = list(placeholder = "Select Fantasy Competitor", onInitialize = I("function(){this.setValue('');}"))
+      ),
+      footer = actionButton("fty_dash_init", "Kobeee!"),
+      size = "s"
+    )
+  )
+  
+
+# Load datasets -----------------------------------------------------------
+
   # Start loading page
   data_collection_caption <- "Processing data, one minute..."
   showPageSpinner(type = 6, caption = data_collection_caption)
 
-  # Variables
-  # cur_date <<- as.Date(str_extract(as.POSIXct(Sys.time(), tz="NZ"), "\\d{4}-\\d{2}-\\d{2}")) - 1
-  cur_date <<- as.Date("2024-02-26")
-  cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
-  prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
-  db_con <<- if(Sys.info()["user"] == "fred") dh_createCon("postgres") else dh_createCon("cockroach") 
-  
   # Data Frames
   if(Sys.info()["user"] == "shiny") load(".RData") else source(here("data", "base_frames.R"))
   .load_datasets <- function() walk(list.files(here("data", "app_data_prep"), full.names = TRUE), \(x) source(x, local = TRUE))
@@ -61,7 +89,7 @@ server <- function(input, output, session) {
   free_agents <<- sort_players_by_min_desc(filter(df_player_log, free_agent_status == "ACTIVE"))
   ls_fty_name_to_cid <- magrittr::`%$%`(df_fty_base, map(setNames(competitor_id, competitor_name), \(x) as.vector(x)))
   ls_fty_cid_to_name <- magrittr::`%$%`(df_fty_base, map(setNames(competitor_name, competitor_id), \(x) as.vector(x)))
-  ls_log_config <- list("reset" = paste0("h2h_competitor=5;h2h_week=", cur_week, ";h2h_ex_player=;h2h_add_player=;h2h_future_only=FALSE;h2h_future_from_tomorrow=FALSE;h2h_hl_player="))
+  ls_log_config <- list("reset" = paste0("h2h_competitor=", ls_fty_name_to_cid[input$fty_competitor_select],";h2h_week=", cur_week, ";h2h_ex_player=;h2h_add_player=;h2h_future_only=FALSE;h2h_future_from_tomorrow=FALSE;h2h_hl_player="))
   # Alter h2h_competitor part of string when have a way
   
 
@@ -177,7 +205,7 @@ server <- function(input, output, session) {
       if(input$h2h_future_only) df_h <- filter(df_h, origin == "future")
       opp_id <- filter(df_h, league_week == input$h2h_week, competitor_id == as.numeric(input$h2h_competitor))$opponent_id[1]
 
-      h2h_plt <<- bind_rows(
+      h2h_plt <- bind_rows(
         filter(df_h, competitor_id == as.numeric(input$h2h_competitor), league_week == input$h2h_week),
         filter(df_h, competitor_id == opp_id, league_week == input$h2h_week)
       ) |>

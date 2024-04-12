@@ -1,9 +1,4 @@
 
-suppressMessages({
-  library(nba.dataRub)
-  library(stringr)
-})
-
 
 # News --------------------------------------------------------------------
 
@@ -66,12 +61,6 @@ df_nba_schedule <<- df_nba_schedule |>
 
 cat("\t- df_nba_roster\n")
 df_nba_roster <<- dh_getQuery(db_con, "sql/nba_team_roster.sql")
-
-
-# Fantasy Base object -----------------------------------------------------
-
-cat("\t- df_fantasy_base\n")
-df_fty_base <- dh_getQuery(db_con, "sql/fty_league_info.sql")
 
 
 # Fantasy league schedule -------------------------------------------------

@@ -2,6 +2,7 @@
 
 # Common Libraries --------------------------------------------------------
 
+library(nba.dataRub)
 library(shiny)
 library(DT)
 library(plotly)
@@ -9,7 +10,22 @@ library(here)
 library(purrr)
 library(stringr)
 
+
+# Database connection -----------------------------------------------------
+
+db_con <<- if(Sys.info()["user"] == "fred") dh_createCon("postgres") else dh_createCon("cockroach") 
+
+
 # Common objects ----------------------------------------------------------
+# Variables ---------------------------------------------------------------
+
+# cur_date <<- as.Date(str_extract(as.POSIXct(Sys.time(), tz="NZ"), "\\d{4}-\\d{2}-\\d{2}")) - 1
+cur_date <<- as.Date("2024-02-26")
+cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
+prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
+ 
+df_fty_base <- dh_getQuery(db_con, "sql/fty_league_info.sql") 
+
 # Project Constants -------------------------------------------------------
 
 # Dataframe used to select NBA stats

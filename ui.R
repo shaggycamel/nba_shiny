@@ -5,7 +5,10 @@
 library(shinyWidgets)
 library(bslib)
 library(readr)
+library(shinyjs)
+library(htmltools)
 
+library(shiny)
 
 
 # Sidebar pages -----------------------------------------------------------
@@ -123,6 +126,7 @@ page_info <- card(
 # Main UI -----------------------------------------------------------------
 
 ui <- page_navbar(
+  shinyjs::useShinyjs(),
   title = "NBA Fantasy",
   nav_spacer(),
   nav_panel("Fantasy Overview", page_fty_league_overview),
