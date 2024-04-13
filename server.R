@@ -53,8 +53,10 @@ server <- function(input, output, session) {
   bindEvent(observe({
     if(!fty_parameters_met())
       output$login_messages <- renderText("You gotta go fill the form at least once!")
-    else
+    else {
       removeModal()
+      output$login_messages <- NULL
+    }
   }), input$fty_abort)
   
   bindEvent(observe(login_modal()), input$fty_league_competitor_switch)
