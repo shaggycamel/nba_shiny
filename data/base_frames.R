@@ -1,9 +1,4 @@
 
-suppressMessages({
-  library(nba.dataRub)
-  library(stringr)
-})
-
 
 # News --------------------------------------------------------------------
 
@@ -68,22 +63,11 @@ cat("\t- df_nba_roster\n")
 df_nba_roster <<- dh_getQuery(db_con, "sql/nba_team_roster.sql")
 
 
-# Fantasy Base object -----------------------------------------------------
-
-cat("\t- df_fantasy_base\n")
-df_fty_base <- dh_getQuery(db_con, "sql/fty_league_info.sql")
-
-
 # Fantasy league schedule -------------------------------------------------
 
 cat("\t- df_fantasy_schedule\n")
 df_fty_schedule <<- dh_getQuery(db_con, "SELECT * FROM fty.league_schedule") |> 
-  select(-ends_with("_name")) 
-  # left_join(df_fty_base, by = join_by(season, league_id, competitor_id)) |> 
-  # left_join(
-  #   rename(df_fty_base, opponent_abbrev = competitor_abbrev, opponent_name = competitor_name),
-  #   by = join_by(season, league_id, opponent_id == competitor_id)
-  # )
+  select(-ends_with("_name"))
 
 
 # Fantasy competitor roster -------------------------------------------------------
@@ -91,17 +75,11 @@ df_fty_schedule <<- dh_getQuery(db_con, "SELECT * FROM fty.league_schedule") |>
 cat("\t- df_fty_roster\n")
 df_fty_roster <<- dh_getQuery(db_con, "sql/fty_team_roster.sql") |> 
   select(-c(competitor_name, opponent_name))
-  # left_join(df_fty_base, by = join_by(season, league_id, competitor_id)) |> 
-  # left_join(
-  #   rename(df_fty_base, opponent_abbrev = competitor_abbrev, opponent_name = competitor_name),
-  #   by = join_by(season, league_id, opponent_id == competitor_id)
-  # )
 
 
 # Fantasy Box Score -------------------------------------------------------
 
 cat("\t- df_fty_box_score\n")
 df_fty_box_score <<- dh_getQuery(db_con, "sql/fty_box_score.sql") |> 
-  dplyr::relocate(starts_with("competitor"), .before = matchup) |> 
+  relocate(starts_with("competitor"), .before = matchup) |> 
   select(-matches("r_name|r_abbrev")) 
-  # left_join(df_fty_base, by = join_by(season, league_id, competitor_id))

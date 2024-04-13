@@ -2,7 +2,6 @@
 
 # Libraries ---------------------------------------------------------------
 
-library(nba.dataRub)
 library(dplyr)
 library(tidyr)
 library(lubridate)
@@ -22,68 +21,149 @@ source(here("_proj_useful.R"))
 
 server <- function(input, output, session) {
   
-  # Start loading page
-  data_collection_caption <- "Processing data, one minute..."
-  showPageSpinner(type = 6, caption = data_collection_caption)
+# Variables ---------------------------------------------------------------
 
-  # Variables
+  fty_parameters_met <- reactiveVal(FALSE)
+  
+  db_con <<- if(Sys.info()["user"] == "fred") dh_createCon("postgres") else dh_createCon("cockroach") 
   # cur_date <<- as.Date(str_extract(as.POSIXct(Sys.time(), tz="NZ"), "\\d{4}-\\d{2}-\\d{2}")) - 1
   cur_date <<- as.Date("2024-02-26")
   cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
   prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
-  db_con <<- if(Sys.info()["user"] == "fred") dh_createCon("postgres") else dh_createCon("cockroach") 
+  df_fty_base <<- if(Sys.info()["user"] == "shiny") readRDS("fty_base.RDS") else dh_getQuery(db_con, "sql/fty_league_info.sql") 
   
-  # Data Frames
-  if(Sys.info()["user"] == "shiny") load(".RData") else source(here("data", "base_frames.R"))
-  .load_datasets <- function() walk(list.files(here("data", "app_data_prep"), full.names = TRUE), \(x) source(x, local = TRUE))
-  .load_datasets()
+# Login -------------------------------------------------------------------
   
-  # Extra variable that relies on datasets
-  # cur_week <<- df_week_game_count |>
-  #   mutate(week_end = if_else(week_end - week_start < 6, week_start + 6, week_end)) |>
-  #   filter(cur_date >= week_start, cur_date <= week_end) |>
-  #   pull(season_week) |>
-  #   unique()
-  cur_week <<- 18
-  teams <<- sort(unique(df_player_log$team_slug))
+  bindEvent(observe({
+    if(input$fty_league_select != "")
+      updateSelectInput(inputId = "fty_competitor_select", choices = filter(df_fty_base, league_name == input$fty_league_select)$competitor_name)
+  }), input$fty_league_select)
+  
+  bindEvent(observe({
+    if(input$fty_competitor_select == "" && input$fty_league_select == "")
+      output$login_messages <- renderText("Select a league, then select a competitor.")
+    else if(input$fty_competitor_select != ""){
+      fty_parameters_met(TRUE)
+      removeModal()
+      output$login_messages <- NULL
+    } else
+      output$login_messages <- renderText("Select a competitor")
+  }), input$fty_dash_init)
+  
+  bindEvent(observe({
+    if(!fty_parameters_met())
+      output$login_messages <- renderText("You gotta go fill the form at least once!")
+    else
+      removeModal()
+  }), input$fty_abort)
+  
+  bindEvent(observe(login_modal()), input$fty_league_competitor_switch)
+  
+  login_modal <- function() {
+    showModal(
+      modalDialog(
+        selectizeInput(
+          "fty_league_select", 
+          label = NULL, 
+          choices = unique(df_fty_base$league_name),
+          options = list(placeholder = "Select Fantasy League", onInitialize = I("function(){this.setValue('');}"))
+        ),
+        selectizeInput(
+          "fty_competitor_select", 
+          label = NULL, 
+          choices = character(0),
+          options = list(placeholder = "Select Fantasy Competitor", onInitialize = I("function(){this.setValue('');}"))
+        ),
+        span(textOutput("login_messages"), style="color:red"),
+        footer = tagList(
+          actionButton("fty_abort", label = NULL, icon = icon("square-xmark")), 
+          actionButton("fty_dash_init", "Kobeee!")
+        ),
+        size = "m"
+      )
+    )
+  }
+  login_modal()
   
 
+# Load datasets -----------------------------------------------------------
+
+  observe({
+    req(fty_parameters_met())
+    
+    # Start loading page
+    data_collection_caption <- "Processing data, one minute..."
+    showPageSpinner(type = 6, caption = data_collection_caption)
+    
+    # Data Frames
+    if(Sys.info()["user"] == "shiny") load(".RData") else source(here("data", "base_frames.R"))
+    .load_datasets <- function() walk(list.files(here("data", "app_data_prep"), full.names = TRUE), \(x) source(x, local = TRUE))
+    .load_datasets()
+    
+    # Extra variable that relies on datasets
+    # cur_week <<- df_week_game_count |>
+    #   mutate(week_end = if_else(week_end - week_start < 6, week_start + 6, week_end)) |>
+    #   filter(cur_date >= week_start, cur_date <= week_end) |>
+    #   pull(season_week) |>
+    #   unique()
+    cur_week <<- 18
+    teams <<- sort(unique(df_player_log$team_slug))
+    
+  
 # Set Server Side Dynamic Menus -------------------------------------------
-  
-  sort_players_by_min_desc <- function(df) {
-    summarise(df, avg_min = median(min), .by = player_name) |> 
-      arrange(desc(avg_min)) |>
-      pull(player_name)
-  }
-  
-  # Maybe get to the point where I place free agents at top of list
-  active_players <<- sort_players_by_min_desc(df_player_log)
-  free_agents <<- sort_players_by_min_desc(filter(df_player_log, free_agent_status == "ACTIVE"))
-  ls_fty_name_to_cid <- magrittr::`%$%`(df_fty_base, map(setNames(competitor_id, competitor_name), \(x) as.vector(x)))
-  ls_fty_cid_to_name <- magrittr::`%$%`(df_fty_base, map(setNames(competitor_name, competitor_id), \(x) as.vector(x)))
-  ls_log_config <- list("reset" = paste0("h2h_competitor=5;h2h_week=", cur_week, ";h2h_ex_player=;h2h_add_player=;h2h_future_only=FALSE;h2h_future_from_tomorrow=FALSE;h2h_hl_player="))
-  # Alter h2h_competitor part of string when have a way
+    
+    sort_players_by_min_desc <- function(df) {
+      summarise(df, avg_min = median(min), .by = player_name) |> 
+        arrange(desc(avg_min)) |>
+        pull(player_name)
+    }
+    
+    # Maybe get to the point where I place free agents at top of list
+    active_players <<- sort_players_by_min_desc(df_player_log)
+    free_agents <<- sort_players_by_min_desc(filter(df_player_log, free_agent_status == "ACTIVE"))
+    ls_fty_name_to_cid <<- magrittr::`%$%`(df_fty_base, map(setNames(competitor_id, competitor_name), \(x) as.vector(x)))
+    ls_fty_cid_to_name <<- magrittr::`%$%`(df_fty_base, map(setNames(competitor_name, competitor_id), \(x) as.vector(x)))
+    ls_log_config <<- list("reset" = paste0("h2h_competitor=", ls_fty_name_to_cid[input$fty_competitor_select],";h2h_week=", cur_week, ";h2h_ex_player=;h2h_add_player=;h2h_future_only=FALSE;h2h_future_from_tomorrow=FALSE;h2h_hl_player="))
+    ss_week <- select(df_nba_schedule, season_week, week_start, week_end)
+    week_drop_box_choices <<- unique(paste0("Week: ", ss_week$season_week, " (", ss_week$week_start, " to ", ss_week$week_end, ")"))
   
 
 # Init app filter list creation -------------------------------------------
-
-  # Player Comparison tab
-  updateSelectInput(session, "comparison_team_filter", choices = teams)
   
-  # Player trend tab
-  updateSelectInput(session, "trend_select_player", choices = active_players)
-  
-  # H2H tab
-  updateSelectInput(session, "h2h_competitor", choices = ls_fty_name_to_cid, selected = 5)
-  updateSelectInput(session, "h2h_week", choices = unique(df_nba_schedule$season_week)[-1], selected = cur_week)  
-  updateSelectInput(session, "h2h_log_config", choices = ls_log_config)
- 
-  # Stop loading page
-  hidePageSpinner() 
+    # Player Comparison tab
+    updateSelectInput(session, "comparison_team_filter", choices = teams)
+    
+    # Player trend tab
+    updateSelectInput(session, "trend_select_player", choices = active_players)
+    
+    # H2H tab
+    updateSelectInput(session, "h2h_competitor", choices = ls_fty_name_to_cid, selected = ls_fty_name_to_cid[input$fty_competitor_select])
+    updateSelectInput(session, "h2h_week", choices = unique(df_nba_schedule$season_week)[-1], selected = cur_week)  
+    updateSelectInput(session, "h2h_log_config", choices = ls_log_config)
+    
+    # NBA schedule tab
+    updateSelectInput(
+      session, 
+      "week_selection", 
+      choices = week_drop_box_choices,
+      selected = week_drop_box_choices[
+        df_nba_schedule |> 
+          distinct(pick(contains("week"))) |> 
+          filter(season_week == cur_week) |>
+          pull(season_week) + 1 # plus for correct index
+      ]
+    )
+   
+    # Stop loading page
+    hidePageSpinner() 
+    
+  }) |> 
+    bindEvent(input$fty_dash_init)
 
 # On-going filter list alteration -----------------------------------------
 
   observe({
+    req(fty_parameters_met, exists("df_player_log"))
     # Draft Assistance tab
     min_range <- if(input$draft_tot_avg_toggle) round(quantile(summarise(group_by(df_player_log, player_id), min = sum(min, na.rm = TRUE))$min))
       else round(quantile(summarise(group_by(df_player_log, player_id), min = mean(min, na.rm = TRUE))$min))
@@ -93,6 +173,8 @@ server <- function(input, output, session) {
  
   # Additional H2H filter alteration
   observe({
+    req(fty_parameters_met, exists("df_h2h_og"))
+    
     competitor_players <- sort(filter(slice_max(df_h2h_og, us_date, by = competitor_id), competitor_id == input$h2h_competitor)$player_name)
     updateSelectInput(session, "h2h_ex_player", choices = competitor_players)
     updateSelectInput(session, "h2h_add_player", choices = setdiff(active_players, competitor_players))
@@ -105,6 +187,7 @@ server <- function(input, output, session) {
 # FTY League Overview -------------------------------------------------
 
   output$fty_league_overview_rank_plot <- renderPlotly({
+    req(fty_parameters_met(), exists("df_fty_league_overview"), exists("df_fty_base"))
 
     (
       df_fty_league_overview |>
@@ -177,7 +260,7 @@ server <- function(input, output, session) {
       if(input$h2h_future_only) df_h <- filter(df_h, origin == "future")
       opp_id <- filter(df_h, league_week == input$h2h_week, competitor_id == as.numeric(input$h2h_competitor))$opponent_id[1]
 
-      h2h_plt <<- bind_rows(
+      h2h_plt <- bind_rows(
         filter(df_h, competitor_id == as.numeric(input$h2h_competitor), league_week == input$h2h_week),
         filter(df_h, competitor_id == opp_id, league_week == input$h2h_week)
       ) |>
@@ -492,24 +575,7 @@ server <- function(input, output, session) {
 
 # NBA Schedule Table ------------------------------------------------------
   
-  # Drop box choices
-  ss_week <- select(df_nba_schedule, season_week, week_start, week_end)
-  week_drop_box_choices <- unique(paste0("Week: ", ss_week$season_week, " (", ss_week$week_start, " to ", ss_week$week_end, ")"))
-  
-  # Update drop box values
-  observe({
-    updateSelectInput(
-      session, 
-      "week_selection", 
-      choices = week_drop_box_choices,
-      selected = week_drop_box_choices[
-        df_nba_schedule |> 
-          distinct(pick(contains("week"))) |> 
-          filter(season_week == cur_week) |>
-          pull(season_week) + 1 # plus for correct index
-      ]
-    )
-  })
+
   
   observe({
     

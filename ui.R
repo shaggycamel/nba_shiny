@@ -7,7 +7,6 @@ library(bslib)
 library(readr)
 
 
-
 # Sidebar pages -----------------------------------------------------------
 # FTY League Overview -----------------------------------------------------
 
@@ -135,6 +134,7 @@ ui <- page_navbar(
     nav_panel("Draft", page_draft),
     nav_panel("News", page_news),
     nav_panel("Info", page_info),
+    nav_item(actionButton("fty_league_competitor_switch", "League", icon = icon("right-from-bracket"), width = "150px")),
     align = "right"
   ),
   theme = bs_theme(
