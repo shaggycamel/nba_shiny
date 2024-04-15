@@ -26,8 +26,8 @@ server <- function(input, output, session) {
   fty_parameters_met <- reactiveVal(FALSE)
   
   db_con <<- if(Sys.info()["user"] == "fred") dh_createCon("postgres") else dh_createCon("cockroach") 
-  # cur_date <<- as.Date(str_extract(as.POSIXct(Sys.time(), tz="NZ"), "\\d{4}-\\d{2}-\\d{2}")) - 1
-  cur_date <<- as.Date("2024-02-26")
+  cur_date <<- as.Date(str_extract(as.POSIXct(Sys.time(), tz="NZ"), "\\d{4}-\\d{2}-\\d{2}")) - 1
+  # cur_date <<- as.Date("2024-02-26")
   cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
   prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
   df_fty_base <<- if(Sys.info()["user"] == "shiny") readRDS("fty_base.RDS") else dh_getQuery(db_con, "sql/fty_league_info.sql") 
@@ -78,8 +78,8 @@ server <- function(input, output, session) {
         ),
         span(textOutput("login_messages"), style="color:red"),
         footer = tagList(
-          actionButton("fty_abort", label = NULL, icon = icon("square-xmark")), 
-          actionButton("fty_dash_init", "Kobeee!")
+          actionButton("fty_abort", label = NULL, icon = icon("square-xmark"), style="color:#FFF; background-color:#CD3333; border-color:#2E6DA4"), 
+          actionButton("fty_dash_init", "Kobeee!", style="color:#FFF; background-color:#337AB7; border-color:#2E6DA4")
         ),
         size = "m"
       )
@@ -103,12 +103,12 @@ server <- function(input, output, session) {
     .load_datasets()
     
     # Extra variable that relies on datasets
-    # cur_week <<- df_week_game_count |>
-    #   mutate(week_end = if_else(week_end - week_start < 6, week_start + 6, week_end)) |>
-    #   filter(cur_date >= week_start, cur_date <= week_end) |>
-    #   pull(season_week) |>
-    #   unique()
-    cur_week <<- 18
+    cur_week <<- df_week_game_count |>
+      mutate(week_end = if_else(week_end - week_start < 6, week_start + 6, week_end)) |>
+      filter(cur_date >= week_start, cur_date <= week_end) |>
+      pull(season_week) |>
+      unique()
+    # cur_week <<- 18
     teams <<- sort(unique(df_player_log$team_slug))
     
   
@@ -190,22 +190,25 @@ server <- function(input, output, session) {
 
   output$fty_league_overview_rank_plot <- renderPlotly({
     req(fty_parameters_met(), exists("df_fty_league_overview"), exists("df_fty_base"))
-
+    
+    df_point <- filter(df_fty_league_overview, as.integer(matchup_sigmoid) == matchup_sigmoid)
+    
     (
       df_fty_league_overview |>
-        left_join(select(df_fty_base, competitor_id, competitor_name), by = join_by(competitor_id)) |>
-        ggplot(aes(x = matchup, y = !!sym(input$fty_lg_ov_cat), colour = competitor_name)) +
-        ggbump::geom_bump(linewidth = 0.5) +
-        geom_point(size = 3) +
-        scale_x_discrete(breaks = NULL) +
-        labs(title = "Competitor Category Ranking", x = "Matchup Period", y = db_to_fmt_stat_name[[input$fty_lg_ov_cat]]) +
+        ggplot(aes(x = matchup_sigmoid, y = !!sym(input$fty_lg_ov_cat), colour = competitor_name)) +
+        geom_line(linewidth = 0.5) +
+        geom_point(data = df_point, size = 2) +
+        scale_x_continuous(breaks = sort(unique(df_point$matchup)), labels = sort(unique(df_point$matchup))) +
+        labs(title = paste("Competitor Category Ranking:", input$fty_lg_ov_cat), x = "Matchup Period", y = db_to_fmt_stat_name[[input$fty_lg_ov_cat]]) +
         theme_bw()
     ) |>
       ggplotly() |>
+      # Remove hover for line traces: 0:8 for each competitor
+      style(hoverinfo = "none", traces = 0:length(unique(df_point$competitor_id))) |>
       rangeslider(
-        start = max(df_fty_league_overview$matchup) - 5.1,
-        end = max(df_fty_league_overview$matchup) + 0.1,
-        range = list(min(df_fty_league_overview$matchup) - 0.2, max(df_fty_league_overview$matchup) + 0.2)
+        start = max(df_point$matchup) - 5.1,
+        end = max(df_point$matchup) + 0.1,
+        range = list(min(df_point$matchup) - 0.2, max(df_point$matchup) + 0.2)
       ) |> 
       config(displayModeBar = FALSE)
 
