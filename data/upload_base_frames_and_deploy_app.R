@@ -17,6 +17,10 @@ source(here::here("data", "base_frames.R"))
 # Save datasets -----------------------------------------------------------
 
 cat("Saving image...\n")
+
+nba.dataRub::dh_getQuery(db_con, "sql/fty_league_info.sql") |> 
+  saveRDS(here::here("fty_base.RDS"))
+
 rm(list = c("db_con", "cur_date", "cur_season", "prev_season"))
 save.image()
 
@@ -29,6 +33,7 @@ rsconnect::deployApp(
   appFiles = c(
     "_proj_python.R", 
     "_proj_useful.R",
+    "fty_base.RDS",
     ".RData",
     ".Rprofile",
     "data", 
@@ -49,3 +54,8 @@ rsconnect::deployApp(
 )
 
 cat("Successfully deployed on:", format(as.POSIXct(Sys.time(), tz="NZ"), usetz=TRUE), "\n\n")
+
+
+# Delete residual files ---------------------------------------------------
+
+walk(c(".RData", "fty_base.RDS"), \(x) file.remove(here::here(x)))
