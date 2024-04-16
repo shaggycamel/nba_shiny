@@ -23,9 +23,24 @@ df_fty_league_overview <-
       .names = "{.col}_lead"
     ),
     .by = competitor_id
+  ) |> 
+  mutate(
+    across(
+      unlist(fmt_to_db_stat_name[fmt_to_db_stat_name != "min"], use.names = FALSE),
+      \(x) rank(x*-1),
+      .names = "{.col}_rank"
+    ),
+    .by = matchup
+  ) |> 
+  mutate(
+    across(
+      paste0(unlist(fmt_to_db_stat_name[fmt_to_db_stat_name != "min"], use.names = FALSE), "_rank"), 
+      \(x) lead(x, order_by = matchup), 
+      .names = "{.col}_lead"
+    ),
+    .by = competitor_id
   )
 
-# NEED TO ALTER THE WAY TOV IS ADDED TO NINE_CAT & FIVE_CAT
 
 df_latest_matchup <- filter(df_fty_league_overview, matchup == max(matchup))
 df_fty_league_overview <- filter(df_fty_league_overview, matchup < max(matchup))

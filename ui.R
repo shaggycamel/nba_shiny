@@ -11,7 +11,18 @@ library(readr)
 # FTY League Overview -----------------------------------------------------
 
 page_fty_league_overview <- layout_sidebar(
-  sidebar = selectInput("fty_lg_ov_cat", "Category", choices = discard_at(fmt_to_db_stat_name, "Minutes")),
+  sidebar = sidebar(
+    selectInput(
+      "fty_lg_ov_cat", 
+      "Category", 
+      choices = list(
+        "Overall" = keep(fmt_to_db_stat_name, \(x) str_detect(x, "_cat")),
+        "Categories" = keep(fmt_to_db_stat_name, \(x) x %in% anl_cols$h2h_cols),
+        "Z Scores" = keep(fmt_to_db_stat_name, \(x) str_detect(x, "_z"))
+      )
+    ),
+    switchInput("fty_lg_ov_rank_toggle", value = TRUE, onLabel = "Value", offLabel = "Rank", size = "small")
+  ),
   card(full_screen = TRUE, plotlyOutput("fty_league_overview_rank_plot")),
   fillable = TRUE
 )
@@ -94,7 +105,11 @@ page_player_trend <- layout_sidebar(
 
 page_draft <- layout_sidebar(
   sidebar = sidebar(
-    selectInput("draft_stat", "Statistic", choices = filter(stat_selection, !str_detect(database_name, "_pct|_cat"))$formatted_name),
+    selectInput(
+      "draft_stat", 
+      "Statistic", 
+      choices = filter(stat_selection, !str_detect(database_name, "_pct|_cat"))$formatted_name
+    ),
     sliderTextInput("draft_min_filter", "Limit Minutes", choices = 0), # updated dynamically in server.R
     sliderInput("draft_top_n", "Top N Players", min = 10, max = 20, value = 15, ticks = FALSE),
     checkboxInput("draft_scale_minutes", "Scale by Minutes"),

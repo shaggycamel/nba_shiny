@@ -205,6 +205,7 @@ server <- function(input, output, session) {
       ggplotly() |>
       # Remove hover for line traces: 0:8 for each competitor
       style(hoverinfo = "none", traces = 0:length(unique(df_point$competitor_id))) |>
+      layout(xaxis = list(fixedrange = TRUE), yaxis = list(fixedrange = TRUE)) |> 
       rangeslider(
         start = max(df_point$matchup) - 5.1,
         end = max(df_point$matchup) + 0.1,

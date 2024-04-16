@@ -5,3 +5,4 @@
 
 - Delete residual weeks that are a hangover from the league being reduced
 - Include playoff weeks 
+- Reserach graph state transition
