@@ -68,13 +68,15 @@ server <- function(input, output, session) {
           "fty_league_select", 
           label = NULL, 
           choices = unique(df_fty_base$league_name),
-          options = list(placeholder = "Select Fantasy League", onInitialize = I("function(){this.setValue('');}"))
+          options = list(placeholder = "Select Fantasy League", onInitialize = I("function(){this.setValue('');}")),
+          width = "100%"
         ),
         selectizeInput(
           "fty_competitor_select", 
           label = NULL, 
           choices = character(0),
-          options = list(placeholder = "Select Fantasy Competitor", onInitialize = I("function(){this.setValue('');}"))
+          options = list(placeholder = "Select Fantasy Competitor", onInitialize = I("function(){this.setValue('');}")),
+          width = "100%"
         ),
         span(textOutput("login_messages"), style="color:red"),
         footer = tagList(
@@ -345,7 +347,7 @@ server <- function(input, output, session) {
 
     } else {
 
-      df_h <- df_h2h()
+      df_h <<- df_h2h()
       if(input$h2h_future_from_tomorrow) df_h <- mutate(df_h, origin = if_else(us_date == cur_date, "past", origin))
       if(input$h2h_future_only) df_h <- filter(df_h, origin == "future")
       opp_id <- filter(df_h, competitor_id == as.numeric(input$h2h_competitor), league_week == input$h2h_week)$opponent_id[1]
@@ -589,9 +591,6 @@ server <- function(input, output, session) {
     
     # Prepare tables to be presented
     # tbl_schedule <<- tbl_week_games$data[[24]] |>
-    ##### Also some weeks just dont work...why?
-    #### Feel like its problem with dataset
-    # 9, 7, 6
     tbl_schedule <- tbl_week_games$data[[match(input$week_selection, week_drop_box_choices)]] |>
       mutate(across(ends_with(")"), \(x) if_else(as.character(x) == "NULL", 0, 1))) |>
       mutate(across(c(contains("games"), Team), as.factor))
@@ -616,7 +615,7 @@ server <- function(input, output, session) {
     
     # If a day is missing from ts_names add it in
     if(length(keep_at(ts_names, \(x) str_detect(x, "1_"))) < 7){
-      ms_dt_nm <- setdiff(expected_elements, names(ts_names))
+      ms_dt_nm <- setdiff(keep(expected_elements, \(x) str_detect(x, "1_")), names(ts_names))
       ms_dt_ix <- which(expected_elements == ms_dt_nm) - 1
       ms_dt <- (selected_week_dates[1] + days(ms_dt_ix)) |> 
         format("%a (%d/%m)") |> 

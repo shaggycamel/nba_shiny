@@ -10,7 +10,7 @@ db_con <- nba.dataRub::dh_createCon("cockroach")
 
 # Read datasets -----------------------------------------------------------
 
-cat("Reading datasets...\n")
+cat("Creating datasets...\n")
 source(here::here("data", "base_frames.R"))
 
 

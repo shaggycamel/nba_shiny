@@ -35,25 +35,7 @@ df_season_segments <<- dh_getQuery(db_con, "sql/season_segments.sql") |>
 # NBA schedule ------------------------------------------------------------
 
 cat("\t- df_schedule\n")
-df_nba_schedule <<- dh_getQuery(db_con, "sql/nba_schedule.sql")
-  # group_by(slug_season) |> 
-  # mutate(season_week = ifelse(season_week < 30, season_week + 52, season_week))
-
-# minus_wk <- df_nba_schedule |> 
-#   filter(type_season == "Pre Season") |> 
-#   pull(season_week) |> 
-  max()
-  
-df_nba_schedule <<- df_nba_schedule |> 
-  # mutate(season_week = case_when(
-  #   type_season == "Pre Season" ~ 0,
-  #   type_season == "Regular Season" ~ season_week - minus_wk
-  # )) |> 
-  # mutate(season_week = if_else(season_week > 17, season_week - 1, season_week)) |> # all star week
-  # group_by(season_week) |> 
-  # mutate(week_start = min(game_date), week_end = max(game_date)) |> 
-  # ungroup() |> 
-  arrange(game_date) |> 
+df_nba_schedule <<- dh_getQuery(db_con, "sql/nba_schedule.sql") |> 
   mutate(scheduled_to_play = 1) # used in h2h calculations
 
 

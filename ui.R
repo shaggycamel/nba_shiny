@@ -21,7 +21,8 @@ page_fty_league_overview <- layout_sidebar(
         "Z Scores" = keep(fmt_to_db_stat_name, \(x) str_detect(x, "_z"))
       )
     ),
-    switchInput("fty_lg_ov_rank_toggle", value = TRUE, onLabel = "Value", offLabel = "Rank", size = "small")
+    switchInput("fty_lg_ov_rank_toggle", value = TRUE, onLabel = "Value", offLabel = "Rank", size = "small"),
+    open = "open"
   ),
   card(full_screen = TRUE, plotlyOutput("fty_league_overview_rank_plot")),
   fillable = TRUE
@@ -46,13 +47,14 @@ page_h2h <- layout_sidebar(
     ),
     selectInput("h2h_hl_player", "Highlight Player", choices = character(0), multiple = TRUE),
     selectInput("h2h_log_config", "Log Filter Config", choices = character(0), size = 4, selectize = FALSE),
-    actionButton("h2h_snapshot_config", "Snapshot config")
+    actionButton("h2h_snapshot_config", "Snapshot config"),
+    open = "open"
   ),
   card(
-    height = 1200,
+    height = 1400,
     fill = FALSE,
-    card(full_screen = TRUE, min_height = 200, max_height = 600, plotlyOutput("h2h_stat_plot")),
-    card(full_screen = TRUE, min_height = 200, max_height = 600, DTOutput("h2h_game_table"))
+    card(full_screen = TRUE, min_height = 200, max_height = 700, plotlyOutput("h2h_stat_plot")),
+    card(full_screen = TRUE, min_height = 200, max_height = 700, DTOutput("h2h_game_table"))
   ),
   fillable = TRUE, 
   tags$style(
@@ -70,6 +72,7 @@ page_player_comparison <- layout_sidebar(
     sliderInput("comparison_minute_filter", "Minute Filter", min = 0, max = 50, value = 20, round = TRUE),
     radioButtons("date_range_switch", NULL, choices = c("Seven Days", "Two Weeks", "One Month")),
     checkboxInput("comparison_free_agent_filter", "Free Agents only"),
+    open = "open"
   ),
   card(full_screen = TRUE, DTOutput("player_comparison_table")),
   fillable = TRUE
@@ -81,7 +84,8 @@ page_player_comparison <- layout_sidebar(
 page_league_game_schedule <- layout_sidebar(
   sidebar = sidebar(
     selectInput("week_selection", "Week", choices = character(0), selectize = FALSE),
-    dateInput("pin_date", "Pinned Date")
+    dateInput("pin_date", "Pinned Date"),
+    open = "open"
   ),
   card(full_screen = TRUE, DTOutput("schedule_table")),
   fillable = TRUE
@@ -94,7 +98,8 @@ page_player_trend <- layout_sidebar(
   sidebar = sidebar(
     selectInput("trend_select_stat", "Statistic", choices = discard(fmt_to_db_stat_name, \(x) str_detect(x, "_z|_cat"))),
     selectInput("trend_select_player", "Player", multiple = TRUE, choices = character(0)),
-    checkboxInput("this_season_trend_switch", "This year only", value = FALSE)
+    checkboxInput("this_season_trend_switch", "This year only", value = FALSE),
+    open = "open"
   ),
   card(full_screen = TRUE, plotlyOutput("player_trend_plot")),
   fillable = TRUE,
@@ -113,7 +118,8 @@ page_draft <- layout_sidebar(
     sliderTextInput("draft_min_filter", "Limit Minutes", choices = 0), # updated dynamically in server.R
     sliderInput("draft_top_n", "Top N Players", min = 10, max = 20, value = 15, ticks = FALSE),
     checkboxInput("draft_scale_minutes", "Scale by Minutes"),
-    switchInput("draft_tot_avg_toggle", value = TRUE, onLabel = "Total", offLabel = "Average", size = "small")
+    switchInput("draft_tot_avg_toggle", value = TRUE, onLabel = "Total", offLabel = "Average", size = "small"),
+    open = "open"
   ),
   card(full_screen = TRUE, plotlyOutput("draft_stat_plot")),
   fillable = TRUE,
