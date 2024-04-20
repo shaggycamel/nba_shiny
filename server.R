@@ -103,10 +103,11 @@ server <- function(input, output, session) {
     .load_datasets()
     
     # Extra variable that relies on datasets
+    cur_date <<- if(cur_date > max(df_fty_schedule$week_end)) max(df_fty_schedule$week_end) else cur_date
     cur_week <<- df_week_game_count |>
       mutate(week_end = if_else(week_end - week_start < 6, week_start + 6, week_end)) |>
       filter(cur_date >= week_start, cur_date <= week_end) |>
-      pull(season_week) |>
+      pull(fty_matchup_week) |>
       unique()
     # cur_week <<- 18
     teams <<- sort(unique(df_player_log$team_slug))
@@ -126,8 +127,9 @@ server <- function(input, output, session) {
     ls_fty_name_to_cid <<- magrittr::`%$%`(df_fty_base, map(setNames(competitor_id, competitor_name), \(x) as.vector(x)))
     ls_fty_cid_to_name <<- magrittr::`%$%`(df_fty_base, map(setNames(competitor_name, competitor_id), \(x) as.vector(x)))
     ls_log_config <<- list("reset" = paste0("h2h_competitor=", ls_fty_name_to_cid[input$fty_competitor_select],";h2h_week=", cur_week, ";h2h_ex_player=;h2h_add_player=;h2h_future_only=FALSE;h2h_future_from_tomorrow=FALSE;h2h_hl_player="))
-    ss_week <- select(df_nba_schedule, season_week, week_start, week_end)
-    week_drop_box_choices <<- unique(paste0("Week: ", ss_week$season_week, " (", ss_week$week_start, " to ", ss_week$week_end, ")"))
+    ss_week <- select(df_fty_schedule, week, week_start, week_end)
+    week_drop_box_choices <<- unique(paste0("Week ", ss_week$week, ": (", ss_week$week_start, " to ", ss_week$week_end, ")"))
+    week_drop_box_choices <<- setNames(str_extract(week_drop_box_choices, "\\d{4}.*-\\d{2}"), week_drop_box_choices)
   
 
 # Init app filter list creation -------------------------------------------
@@ -140,21 +142,12 @@ server <- function(input, output, session) {
     
     # H2H tab
     updateSelectInput(session, "h2h_competitor", choices = ls_fty_name_to_cid, selected = ls_fty_name_to_cid[input$fty_competitor_select])
-    updateSelectInput(session, "h2h_week", choices = unique(df_nba_schedule$season_week)[-1], selected = cur_week)  
+    # STILL NEED TO ADD FTY PLAYOFFS TO FTY LEAGUE TABLE
+    updateSelectInput(session, "h2h_week", choices = unique(df_fty_schedule$week), selected = if(cur_week > max(df_fty_schedule$week)) max(df_fty_schedule$week) else cur_week)  
     updateSelectInput(session, "h2h_log_config", choices = ls_log_config)
     
     # NBA schedule tab
-    updateSelectInput(
-      session, 
-      "week_selection", 
-      choices = week_drop_box_choices,
-      selected = week_drop_box_choices[
-        df_nba_schedule |> 
-          distinct(pick(contains("week"))) |> 
-          filter(season_week == cur_week) |>
-          pull(season_week) + 1 # plus for correct index
-      ]
-    )
+    updateSelectInput(session, "week_selection", choices = week_drop_box_choices, selected = week_drop_box_choices[[cur_week]])
    
     # Stop loading page
     hidePageSpinner() 
@@ -392,12 +385,12 @@ server <- function(input, output, session) {
         mutate(df, Total = Ttl)
       })() |>
       mutate(Total = if_else(Total == 0 & is.na(player_team), NA, Total)) |>
-      mutate(season_week = as.numeric(input$h2h_week)) |>
+      mutate(fty_matchup_week = as.numeric(input$h2h_week)) |>
       left_join(
-        select(df_week_game_count, season_week, team, following_week_games),
-        by = join_by(player_team == team, season_week)
+        select(df_week_game_count, fty_matchup_week, team, following_week_games),
+        by = join_by(player_team == team, fty_matchup_week)
       ) |>
-      select(-season_week, next_week = following_week_games)
+      select(-fty_matchup_week, next_week = following_week_games)
 
       df_h2h_week_game_count_tbl <- select(df_h2h_week_game_count, starts_with("player"), all_of(sort(str_subset(colnames(df_h2h_week_game_count), "\\d"))), Total, `Next Week` = next_week, Team = player_team, Player = player_name) |>
         rename_with(.fn = \(x) format(as.Date(x), "%a (%d/%m)"), .cols = starts_with("20")) |> 
@@ -581,11 +574,9 @@ server <- function(input, output, session) {
 
 # NBA Schedule Table ------------------------------------------------------
   
-
-  
   observe({
     
-    selected_week_dates <<- as.vector(str_extract_all(input$week_selection, "\\d{4}-\\d{2}-\\d{2}", simplify = TRUE))
+    selected_week_dates <<- as.Date(str_split_1(input$week_selection, " to "))
     date_input_value <- cur_date
     if(input$pin_date < selected_week_dates[1]) date_input_value <- selected_week_dates[1]
     if(input$pin_date > selected_week_dates[2]) date_input_value <- selected_week_dates[2]
@@ -595,30 +586,51 @@ server <- function(input, output, session) {
     bindEvent(input$week_selection)
 
   output$schedule_table <- renderDT({
-
+    
     # Prepare tables to be presented
     # tbl_schedule <<- tbl_week_games$data[[24]] |>
-    tbl_schedule <<- tbl_week_games$data[[match(input$week_selection, week_drop_box_choices)+1]] |>
+    ##### Also some weeks just dont work...why?
+    #### Feel like its problem with dataset
+    # 9, 7, 6
+    tbl_schedule <- tbl_week_games$data[[match(input$week_selection, week_drop_box_choices)]] |>
       mutate(across(ends_with(")"), \(x) if_else(as.character(x) == "NULL", 0, 1))) |>
       mutate(across(c(contains("games"), Team), as.factor))
 
     ts_names <- tmp_names <- str_subset(colnames(tbl_schedule), "\\(")
     names(ts_names) <- names(tmp_names) <- str_sub(ts_names, end = 3)
-
+    
     # Add condition for where years aren't equal
     for(ix in 1:length(ts_names)){
       nm <- table(names(tmp_names)[1:ix])[names(tmp_names)[ix]]
       names(ts_names)[ix] <- paste0(nm[[1]], "_", names(nm))
-      if(as.Date(paste0(year(selected_week_dates[1]), "/", str_extract(tmp_names[ix], "\\d{2}/\\d{2}"))) == selected_week_dates[2]){
+      
+      if(as.Date(paste0(year(selected_week_dates[1]), "/", str_extract(tmp_names[ix], "\\d{2}/\\d{2}")), "%Y/%d/%m") == selected_week_dates[2])
         wk_th <- ix
-      }
+      
+      if(!exists("wk_th") && as.Date(paste0(year(selected_week_dates[1]), "/", str_extract(tmp_names[ix], "\\d{2}/\\d{2}")), "%Y/%d/%m") == selected_week_dates[2] + days(1))
+        wk_th <- ix - 1
+      
     }
-    ts_names <- discard(ts_names[c("1_Mon", "1_Tue", "1_Wed", "1_Thu", "1_Fri", "1_Sat", "1_Sun", "2_Mon", "2_Tue")], is.na)
-
+    expected_elements <- c("1_Mon", "1_Tue", "1_Wed", "1_Thu", "1_Fri", "1_Sat", "1_Sun", "2_Mon", "2_Tue")
+    ts_names <- discard(ts_names[expected_elements], is.na)
+    
+    # If a day is missing from ts_names add it in
+    if(length(keep_at(ts_names, \(x) str_detect(x, "1_"))) < 7){
+      ms_dt_nm <- setdiff(expected_elements, names(ts_names))
+      ms_dt_ix <- which(expected_elements == ms_dt_nm) - 1
+      ms_dt <- (selected_week_dates[1] + days(ms_dt_ix)) |> 
+        format("%a (%d/%m)") |> 
+        setNames(ms_dt_nm)
+      
+      ts_names <- append(ts_names, ms_dt, after = ms_dt_ix)
+      tbl_schedule <- mutate(tbl_schedule, !!ms_dt := NA_real_, .after = ms_dt_ix + 1)
+      wk_th <- wk_th + 1
+    }
+    
     tbl_schedule <- tbl_schedule |>
       rowwise() |>
       mutate(
-        `Games From Pin` = sum(c_across(str_subset(ts_names, format(input$pin_date, "%m/%d")):ts_names[wk_th])),
+        `Games From Pin` = sum(c_across(str_subset(ts_names, format(input$pin_date, "%d/%m")):ts_names[wk_th]), na.rm = TRUE),
         .before = "Following Week Games"
       ) |>
       relocate(contains("games"), .after = wk_th + 1) |>
@@ -644,18 +656,27 @@ server <- function(input, output, session) {
       filter = list(position = "top", clear = FALSE),
     ) |>
     formatStyle(columns = "Team", backgroundColor = "azure") |>
-    formatStyle(columns = str_subset(ts_names, format(input$pin_date, "%m/%d")), backgroundColor = "lightyellow") |>
+    formatStyle(columns = str_subset(ts_names, format(input$pin_date, "%d/%m")), backgroundColor = "lightyellow") |>
     (\(tb){
+      
       lvl <- 0:length(unique(tbl_schedule$`Games From Pin`))
       col <- c("white", rev(RColorBrewer::brewer.pal(5, "Greens")))[lvl + 1]
-      formatStyle(tb, columns = "Games From Pin", backgroundColor = styleEqual(levels = lvl, values = col))
-    })() |>
-    formatStyle(
-      columns = "Following Week Games",
-      backgroundColor = styleEqual(levels = 0:tail(levels(tbl_schedule$`Following Week Games`), 1), values = rev(RColorBrewer::brewer.pal(length(0:tail(levels(tbl_schedule$`Following Week Games`), 1)), "Greens")))
-    ) |>
-    formatStyle(columns = (length(tbl_schedule)-1):length(tbl_schedule), backgroundColor = "lightgrey")
-
+      tb <- formatStyle(tb, columns = "Games From Pin", backgroundColor = styleEqual(levels = lvl, values = col))
+      
+      if(match(input$week_selection, week_drop_box_choices) < length(week_drop_box_choices)){
+        tb <- 
+          formatStyle(
+            tb,
+            columns = "Following Week Games",
+            backgroundColor = styleEqual(levels = 0:tail(levels(tbl_schedule$`Following Week Games`), 1), values = rev(RColorBrewer::brewer.pal(length(0:tail(levels(tbl_schedule$`Following Week Games`), 1)), "Greens")))
+          ) |>
+          formatStyle(columns = (ncol(tbl_schedule)-1):ncol(tbl_schedule), backgroundColor = "lightgrey")
+      } else 
+        tb <- formatStyle(tb, columns = "Following Week Games", backgroundColor = "lightgrey")
+      
+      tb # return
+      
+    })()
   })
 
 

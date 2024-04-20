@@ -73,7 +73,7 @@ df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NUL
   df_future <- left_join(
       df_future_pre,
       filter(df_nba_schedule, game_date >= cur_date) |> 
-        select(game_date, season_week, team),
+        select(game_date, fty_matchup_week, team),
       by = join_by(player_team == team),
       relationship = "many-to-many"
     ) |> 
@@ -82,7 +82,7 @@ df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NUL
       by = join_by(competitor_id, between(game_date, week_start, week_end)),
       relationship = "many-to-many"
     ) |> 
-    rename(us_date = game_date, league_week = season_week) |> 
+    rename(us_date = game_date, league_week = fty_matchup_week) |> 
     mutate(dow = lubridate::wday(us_date, week_start = 1)) |> 
     left_join(
       select(df_nba_schedule, team, game_date, scheduled_to_play),

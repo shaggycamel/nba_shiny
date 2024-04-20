@@ -2,7 +2,7 @@
 
 ## TO DO:
 - Fix H2H query to include past data for players who have only recently been picked up
+- H2H table showing values as list stillll, why ??
 
-- Delete residual weeks that are a hangover from the league being reduced
-- Include playoff weeks 
+
 - Reserach graph state transition
