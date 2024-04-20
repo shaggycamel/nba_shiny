@@ -191,12 +191,12 @@ server <- function(input, output, session) {
     
     df_point <- filter(df_fty_league_overview, as.integer(matchup_sigmoid) == matchup_sigmoid)
     
-    plt <<- df_fty_league_overview |>
+    plt <- df_fty_league_overview |>
         ggplot(aes(x = matchup_sigmoid, y = !!sym(plot_col), colour = competitor_name)) +
         geom_line(linewidth = 0.5) +
         geom_point(data = df_point, size = 2) +
         scale_x_continuous(breaks = sort(unique(df_point$matchup)), labels = sort(unique(df_point$matchup))) +
-        labs(title = paste("Competitor Category Ranking:", input$fty_lg_ov_cat), x = "Matchup Period", y = db_to_fmt_stat_name[[input$fty_lg_ov_cat]]) +
+        labs(title = paste("Competitor Category Ranking:", db_to_fmt_stat_name[[input$fty_lg_ov_cat]]), x = "Matchup Period", y = input$fty_lg_ov_cat) +
         theme_bw()
     
     if(!input$fty_lg_ov_rank_toggle) plt <- plt + scale_y_reverse(n.breaks = length(ls_fty_name_to_cid))

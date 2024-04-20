@@ -63,4 +63,4 @@ cat("Successfully deployed on:", format(as.POSIXct(Sys.time(), tz="NZ"), usetz=T
 
 # Delete residual files ---------------------------------------------------
 
-walk(c(".RData", "fty_base.RDS"), \(x) file.remove(here::here(x)))
+purrr::walk(c(".RData", "fty_base.RDS"), \(x) file.remove(here::here(x)))
