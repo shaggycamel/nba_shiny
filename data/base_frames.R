@@ -4,8 +4,7 @@
 
 cat("\t- df_news\n")
 df_news <<- dh_getQuery(db_con, "SELECT * FROM nba.transaction_log WHERE date >= '{cur_date}'::DATE - 60") |>
-  mutate(across(c(transaction_type, team, acc_req), as.factor)) |>
-  arrange(desc(date))
+  mutate(across(c(transaction_type, team, acc_req), as.factor))
 
 
 # Player log --------------------------------------------------------------
