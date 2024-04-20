@@ -32,6 +32,7 @@ df_fty_league_overview <-
     ),
     .by = matchup
   ) |> 
+  mutate(tov_rank = rank(tov), .by = matchup) |> 
   mutate(
     across(
       paste0(unlist(fmt_to_db_stat_name[fmt_to_db_stat_name != "min"], use.names = FALSE), "_rank"), 
@@ -53,17 +54,23 @@ df_fty_league_overview <-
     x <- seq(-5, 5, 0.3)
     df_ls <- list()
     for(stat in fmt_to_db_stat_name[fmt_to_db_stat_name != "min"]){
+      
       matchup_sigmoid <- x
       if(df_t[[stat]] > df_t[[paste0(stat, "_lead")]]) matchup_sigmoid <- rev(matchup_sigmoid)
+      
       stat_sigmoid <- scales::rescale(pracma::sigmoid(matchup_sigmoid), to = c(df_t[[stat]], df_t[[paste0(stat, "_lead")]]))
+      stat_rank_sigmoid <- scales::rescale(pracma::sigmoid(matchup_sigmoid), to = c(df_t[[paste0(stat, "_rank")]], df_t[[paste0(stat, "_rank_lead")]]))
       matchup_sigmoid <- scales::rescale(matchup_sigmoid, to = c(df_t$matchup, df_t$matchup_lead))
-      df_ls <- append(df_ls, list(tibble(competitor_id = df_t$competitor_id, matchup = df_t$matchup, matchup_sigmoid = matchup_sigmoid, stat = stat, stat_sigmoid = stat_sigmoid)))
+      
+      df_ls <- append(df_ls, list(tibble(competitor_id = df_t$competitor_id, matchup = df_t$matchup, matchup_sigmoid = matchup_sigmoid, stat = stat, sigmoid = stat_sigmoid, rank_sigmoid = stat_rank_sigmoid)))
     }
     df_ls
   }) |> 
   bind_rows() |> 
-  filter(!(as.integer(matchup_sigmoid) == matchup_sigmoid & matchup != matchup_sigmoid))|> 
-  pivot_wider(names_from = stat, values_from = stat_sigmoid)
+  filter(!(as.integer(matchup_sigmoid) == matchup_sigmoid & matchup != matchup_sigmoid)) |> 
+  pivot_wider(names_from = stat, values_from = c(sigmoid, rank_sigmoid)) |> 
+  rename_with(\(x) str_remove(x, "sigmoid_"), .cols = starts_with("sigmoid_")) |> 
+  rename_with(\(x) paste0(str_remove(x, "rank_sigmoid_"), "_rank"), .cols = starts_with("rank_sigmoid_"))
 
 
 df_fty_league_overview <<- 

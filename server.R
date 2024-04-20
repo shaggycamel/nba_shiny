@@ -186,18 +186,22 @@ server <- function(input, output, session) {
   output$fty_league_overview_rank_plot <- renderPlotly({
     req(fty_parameters_met(), exists("df_fty_league_overview"), exists("df_fty_base"))
     
+    plot_col <- input$fty_lg_ov_cat
+    if(!input$fty_lg_ov_rank_toggle) plot_col <- paste0(plot_col, "_rank")
+    
     df_point <- filter(df_fty_league_overview, as.integer(matchup_sigmoid) == matchup_sigmoid)
     
-    (
-      df_fty_league_overview |>
-        ggplot(aes(x = matchup_sigmoid, y = !!sym(input$fty_lg_ov_cat), colour = competitor_name)) +
+    plt <<- df_fty_league_overview |>
+        ggplot(aes(x = matchup_sigmoid, y = !!sym(plot_col), colour = competitor_name)) +
         geom_line(linewidth = 0.5) +
         geom_point(data = df_point, size = 2) +
         scale_x_continuous(breaks = sort(unique(df_point$matchup)), labels = sort(unique(df_point$matchup))) +
         labs(title = paste("Competitor Category Ranking:", input$fty_lg_ov_cat), x = "Matchup Period", y = db_to_fmt_stat_name[[input$fty_lg_ov_cat]]) +
         theme_bw()
-    ) |>
-      ggplotly() |>
+    
+    if(!input$fty_lg_ov_rank_toggle) plt <- plt + scale_y_reverse(n.breaks = length(ls_fty_name_to_cid))
+
+    ggplotly(plt) |>
       # Remove hover for line traces: 0:8 for each competitor
       style(hoverinfo = "none", traces = 0:length(unique(df_point$competitor_id))) |>
       layout(xaxis = list(fixedrange = TRUE), yaxis = list(fixedrange = TRUE)) |> 
