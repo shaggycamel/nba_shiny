@@ -356,7 +356,7 @@ server <- function(input, output, session) {
       if(input$h2h_future_only) df_h <- filter(df_h, origin == "future")
       opp_id <- filter(df_h, competitor_id == as.numeric(input$h2h_competitor), league_week == input$h2h_week)$opponent_id[1]
 
-      df_h2h_week_game_count <- bind_rows(
+      df_h2h_week_game_count <<- bind_rows(
         filter(df_h, competitor_id == as.numeric(input$h2h_competitor), league_week == input$h2h_week),
         filter(df_h, competitor_id == opp_id, league_week == input$h2h_week)
       ) |>

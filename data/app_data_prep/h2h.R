@@ -70,7 +70,7 @@ df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NUL
     )
   
   # FUTURE
-  df_future <- left_join(
+  df_future <<- left_join(
       df_future_pre,
       filter(df_nba_schedule, game_date >= cur_date) |> 
         select(game_date, fty_matchup_week, team),
@@ -91,7 +91,10 @@ df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NUL
     select(all_of(colnames(df_past)))
   
 
-  df_h2h <- bind_rows(df_past, df_future) |> 
+  df_h2h <- bind_rows(
+      filter(df_past, us_date < cur_date), 
+      df_future
+    ) |> 
     left_join(
       select(df_rolling_stats, -c(fty_id, player_name, team_slug)),
       by = join_by(player_id, us_date == game_date)
