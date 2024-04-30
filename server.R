@@ -131,7 +131,7 @@ server <- function(input, output, session) {
     ls_log_config <<- list("reset" = paste0("h2h_competitor=", ls_fty_name_to_cid[input$fty_competitor_select],";h2h_week=", cur_week, ";h2h_ex_player=;h2h_add_player=;h2h_future_only=FALSE;h2h_future_from_tomorrow=FALSE;h2h_hl_player="))
     ss_week <- select(df_fty_schedule, week, week_start, week_end)
     week_drop_box_choices <<- unique(paste0("Week ", ss_week$week, ": (", ss_week$week_start, " to ", ss_week$week_end, ")"))
-    week_drop_box_choices <<- setNames(str_extract(week_drop_box_choices, "\\d{4}.*-\\d{2}"), week_drop_box_choices)
+    week_drop_box_choices <<- sort(setNames(str_extract(week_drop_box_choices, "\\d{4}.*-\\d{2}"), week_drop_box_choices))
   
 
 # Init app filter list creation -------------------------------------------
@@ -145,7 +145,7 @@ server <- function(input, output, session) {
     # H2H tab
     updateSelectInput(session, "h2h_competitor", choices = ls_fty_name_to_cid, selected = ls_fty_name_to_cid[input$fty_competitor_select])
     # STILL NEED TO ADD FTY PLAYOFFS TO FTY LEAGUE TABLE
-    updateSelectInput(session, "h2h_week", choices = unique(df_fty_schedule$week), selected = if(cur_week > max(df_fty_schedule$week)) max(df_fty_schedule$week) else cur_week)  
+    updateSelectInput(session, "h2h_week", choices = sort(unique(df_fty_schedule$week)), selected = if(cur_week > max(df_fty_schedule$week)) max(df_fty_schedule$week) else cur_week)  
     updateSelectInput(session, "h2h_log_config", choices = ls_log_config)
     
     # NBA schedule tab
@@ -216,7 +216,7 @@ server <- function(input, output, session) {
 
 
 # FTY Head to Head --------------------------------------------------------
-
+  
   # Reactive H2H data creation
   df_h2h <- reactive(df_h2h_prepare(as.numeric(input$h2h_competitor), input$h2h_ex_player, input$h2h_add_player, input$h2h_future_from_tomorrow)) |> 
     bindEvent(input$h2h_competitor, input$h2h_ex_player, input$h2h_add_player, input$h2h_future_from_tomorrow)
@@ -351,7 +351,7 @@ server <- function(input, output, session) {
 
     } else {
 
-      df_h <<- df_h2h()
+      df_h <- df_h2h()
       if(input$h2h_future_from_tomorrow) df_h <- mutate(df_h, origin = if_else(us_date == cur_date, "past", origin))
       if(input$h2h_future_only) df_h <- filter(df_h, origin == "future")
       opp_id <- filter(df_h, competitor_id == as.numeric(input$h2h_competitor), league_week == input$h2h_week)$opponent_id[1]

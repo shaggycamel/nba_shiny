@@ -51,10 +51,10 @@ page_h2h <- layout_sidebar(
     # open = "open"
   ),
   card(
-    height = 1200,
+    height = 1400,
     fill = FALSE,
-    card(full_screen = TRUE, min_height = 200, max_height = 600, plotlyOutput("h2h_stat_plot")),
-    card(full_screen = TRUE, min_height = 200, max_height = 600, DTOutput("h2h_game_table"))
+    card(full_screen = TRUE, min_height = 500, max_height = 700, plotlyOutput("h2h_stat_plot")),
+    card(full_screen = TRUE, min_height = 200, max_height = 650, DTOutput("h2h_game_table"))
   ),
   fillable = TRUE, 
   tags$style(

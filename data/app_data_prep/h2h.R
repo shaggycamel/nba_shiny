@@ -95,7 +95,8 @@ df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NUL
     left_join(
       select(df_rolling_stats, -c(fty_id, player_name, team_slug)),
       by = join_by(player_id, us_date == game_date)
-    )
+    ) |> 
+    filter(us_date <= cur_date)
    
   if(from_tomorrow){
     df_h2h <- df_h2h |> 
