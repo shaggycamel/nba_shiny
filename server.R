@@ -144,7 +144,6 @@ server <- function(input, output, session) {
     
     # H2H tab
     updateSelectInput(session, "h2h_competitor", choices = ls_fty_name_to_cid, selected = ls_fty_name_to_cid[input$fty_competitor_select])
-    # STILL NEED TO ADD FTY PLAYOFFS TO FTY LEAGUE TABLE
     updateSelectInput(session, "h2h_week", choices = sort(unique(df_fty_schedule$week)), selected = if(cur_week > max(df_fty_schedule$week)) max(df_fty_schedule$week) else cur_week)  
     updateSelectInput(session, "h2h_log_config", choices = ls_log_config)
     
@@ -164,7 +163,7 @@ server <- function(input, output, session) {
     # Draft Assistance tab
     min_range <- if(input$draft_tot_avg_toggle) round(quantile(summarise(group_by(df_player_log, player_id), min = sum(min, na.rm = TRUE))$min))
       else round(quantile(summarise(group_by(df_player_log, player_id), min = mean(min, na.rm = TRUE))$min))
-    updateSliderTextInput(session, "draft_min_filter", choices = seq(from = min_range[["100%"]], to = min_range[["0%"]]), selected = min_range[["75%"]])
+    updateSliderTextInput(session, "draft_min_filter", choices = seq(from = min_range[["100%"]], to = min_range[["0%"]]), selected = min_range[["50%"]])
   }) |> 
     bindEvent(input$draft_tot_avg_toggle)
  
@@ -633,7 +632,7 @@ server <- function(input, output, session) {
     tbl_schedule <- tbl_schedule |>
       rowwise() |>
       mutate(
-        `Games From Pin` = sum(c_across(str_subset(ts_names, format(input$pin_date, "%d/%m")):ts_names[wk_th]), na.rm = TRUE),
+        `Games From Pin` = factor(sum(c_across(str_subset(ts_names, format(input$pin_date, "%d/%m")):ts_names[wk_th]), na.rm = TRUE)),
         .before = "Following Week Games"
       ) |>
       relocate(contains("games"), .after = wk_th + 1) |>
@@ -792,7 +791,9 @@ server <- function(input, output, session) {
 # News Transactions -------------------------------------------------------
 
     output$news_transactions <- renderDT({
-      df_t <- rename_with(df_news, \(x) str_to_title(str_replace(x, "_", " ")))
+      df_t <- df_news |> 
+        arrange(desc(date)) |> 
+        rename_with(\(x) str_to_title(str_replace(x, "_", " ")))
       
       datatable(
         df_t,
