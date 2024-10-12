@@ -3,5 +3,5 @@ SELECT DISTINCT
   league_name,
   competitor_id,
   competitor_name
-FROM fty.league_info
+FROM fty.league_competitor
 WHERE season = '{cur_season}'

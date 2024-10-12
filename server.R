@@ -30,7 +30,7 @@ server <- function(input, output, session) {
   # cur_date <<- as.Date("2024-02-26")
   cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
   prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
-  df_fty_base <<- if(Sys.info()["user"] == "shiny") readRDS("fty_base.RDS") else dh_getQuery(db_con, "sql/fty_league_info.sql") 
+  df_fty_base <<- if(Sys.info()["user"] == "shiny") readRDS("fty_base.RDS") else dh_getQuery(db_con, "sql/fty_league_competitor.sql") 
   
 # Login -------------------------------------------------------------------
   
@@ -540,6 +540,7 @@ server <- function(input, output, session) {
         options = lst(
           dom = "t",
           paging = FALSE,
+          fixerHeader = TRUE,
           columnDefs = list(list(visible = FALSE, targets = str_which(colnames(df_comparison_table), "_count|_colour") - 1)),
           initComplete = JS(
             "function(settings, json) {",
@@ -638,7 +639,8 @@ server <- function(input, output, session) {
       relocate(contains("games"), .after = wk_th + 1) |>
       mutate(across(ends_with(")"), \(x) as.factor(if_else(x == 0, ".", "1"))))
 
-    # Present table
+    # Present table -- TRY disabling vertical scroll on card and activating
+    # on table instead...
     datatable(
       tbl_schedule,
       rownames = FALSE,
@@ -646,6 +648,7 @@ server <- function(input, output, session) {
       style = "default",
       options = list(
         paging = FALSE,
+        fixerHeader = TRUE,
         autoWidth = TRUE,
         dom = 't',
         scrollX = TRUE,
