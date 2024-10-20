@@ -30,13 +30,16 @@ server <- function(input, output, session) {
   # cur_date <<- as.Date("2024-02-26")
   cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
   prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
-  df_fty_base <<- if(Sys.info()["user"] == "shiny") readRDS("fty_base.RDS") else dh_getQuery(db_con, "sql/fty_league_competitor.sql") 
+  df_fty_base <<- if(Sys.info()["user"] == "shiny") readRDS("fty_base.RDS") else dh_getQuery(db_con, "SELECT * FROM fty.league WHERE season = '{cur_season}'") 
+  ls_fty_base <<- magrittr::`%$%`(df_fty_base, purrr::map(setNames(paste0(platform, "_", league_id), league_name), \(x) as.vector(x)))
   
 # Login -------------------------------------------------------------------
   
   bindEvent(observe({
     if(input$fty_league_select != "")
-      updateSelectInput(inputId = "fty_competitor_select", choices = filter(df_fty_base, league_name == input$fty_league_select)$competitor_name)
+      load(paste0("fty_", ls_fty_base[input$fty_league_select], ".RData"))
+      updateSelectInput(inputId = "fty_competitor_select", choices = df_fty_competitor$competitor_name)
+      platform_selected <<- str_to_lower(str_split(ls_fty_base['Tucked'], "_")[[1]][1])
   }), input$fty_league_select)
   
   bindEvent(observe({
@@ -100,7 +103,7 @@ server <- function(input, output, session) {
     showPageSpinner(type = 6, caption = data_collection_caption)
     
     # Data Frames
-    if(Sys.info()["user"] == "shiny") load(".RData") else source(here("data", "base_frames.R"))
+    load("base_data.RData")
     .load_datasets <- function() walk(list.files(here("data", "app_data_prep"), full.names = TRUE), \(x) source(x, local = TRUE))
     .load_datasets()
     
@@ -109,10 +112,10 @@ server <- function(input, output, session) {
     cur_week <<- df_week_game_count |>
       mutate(week_end = if_else(week_end - week_start < 6, week_start + 6, week_end)) |>
       filter(cur_date >= week_start, cur_date <= week_end) |>
-      pull(fty_matchup_week) |>
+      pull(week) |>
       unique()
     # cur_week <<- 18
-    teams <<- sort(unique(df_player_log$team_slug))
+    teams <<- sort(unique(df_nba_roster$team_slug))
     
   
 # Set Server Side Dynamic Menus -------------------------------------------
@@ -124,8 +127,8 @@ server <- function(input, output, session) {
     }
     
     # Maybe get to the point where I place free agents at top of list
-    active_players <<- sort_players_by_min_desc(df_player_log)
-    free_agents <<- sort_players_by_min_desc(filter(df_player_log, free_agent_status == "ACTIVE"))
+    active_players <<- sort_players_by_min_desc(df_nba_player_box_score)
+    free_agents <<- sort_players_by_min_desc(filter(df_nba_player_box_score, free_agent_status == "ACTIVE"))
     ls_fty_name_to_cid <<- magrittr::`%$%`(df_fty_base, map(setNames(competitor_id, competitor_name), \(x) as.vector(x)))
     ls_fty_cid_to_name <<- magrittr::`%$%`(df_fty_base, map(setNames(competitor_name, competitor_id), \(x) as.vector(x)))
     ls_log_config <<- list("reset" = paste0("h2h_competitor=", ls_fty_name_to_cid[input$fty_competitor_select],";h2h_week=", cur_week, ";h2h_ex_player=;h2h_add_player=;h2h_future_only=FALSE;h2h_future_from_tomorrow=FALSE;h2h_hl_player="))

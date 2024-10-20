@@ -10,7 +10,8 @@ cat("\nInitialising variables...\n")
 prev_season <- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
 cur_season <- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
 cur_date <- as.Date(stringr::str_extract(as.POSIXct(Sys.time(), tz="NZ"), "\\d{4}-\\d{2}-\\d{2}")) - 1
-db_con <- nba.dataRub::dh_createCon("cockroach") 
+# db_con <- nba.dataRub::dh_createCon("cockroach") 
+db_con <- nba.dataRub::dh_createCon("postgres") 
 
 
 # Read datasets -----------------------------------------------------------
@@ -23,7 +24,7 @@ source(here::here("data", "base_frames.R"))
 
 cat("Saving image...\n")
 
-nba.dataRub::dh_getQuery(db_con, "sql/fty_league_info.sql") |> 
+nba.dataRub::dh_getQuery(db_con, "sql/fty_league.sql") |> 
   saveRDS(here::here("fty_base.RDS"))
 
 rm(list = c("db_con", "cur_date", "cur_season", "prev_season"))

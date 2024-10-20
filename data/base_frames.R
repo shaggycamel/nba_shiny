@@ -6,13 +6,22 @@ df_news <<- nba.dataRub::dh_getQuery(db_con, "SELECT * FROM nba.transaction_log 
   dplyr::mutate(dplyr::across(c(transaction_type, team, acc_req), as.factor))
 
 
+# Player Box Score --------------------------------------------------------------
+
+cat("\t- df_player_box_score\n")
+df_player_box_score <<- nba.dataRub::dh_getQuery(db_con, "sql/player_box_score.sql") |>
+  dplyr::mutate(season = ordered(season)) |>
+  dplyr::mutate(season_type = ordered(season_type, c("Pre Season", "Regular Season", "Playoffs"))) |>
+  dplyr::mutate(year_season_type = forcats::fct_cross(season_type, stringr::str_sub(season, start = 6), sep=" "))
+  
+
 # Player log --------------------------------------------------------------
 
 cat("\t- df_player_log\n")
 df_player_log <<- nba.dataRub::dh_getQuery(db_con, "sql/player_log.sql") |>
-  dplyr::mutate(slug_season = ordered(slug_season)) |>
+  dplyr::mutate(season = ordered(season)) |>
   dplyr::mutate(season_type = ordered(season_type, c("Pre Season", "Regular Season", "Playoffs"))) |>
-  dplyr::mutate(year_season_type = forcats::fct_cross(season_type, stringr::str_sub(slug_season, start = 6), sep=" "))
+  dplyr::mutate(year_season_type = forcats::fct_cross(season_type, stringr::str_sub(season, start = 6), sep=" "))
   
 
 # Season segments ---------------------------------------------------------
