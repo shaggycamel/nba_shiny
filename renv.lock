@@ -338,14 +338,14 @@
     },
     "data.table": {
       "Package": "data.table",
-      "Version": "1.16.0",
+      "Version": "1.16.2",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
         "R",
         "methods"
       ],
-      "Hash": "fb24e05d4a91d8b1c7ff8e284bde834a"
+      "Hash": "2e00b378fc3be69c865120d9f313039a"
     },
     "digest": {
       "Package": "digest",
@@ -383,13 +383,13 @@
     },
     "evaluate": {
       "Package": "evaluate",
-      "Version": "1.0.0",
+      "Version": "1.0.1",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
         "R"
       ],
-      "Hash": "6b567375113ceb7d9f800de4dd42218e"
+      "Hash": "3fd29944b231036ad67c3edb32e02201"
     },
     "fansi": {
       "Package": "fansi",
@@ -1043,13 +1043,13 @@
     },
     "renv": {
       "Package": "renv",
-      "Version": "1.0.10",
+      "Version": "1.0.11",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
         "utils"
       ],
-      "Hash": "d0387d5687ec933dd7587efd4cfa2d85"
+      "Hash": "47623f66b4e80b3b0587bc5d7b309888"
     },
     "reticulate": {
       "Package": "reticulate",
@@ -1142,10 +1142,10 @@
     },
     "rstudioapi": {
       "Package": "rstudioapi",
-      "Version": "0.16.0",
+      "Version": "0.17.0",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "96710351d642b70e8f02ddeb237c46a7"
+      "Hash": "fb9f5fce8f609e9b66f0bea5c783f88a"
     },
     "sass": {
       "Package": "sass",

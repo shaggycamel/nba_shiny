@@ -3,12 +3,12 @@
 
 # Doesn't account for situations where a player is traded.
 # Assigns stats to player's most recent team (within one season)
-df_rolling_stats <<- df_player_log |> 
-  arrange(game_date) |> 
+df_rolling_stats <<- df_nba_player_box_score |> 
+  arrange(game_date) |>
   mutate(across(any_of(anl_cols$stat_cols), \(x) slider::slide_period_dbl(x, game_date, "day", ~ mean(.x, na.rm = TRUE), .before = 15, .after = -1)), .by = player_id) |>
   filter(game_date < cur_date) |> 
   mutate(across(any_of(anl_cols$stat_cols), \(x) coalesce(x, 0))) |> 
-  select(-c(slug_season, year_season, season_type, year_season_type, free_agent_status, game_id, wl)) |> 
+  select(-c(season, season_type, year_season_type, game_id)) |> 
   mutate(origin = "past") |> 
   (\(df_t){
     bind_rows(
@@ -16,11 +16,11 @@ df_rolling_stats <<- df_player_log |>
       df_nba_schedule |> 
         filter(game_date >= cur_date) |> 
         left_join(
-          select(df_nba_roster, player_id, fty_id, player_name=player, team_slug), 
+          select(df_nba_roster, player_id, espn_id, yahoo_id, player_name=player, team_slug), 
           by = join_by(team == team_slug),
           relationship = "many-to-many"
         ) |> 
-        select(player_id, fty_id, player_name, team_slug=team, game_date) |> 
+        select(player_id, espn_id, yahoo_id, player_name, team_slug=team, game_date) |> 
         left_join(
           slice_max(df_t, order_by = game_date, by = player_id) |> 
             select(player_id, any_of(anl_cols$stat_cols)),
@@ -36,13 +36,11 @@ df_past <<- df_fty_roster |>
   mutate(us_date = with_tz(timestamp, tzone = "EST"), .before = timestamp) |> 
   filter(us_date < cur_date) |> 
   mutate(
-    ts = format(us_date, "%H:%M"), 
     us_date = as.Date(us_date),
     dow = lubridate::wday(us_date, week_start = 1),
     .after = timestamp
-  ) |> 
-  slice_max(ts, by = c(us_date, competitor_id)) |> 
-  select(-c(ts, timestamp)) |> 
+  ) |>
+  filter(max(timestamp) - timestamp < 1000, .by = us_date) |>  # difference less than 1000 seconds
   left_join(
     select(df_nba_schedule, team, game_date, scheduled_to_play),
     by = join_by(player_team == team, us_date == game_date)    
@@ -53,19 +51,12 @@ df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NUL
 
   # PRE-FUTURE
   df_future_pre <- df_fty_roster |> 
-    mutate(
-      us_date = as.Date(with_tz(timestamp, tzone = "EST")), 
-      ts = format(with_tz(timestamp, tzone = "EST"), "%H:%M"), 
-      dow = lubridate::wday(us_date, week_start = 1),
-      .after = timestamp
-    ) |> 
-    slice_max(paste(us_date, ts), by = competitor_id) |> 
-    select(-ts) |> 
-    select(-c(timestamp, us_date, dow, league_week, starts_with("opponent"))) |> 
+    filter(max(timestamp) - timestamp < 1000, .by = competitor_id) |>  # difference less than 1000 seconds
+    select(-c(league_week, starts_with("opponent"))) |>
     bind_rows(
-      filter(df_player_log, player_name %in% add) |>
+      filter(df_nba_player_box_score, player_name %in% add) |>
         slice_max(order_by = game_date, by = player_name) |>
-        select(player_id, player_fantasy_id = fty_id, player_name, player_team = team_slug) |> 
+        select(player_id, player_fantasy_id:=paste0(str_to_lower(platform_selected), "_id"), player_name, player_team = team_slug) |> 
         mutate(season = cur_season, competitor_id = c_id)
     )
   
@@ -73,12 +64,16 @@ df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NUL
   df_future <<- left_join(
       df_future_pre,
       filter(df_nba_schedule, game_date >= cur_date) |> 
-        select(game_date, fty_matchup_week, team),
+        left_join(
+          distinct(select(df_fty_schedule, starts_with("week"))),
+          by = join_by(game_date >= week_start, game_date <= week_end)
+        ) |> 
+        select(game_date, fty_matchup_week=week, team),
       by = join_by(player_team == team),
       relationship = "many-to-many"
     ) |> 
     left_join(
-      select(df_fty_schedule, -c(season, league_id)),
+      select(df_fty_schedule, -c(season, league_id, platform)),
       by = join_by(competitor_id, between(game_date, week_start, week_end)),
       relationship = "many-to-many"
     ) |> 
@@ -96,7 +91,7 @@ df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NUL
       df_future
     ) |> 
     left_join(
-      select(df_rolling_stats, -c(fty_id, player_name, team_slug)),
+      select(df_rolling_stats, -c(espn_id, yahoo_id, player_name, team_slug)),
       by = join_by(player_id, us_date == game_date)
     )
    

@@ -48,6 +48,7 @@ page_h2h <- layout_sidebar(
     selectInput("h2h_hl_player", "Highlight Player", choices = character(0), multiple = TRUE),
     selectInput("h2h_log_config", "Log Filter Config", choices = character(0), size = 4, selectize = FALSE),
     actionButton("h2h_snapshot_config", "Snapshot config"),
+    width = 350,
     # open = "open"
   ),
   card(
@@ -118,7 +119,7 @@ page_draft <- layout_sidebar(
     sliderTextInput("draft_min_filter", "Limit Minutes", choices = 0), # updated dynamically in server.R
     sliderInput("draft_top_n", "Top N Players", min = 10, max = 20, value = 15, ticks = FALSE),
     checkboxInput("draft_scale_minutes", "Scale by Minutes"),
-    switchInput("draft_tot_avg_toggle", value = TRUE, onLabel = "Total", offLabel = "Average", size = "small"),
+    switchInput("draft_tot_avg_toggle", value = TRUE, onLabel = "Total", offLabel = "Mean", size = "small"),
     # open = "open"
   ),
   card(full_screen = TRUE, plotlyOutput("draft_stat_plot")),
@@ -144,6 +145,7 @@ page_info <- card(
 
 ui <- page_navbar(
   title = "NBA Fantasy",
+  id = "title_container",
   nav_spacer(),
   nav_panel("Fantasy Overview", page_fty_league_overview),
   nav_panel("Head to Head", page_h2h),
