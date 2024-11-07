@@ -1,5 +1,5 @@
 SELECT *,
-    REGEXP_REPLACE(REPLACE(slug_matchup, team, ''), ' @ | vs. ', '', 'gi') AS against
+    REGEXP_REPLACE(REPLACE(matchup, team, ''), ' @ | vs. ', '', 'gi') AS against
     --EXTRACT(week FROM GAME_DATE) AS season_week
 FROM (
     SELECT 
@@ -7,10 +7,10 @@ FROM (
         season_type,
         game_id,
         game_date,
-        slug_matchup,
-        LEFT(slug_matchup, 3) AS team,
+        matchup,
+        LEFT(matchup, 3) AS team,
         CASE 
-            WHEN slug_matchup LIKE '%vs%'
+            WHEN matchup LIKE '%vs%'
             THEN 'home'
             ELSE 'away' 
         END AS home_away
@@ -24,10 +24,10 @@ FROM (
         season_type,
         game_id,
         game_date,
-        slug_matchup,
-        RIGHT(slug_matchup, 3) AS team,
+        matchup,
+        RIGHT(matchup, 3) AS team,
         CASE 
-            WHEN slug_matchup LIKE '%@%'
+            WHEN matchup LIKE '%@%'
             THEN 'home'
             ELSE 'away' 
         END AS home_away

@@ -36,13 +36,11 @@ df_past <<- df_fty_roster |>
   mutate(us_date = with_tz(timestamp, tzone = "EST"), .before = timestamp) |> 
   filter(us_date < cur_date) |> 
   mutate(
-    ts = format(us_date, "%H:%M"), 
     us_date = as.Date(us_date),
     dow = lubridate::wday(us_date, week_start = 1),
     .after = timestamp
-  ) |> 
-  slice_max(ts, by = c(us_date, competitor_id)) |> 
-  select(-c(ts, timestamp)) |> 
+  ) |>
+  filter(max(timestamp) - timestamp < 1000, .by = us_date) |>  # difference less than 1000 seconds
   left_join(
     select(df_nba_schedule, team, game_date, scheduled_to_play),
     by = join_by(player_team == team, us_date == game_date)    
@@ -53,19 +51,12 @@ df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NUL
 
   # PRE-FUTURE
   df_future_pre <- df_fty_roster |> 
-    mutate(
-      us_date = as.Date(with_tz(timestamp, tzone = "EST")), 
-      ts = format(with_tz(timestamp, tzone = "EST"), "%H:%M"), 
-      dow = lubridate::wday(us_date, week_start = 1),
-      .after = timestamp
-    ) |> 
-    slice_max(paste(us_date, ts), by = competitor_id) |> 
-    select(-ts) |> 
-    select(-c(timestamp, us_date, dow, league_week, starts_with("opponent"))) |> 
+    filter(max(timestamp) - timestamp < 1000, .by = competitor_id) |>  # difference less than 1000 seconds
+    select(-c(league_week, starts_with("opponent"))) |>
     bind_rows(
       filter(df_nba_player_box_score, player_name %in% add) |>
         slice_max(order_by = game_date, by = player_name) |>
-        select(player_id, player_fantasy_id:=paste0(platform_selected, "_id"), player_name, player_team = team_slug) |> 
+        select(player_id, player_fantasy_id:=paste0(str_to_lower(platform_selected), "_id"), player_name, player_team = team_slug) |> 
         mutate(season = cur_season, competitor_id = c_id)
     )
   

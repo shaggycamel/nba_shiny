@@ -1,6 +1,6 @@
 
-if(nrow(df_fty_box_score) > 0){
-
+df_fty_league_overview_prepare <<- function(platform_selected, league_selected){
+  
   df_fty_league_overview <- 
     df_fty_box_score |> 
     left_join(
@@ -43,11 +43,9 @@ if(nrow(df_fty_box_score) > 0){
       .by = competitor_id
     )
   
-  
   df_latest_matchup <- filter(df_fty_league_overview, matchup == max(matchup))
   df_fty_league_overview <- filter(df_fty_league_overview, matchup < max(matchup))
     
-  
   df_fty_league_overview <- 
     df_fty_league_overview |> 
     group_by(competitor_id, matchup) |> 
@@ -73,12 +71,15 @@ if(nrow(df_fty_box_score) > 0){
     rename_with(\(x) str_remove(x, "sigmoid_"), .cols = starts_with("sigmoid_")) |> 
     rename_with(\(x) paste0(str_remove(x, "rank_sigmoid_"), "_rank"), .cols = starts_with("rank_sigmoid_"))
   
-  
-  df_fty_league_overview <<- 
-    df_fty_league_overview |> 
+  df_fty_league_overview |> 
     bind_rows(select(df_latest_matchup, any_of(colnames(df_fty_league_overview)))) |> 
     mutate(matchup_sigmoid = if_else(is.na(matchup_sigmoid), matchup, matchup_sigmoid)) |> 
-    left_join(select(df_fty_base, competitor_id, competitor_name), by = join_by(competitor_id))
+    left_join(
+      df_fty_base |> 
+        filter(platform == platform_selected, league_id == league_selected) |> 
+        select(competitor_id, competitor_name), 
+      by = join_by(competitor_id)
+    )
 
 }
 

@@ -14,7 +14,7 @@ SELECT
 	lgs.game_date,
 	pbs.player_name,
 	pbs.player_id,
-    id_match.espn_id,
+  id_match.espn_id,
 	id_match.yahoo_id,
 	team.team_slug,
 	pbs.min,
@@ -34,7 +34,7 @@ SELECT
 	pbs.ast,
 	pbs.stl,
 	pbs.blk,
-	pbs.to, -- rename to tov in source table
+	pbs.tov,
 	pbs.pf,
 	pbs.plus_minus,
 	pbs.e_off_rating,
