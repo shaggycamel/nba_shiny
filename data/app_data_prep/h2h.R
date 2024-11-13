@@ -93,7 +93,10 @@ df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NUL
     left_join(
       select(df_rolling_stats, -c(espn_id, yahoo_id, player_name, team_slug)),
       by = join_by(player_id, us_date == game_date)
-    )
+    ) |> 
+    # try this to fix the NULL & List in H2H table
+    select(-timestamp) |> 
+    distinct() 
    
   if(from_tomorrow){
     df_h2h <- df_h2h |> 
