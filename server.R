@@ -622,6 +622,12 @@ server <- function(input, output, session) {
     
   }) |> 
     bindEvent(input$week_selection)
+  
+  observe({
+    tms <- tbl_schedule_grid[input$schedule_table_rows_current,]$Team
+    updateSelectInput(session, "comparison_team_filter", selected = tms)
+  }) |> 
+    bindEvent(input$copy_teams, ignoreInit = TRUE)
 
   output$schedule_table <- renderDT({
     
@@ -662,7 +668,7 @@ server <- function(input, output, session) {
       wk_th <- wk_th + 1
     }
     
-    tbl_schedule <- tbl_schedule |>
+    tbl_schedule_grid <<- tbl_schedule |>
       rowwise() |>
       mutate(
         `Games From Pin` = factor(sum(c_across(str_subset(ts_names, format(input$pin_date, "%d/%m")):ts_names[wk_th]), na.rm = TRUE)),
@@ -674,7 +680,7 @@ server <- function(input, output, session) {
     # Present table -- TRY disabling vertical scroll on card and activating
     # on table instead...
     datatable(
-      tbl_schedule,
+      tbl_schedule_grid,
       rownames = FALSE,
       class = "cell-border stripe",
       style = "default",

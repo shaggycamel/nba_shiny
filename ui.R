@@ -86,6 +86,7 @@ page_league_game_schedule <- layout_sidebar(
   sidebar = sidebar(
     selectInput("week_selection", "Week", choices = character(0), selectize = FALSE),
     dateInput("pin_date", "Pinned Date"),
+    actionButton("copy_teams", "Copy teams to Comparison")
     # open = "open"
   ),
   card(full_screen = TRUE, DTOutput("schedule_table")),
