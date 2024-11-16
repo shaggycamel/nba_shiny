@@ -26,13 +26,12 @@ server <- function(input, output, session) {
   fty_parameters_met <- reactiveVal(FALSE)
   
   db_con <<- if(Sys.info()["user"] == "fred") dh_createCon("postgres") else dh_createCon("cockroach") 
-  cur_date <<- as.Date(str_extract(as.POSIXct(Sys.time(), tz="NZ"), "\\d{4}-\\d{2}-\\d{2}")) - 1
-  # cur_date <<- as.Date("2024-02-26")
+  cur_date <<- as_datetime(Sys.time(), tz = "US/Eastern")
   cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
   prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
   df_fty_base <<- readRDS("fty_base.RDS") 
   ls_fty_base <<- magrittr::`%$%`(distinct(df_fty_base, platform, league_id, league_name), purrr::map(setNames(paste0(platform, "_", league_id), league_name), \(x) as.vector(x)))
-  
+  tz(cur_date)
 # Login -------------------------------------------------------------------
   
   bindEvent(observe({
