@@ -29,9 +29,9 @@ server <- function(input, output, session) {
   cur_date <<- as_datetime(Sys.time(), tz = "US/Eastern")
   cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
   prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
-  df_fty_base <<- readRDS("fty_base.RDS") 
+  df_fty_base <<- readRDS("fty_base.RDS")
   ls_fty_base <<- magrittr::`%$%`(distinct(df_fty_base, platform, league_id, league_name), purrr::map(setNames(paste0(platform, "_", league_id), league_name), \(x) as.vector(x)))
-  tz(cur_date)
+
 # Login -------------------------------------------------------------------
   
   bindEvent(observe({
