@@ -48,6 +48,7 @@ df_fty_league_overview_prepare <<- function(platform_selected, league_selected){
     
   df_fty_league_overview <- 
     df_fty_league_overview |> 
+    mutate(across(where(is.numeric), \(x) replace_na(x, 0))) |> 
     group_by(competitor_id, matchup) |> 
     group_map(.keep = TRUE, \(df_t, ...){
       x <- seq(-5, 5, 0.3)
@@ -63,6 +64,7 @@ df_fty_league_overview_prepare <<- function(platform_selected, league_selected){
         
         df_ls <- append(df_ls, list(tibble(competitor_id = df_t$competitor_id, matchup = df_t$matchup, matchup_sigmoid = matchup_sigmoid, stat = stat, sigmoid = stat_sigmoid, rank_sigmoid = stat_rank_sigmoid)))
       }
+      
       df_ls
     }) |> 
     bind_rows() |> 

@@ -12,7 +12,8 @@ df_nba_news <<- nba.dataRub::dh_getQuery(db_con, "SELECT * FROM nba.transaction_
 # Player Box Score --------------------------------------------------------------
 
 cat("\t- df_nba_player_box_score\n")
-df_nba_player_box_score <<- nba.dataRub::dh_getQuery(db_con, "sql/player_box_score.sql") |>
+df_nba_player_box_score <<- nba.dataRub::dh_getQuery(db_con, "sql/player_box_score.sql") |> 
+  dplyr::mutate(game_date = force_tz(game_date, tz = "EST")) |> 
   dplyr::mutate(season = ordered(season)) |>
   dplyr::mutate(season_type = ordered(season_type, c("Pre Season", "Regular Season", "Playoffs"))) |>
   dplyr::mutate(year_season_type = forcats::fct_cross(season_type, stringr::str_sub(season, start = 6), sep=" "))
@@ -22,6 +23,7 @@ df_nba_player_box_score <<- nba.dataRub::dh_getQuery(db_con, "sql/player_box_sco
 
 cat("\t- df_nba_season_segments\n")
 df_nba_season_segments <<- nba.dataRub::dh_getQuery(db_con, "sql/season_segments.sql") |>
+  dplyr::mutate(dplyr::across(tidyselect::ends_with("date"), \(x) lubridate::force_tz(x, "EST"))) |> 
   (\(df){
     dplyr::bind_rows(
       dplyr::filter(df, Sys.Date() > begin_date, Sys.Date() < end_date) |>
@@ -37,7 +39,10 @@ df_nba_season_segments <<- nba.dataRub::dh_getQuery(db_con, "sql/season_segments
 
 cat("\t- df_nba_schedule\n")
 df_nba_schedule <<- nba.dataRub::dh_getQuery(db_con, "sql/nba_schedule.sql") |> 
-  dplyr::mutate(scheduled_to_play = 1) # used in h2h calculations
+  dplyr::mutate(
+    game_date = lubridate::force_tz(game_date, tz = "EST"),
+    scheduled_to_play = 1 # used in h2h calculations
+  )
 
 
 # NBA team roster -------------------------------------------------------
@@ -71,14 +76,16 @@ purrr::walk2(unique(df_fty_base$platform), unique(df_fty_base$league_id), \(plat
   df_fty_schedule <- nba.dataRub::dh_getQuery(db_con, glue::glue(readr::read_file(here::here("data/sql/fty_league_schedule.sql")))) |>
     dplyr::select(-tidyselect::ends_with("_name"))
   
+
   # Fantasy competitor roster -------------------------------------------------------
   cat("\t- df_fty_roster\n")
   df_fty_roster <- nba.dataRub::dh_getQuery(db_con,  glue::glue(readr::read_file(here::here("data/sql/fty_team_roster.sql")))) |>
+    dplyr::mutate(timestamp = lubridate::with_tz(timestamp, tzone = "EST")) |> 
+    dplyr::mutate(date = lubridate::as_date(timestamp), .after = timestamp) |> 
+    dplyr::filter(max(timestamp) - timestamp < 1000, .by = c(date, competitor_id)) |>
     dplyr::select(-c(competitor_name, opponent_name)) |> 
     dplyr::left_join(
-      df_nba_season_segments |> 
-        dplyr::select(tidyr::starts_with("season"), begin_date, end_date) |> 
-        dplyr::mutate(dplyr::across(tidyr::ends_with("date"), \(x) as.POSIXct(x, tz = "US/Eastern"))),
+      dplyr::select(df_nba_season_segments, tidyr::starts_with("season"), begin_date, end_date),
       by = dplyr::join_by(season, timestamp >= begin_date, timestamp <= end_date)
     ) |> 
     dplyr::filter(season_type == "Regular Season")
