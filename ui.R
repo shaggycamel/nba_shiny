@@ -48,7 +48,7 @@ page_h2h <- layout_sidebar(
     selectInput("h2h_hl_player", "Highlight Player", choices = character(0), multiple = TRUE),
     selectInput("h2h_log_config", "Log Filter Config", choices = character(0), size = 4, selectize = FALSE),
     actionButton("h2h_snapshot_config", "Snapshot config"),
-    width = 350,
+    # width = 350,
     # open = "open"
   ),
   card(
@@ -72,7 +72,7 @@ page_player_comparison <- layout_sidebar(
     selectizeInput("comparison_excels_at_filter", "Excels at", choices = discard(fmt_to_db_stat_name, \(x) str_detect(x, "_pct|_cat")), options = list(maxItems = 5, onInitialize = I('function() { this.setValue(""); }'))),
     sliderInput("comparison_minute_filter", "Minute Filter", min = 0, max = 50, value = 20, round = TRUE),
     radioButtons("date_range_switch", NULL, choices = c("Seven Days", "Two Weeks", "One Month")),
-    checkboxInput("comparison_free_agent_filter", "Free Agents only"),
+    checkboxInput("comparison_free_agent_filter", "Free Agents only", value = TRUE),
     # open = "open"
   ),
   card(full_screen = TRUE, DTOutput("player_comparison_table")),
@@ -85,7 +85,8 @@ page_player_comparison <- layout_sidebar(
 page_league_game_schedule <- layout_sidebar(
   sidebar = sidebar(
     selectInput("week_selection", "Week", choices = character(0), selectize = FALSE),
-    dateInput("pin_date", "Pinned Date"),
+    dateInput("pin_date", "Pinned Date"), 
+    radioButtons("pin_dir", label = "Pin Direction", choices = c("-", "+"), selected = "+", inline = TRUE),
     actionButton("copy_teams", "Copy teams to Comparison")
     # open = "open"
   ),

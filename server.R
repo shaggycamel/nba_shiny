@@ -26,13 +26,12 @@ server <- function(input, output, session) {
   fty_parameters_met <- reactiveVal(FALSE)
   
   db_con <<- if(Sys.info()["user"] == "fred") dh_createCon("postgres") else dh_createCon("cockroach") 
-  cur_date <<- as.Date(str_extract(as.POSIXct(Sys.time(), tz="NZ"), "\\d{4}-\\d{2}-\\d{2}")) - 1
-  # cur_date <<- as.Date("2024-02-26")
+  cur_date <<- date(with_tz(Sys.Date(), "EST"))
   cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
   prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
-  df_fty_base <<- readRDS("fty_base.RDS") 
+  df_fty_base <<- readRDS("fty_base.RDS")
   ls_fty_base <<- magrittr::`%$%`(distinct(df_fty_base, platform, league_id, league_name), purrr::map(setNames(paste0(platform, "_", league_id), league_name), \(x) as.vector(x)))
-  
+
 # Login -------------------------------------------------------------------
   
   bindEvent(observe({
@@ -186,8 +185,7 @@ server <- function(input, output, session) {
   # Additional H2H filter alteration
   observe({
     req(fty_parameters_met, exists("df_h2h_og"))
-    
-    competitor_players <- sort(filter(slice_max(df_h2h_og, us_date, by = competitor_id), competitor_id == input$h2h_competitor)$player_name)
+    competitor_players <- sort(filter(slice_max(df_h2h_og, game_date, by = competitor_id), competitor_id == input$h2h_competitor)$player_name)
     updateSelectInput(session, "h2h_ex_player", choices = competitor_players)
     updateSelectInput(session, "h2h_add_player", choices = setdiff(active_players, competitor_players))
     updateSelectInput(session, "h2h_hl_player", choices = competitor_players)
@@ -280,7 +278,8 @@ server <- function(input, output, session) {
     } else {
 
       df_h <<- df_h2h() 
-      if(input$h2h_future_only) df_h <- filter(df_h, origin == "future")
+      if(input$h2h_future_from_tomorrow) df_h <- mutate(df_h, origin = if_else(origin == "today", "past", origin))
+      if(input$h2h_future_only) df_h <- filter(df_h, origin != "past")
       opp_id <- filter(df_h, league_week == input$h2h_week, competitor_id == as.numeric(input$h2h_competitor))$opponent_id[1]
       
       h2h_plt <- bind_rows(
@@ -374,26 +373,20 @@ server <- function(input, output, session) {
     } else {
 
       df_h <<- df_h2h()
-      if(input$h2h_future_from_tomorrow) df_h <- mutate(df_h, origin = if_else(us_date == cur_date, "past", origin))
-      if(input$h2h_future_only) df_h <- filter(df_h, origin == "future")
+      if(input$h2h_future_from_tomorrow) df_h <- mutate(df_h, origin = if_else(origin == "today", "past", origin))
+      if(input$h2h_future_only) df_h <- filter(df_h, origin != "past")
       opp_id <- filter(df_h, competitor_id == as.numeric(input$h2h_competitor), league_week == input$h2h_week)$opponent_id[1]
 
-      
-      cid = 2
-      oid = 8
-      lw = 2
       df_h2h_week_game_count <<- bind_rows(
         filter(df_h, competitor_id == as.numeric(input$h2h_competitor), league_week == input$h2h_week),
         filter(df_h, competitor_id == opp_id, league_week == input$h2h_week)
-        # filter(df_h, competitor_id == cid, league_week == lw),
-        # filter(df_h, competitor_id == oid, league_week == lw)
       ) |> 
       mutate(inj_status = case_when(
         scheduled_to_play == 1 & str_detect(player_injury_status, "^O|INJ") ~ "1*",
          scheduled_to_play == 1 ~ "1",
         .default = NA_character_
       )) |>
-      pivot_wider(id_cols = c(competitor_id, opponent_id, player_team, player_name), names_from = us_date, values_from = inj_status) |> 
+      pivot_wider(id_cols = c(competitor_id, opponent_id, player_team, player_name), names_from = game_date, values_from = inj_status) |> 
       (\(df){
 
         inner_func <- function(x, nm) filter(x, competitor_id == nm) |>
@@ -403,11 +396,8 @@ server <- function(input, output, session) {
         bind_rows(
           inner_func(df, opp_id),
           inner_func(df, as.numeric(input$h2h_competitor)),
-          # inner_func(df, oid),
-          # inner_func(df, cid),
           setNames(as.data.frame(matrix(rep(NA, length(colnames(df))), nrow = 1)), colnames(df)),
           select(filter(df, competitor_id == as.numeric(input$h2h_competitor)), starts_with(c("player", "20"))) |>
-          # select(filter(df, competitor_id == cid), starts_with(c("player", "20"))) |>
             arrange(player_name) |>
             mutate(across(starts_with("20"), \(x) as.character(x)))
         )
@@ -481,7 +471,6 @@ server <- function(input, output, session) {
         })()
 
       }
-
   })
   
 
@@ -504,7 +493,7 @@ server <- function(input, output, session) {
         game_date <= cur_date,
         # game_date >= cur_date - days(15)
         game_date >= cur_date - case_when(input$date_range_switch == "Two Weeks" ~ days(15), input$date_range_switch == "One Month" ~ days(30), .default = days(7))
-      ) |>
+      ) |> 
       summarise(across(any_of(anl_cols$stat_cols), \(x) mean(x)), .by = c(player_id, player_name)) |>
       mutate(across(where(is.numeric), \(x) replace_na(x, 0L))) |>
       calc_z_pcts() |>
@@ -624,7 +613,7 @@ server <- function(input, output, session) {
     bindEvent(input$week_selection)
   
   observe({
-    tms <- tbl_schedule_grid[input$schedule_table_rows_current,]$Team
+    tms <- tbl_schedule_grid[input$schedule_table_rows_current, ]$Team
     updateSelectInput(session, "comparison_team_filter", selected = tms)
   }) |> 
     bindEvent(input$copy_teams, ignoreInit = TRUE)
@@ -668,10 +657,15 @@ server <- function(input, output, session) {
       wk_th <- wk_th + 1
     }
     
-    tbl_schedule_grid <<- tbl_schedule |>
+    
+    pin_index <- match(str_subset(colnames(tbl_schedule), format(input$pin_date, "%d/%m")), colnames(tbl_schedule))
+    pin_sum_cols <- if(input$pin_dir == "+") (pin_index-1):(wk_th+1) else 2:pin_index
+    
+    tbl_schedule_grid <- tbl_schedule |>
       rowwise() |>
       mutate(
-        `Games From Pin` = factor(sum(c_across(str_subset(ts_names, format(input$pin_date, "%d/%m")):ts_names[wk_th]), na.rm = TRUE)),
+        # `Games From Pin` = factor(sum(c_across(str_subset(ts_names, format(input$pin_date, "%d/%m")):ts_names[wk_th]), na.rm = TRUE)),
+        `Games From Pin` = factor(sum(c_across(pin_sum_cols), na.rm = TRUE)),
         .before = "Following Week Games"
       ) |>
       relocate(contains("games"), .after = wk_th + 1) |>
@@ -702,7 +696,7 @@ server <- function(input, output, session) {
     formatStyle(columns = str_subset(ts_names, format(input$pin_date, "%d/%m")), backgroundColor = "lightyellow") |>
     (\(tb){
       
-      lvl <- 0:length(unique(tbl_schedule$`Games From Pin`))
+      lvl <- 0:length(unique(tbl_schedule_grid$`Games From Pin`))
       col <- c("white", rev(RColorBrewer::brewer.pal(5, "Greens")))[lvl + 1]
       tb <- formatStyle(tb, columns = "Games From Pin", backgroundColor = styleEqual(levels = lvl, values = col))
       
@@ -711,9 +705,9 @@ server <- function(input, output, session) {
           formatStyle(
             tb,
             columns = "Following Week Games",
-            backgroundColor = styleEqual(levels = 0:tail(levels(tbl_schedule$`Following Week Games`), 1), values = rev(RColorBrewer::brewer.pal(length(0:tail(levels(tbl_schedule$`Following Week Games`), 1)), "Greens")))
+            backgroundColor = styleEqual(levels = 0:tail(levels(tbl_schedule_grid$`Following Week Games`), 1), values = rev(RColorBrewer::brewer.pal(length(0:tail(levels(tbl_schedule_grid$`Following Week Games`), 1)), "Greens")))
           ) |>
-          formatStyle(columns = (ncol(tbl_schedule)-1):ncol(tbl_schedule), backgroundColor = "lightgrey")
+          formatStyle(columns = (ncol(tbl_schedule_grid)-1):ncol(tbl_schedule_grid), backgroundColor = "lightgrey")
       } else 
         tb <- formatStyle(tb, columns = "Following Week Games", backgroundColor = "lightgrey")
       

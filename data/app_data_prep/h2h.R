@@ -31,43 +31,42 @@ df_rolling_stats <<- df_nba_player_box_score |>
     )
   })()
 
+
+
+
 # PAST
 df_past <<- df_fty_roster |> 
-  mutate(us_date = with_tz(timestamp, tzone = "EST"), .before = timestamp) |> 
-  filter(us_date < cur_date) |> 
-  mutate(
-    us_date = as.Date(us_date),
-    dow = lubridate::wday(us_date, week_start = 1),
-    .after = timestamp
-  ) |>
-  filter(max(timestamp) - timestamp < 1000, .by = us_date) |>  # difference less than 1000 seconds
+  filter(timestamp < cur_date) |> 
+  mutate(dow = lubridate::wday(date, week_start = 1), .after = date) |> 
   left_join(
     select(df_nba_schedule, team, game_date, scheduled_to_play),
-    by = join_by(player_team == team, us_date == game_date)    
-  )
+    by = join_by(player_team == team, date == game_date)
+  ) |> 
+  rename(game_date = date)
 
 
 df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NULL){
 
-  # PRE-FUTURE
-  df_future_pre <- df_fty_roster |> 
-    filter(max(timestamp) - timestamp < 1000, .by = competitor_id) |>  # difference less than 1000 seconds
+  # TODAY
+  df_today <- df_fty_roster |> 
+    filter(timestamp >= cur_date) |> 
     select(-c(league_week, starts_with("opponent"))) |>
     bind_rows(
       filter(df_nba_player_box_score, player_name %in% add) |>
-        slice_max(order_by = game_date, by = player_name) |>
+        slice_max(order_by = game_date, by = player_name) |> 
         select(player_id, player_fantasy_id:=paste0(str_to_lower(platform_selected), "_id"), player_name, player_team = team_slug) |> 
         mutate(season = cur_season, competitor_id = c_id)
     )
   
   # FUTURE
   df_future <<- left_join(
-      df_future_pre,
-      filter(df_nba_schedule, game_date >= cur_date) |> 
+      df_today,
+      df_nba_schedule |> 
+        filter(game_date >= cur_date) |>
         left_join(
           distinct(select(df_fty_schedule, starts_with("week"))),
           by = join_by(game_date >= week_start, game_date <= week_end)
-        ) |> 
+        ) |>
         select(game_date, fty_matchup_week=week, team),
       by = join_by(player_team == team),
       relationship = "many-to-many"
@@ -77,42 +76,37 @@ df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NUL
       by = join_by(competitor_id, between(game_date, week_start, week_end)),
       relationship = "many-to-many"
     ) |> 
-    rename(us_date = game_date, league_week = fty_matchup_week) |> 
-    mutate(dow = lubridate::wday(us_date, week_start = 1)) |> 
+    rename(league_week = fty_matchup_week) |> 
+    mutate(dow = lubridate::wday(date, week_start = 1)) |> 
     left_join(
       select(df_nba_schedule, team, game_date, scheduled_to_play),
-      by = join_by(player_team == team, us_date == game_date)    
-    ) |> 
+      by = join_by(player_team == team, game_date)    
+    ) |>
     select(all_of(colnames(df_past)))
   
-
-  df_h2h <- bind_rows(
-      filter(df_past, us_date < cur_date), 
-      df_future
-    ) |> 
+  # COMBINE
+  df_h2h <- bind_rows(df_past, df_future) |> 
     left_join(
       select(df_rolling_stats, -c(espn_id, yahoo_id, player_name, team_slug)),
-      by = join_by(player_id, us_date == game_date)
-    ) |> 
-    # try this to fix the NULL & List in H2H table
-    select(-timestamp) |> 
-    distinct() 
+      by = join_by(player_id, game_date)
+    )
    
+  # FROM TOMORROW TWEAKING
   if(from_tomorrow){
     df_h2h <- df_h2h |> 
       anti_join(
         filter(df_h2h, competitor_id == c_id, player_name %in% add, origin == "today"),
-        by = join_by(competitor_id, player_id, us_date)
+        by = join_by(competitor_id, player_id, game_date)
       ) |> 
       anti_join(
         filter(df_h2h, competitor_id == c_id, player_name %in% exclude, origin == "future"),
-        by = join_by(competitor_id, player_id, us_date)
+        by = join_by(competitor_id, player_id, game_date)
       )
   } else {
     df_h2h <- df_h2h |> 
       anti_join(
         filter(df_h2h, competitor_id == c_id, player_name %in% exclude, origin != "past"),
-        by = join_by(competitor_id, player_id, us_date)
+        by = join_by(competitor_id, player_id, game_date)
       )
   }
 
