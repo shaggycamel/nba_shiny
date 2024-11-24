@@ -12,7 +12,6 @@ cur_date <- lubridate::force_tz(as.Date(lubridate::with_tz(Sys.time(), "EST")), 
 db_con <- nba.dataRub::dh_createCon("cockroach")
 # db_con <- nba.dataRub::dh_createCon("postgres") 
 
-lubridate::force_tz(as.Date(lubridate::with_tz(Sys.time(), "EST")), tz = "EST") 
 
 # Read datasets -----------------------------------------------------------
 
