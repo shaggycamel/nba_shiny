@@ -8,7 +8,7 @@
 cat("\nInitialising variables...\n")
 prev_season <- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
 cur_season <- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
-cur_date <- as.Date(stringr::str_extract(as.POSIXct(Sys.time(), tz="NZ"), "\\d{4}-\\d{2}-\\d{2}")) - 1
+cur_date <- date(lubridate::with_tz(Sys.Date(), "EST"))
 db_con <- nba.dataRub::dh_createCon("cockroach")
 # db_con <- nba.dataRub::dh_createCon("postgres") 
 
