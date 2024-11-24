@@ -26,7 +26,7 @@ server <- function(input, output, session) {
   fty_parameters_met <- reactiveVal(FALSE)
   
   db_con <<- if(Sys.info()["user"] == "fred") dh_createCon("postgres") else dh_createCon("cockroach") 
-  cur_date <<- date(with_tz(Sys.Date(), "EST"))
+  cur_date <<- force_tz(as.Date(with_tz(Sys.time(), "EST")), tz = "EST")
   cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
   prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
   df_fty_base <<- readRDS("fty_base.RDS")
@@ -499,7 +499,7 @@ server <- function(input, output, session) {
           any_of(anl_cols$stat_cols), 
           .fns = list(
             mean = \(x) mean(x, na.rm = TRUE), 
-            var = \(x) var(x, na.rm = TRUE)
+            sd = \(x) sd(x, na.rm = TRUE)
           ), 
           .names = "{.col}_{.fn}"),
         .by = c(player_id, player_name)
@@ -507,15 +507,17 @@ server <- function(input, output, session) {
       mutate(across(ends_with("_mean"), \(x) replace_na(x, 0L))) |>
       calc_z_pcts(name_suffix = "_mean") |>
       select(-contains("_pct")) |>
-      rename_with(\(x) str_remove(x, "_mean"), contains("_mean")) |> 
       (\(t_df) {
+        
+        cols <- paste0(stat_selection$database_name, "_mean")
+        
         left_join(
           t_df,
           {
-            select(t_df, player_id, player_name, any_of(stat_selection$database_name), -min) |>
-              mutate(across(any_of(stat_selection$database_name[stat_selection$database_name != "tov"]), ~ round(scales::rescale(.x), 2))) |>
-              mutate(tov = round((((tov * -1) - min(tov)) / (max(tov) - min(tov))) + 1, 2)) |>
-              pivot_longer(cols = any_of(stat_selection$database_name), names_to = "stat") |>
+            select(t_df, player_id, player_name, any_of(cols), -min_mean) |>
+              mutate(across(any_of(cols[cols != "tov_mean"]), ~ round(scales::rescale(.x), 2))) |>
+              mutate(tov_mean = round((((tov_mean * -1) - min(tov_mean)) / (max(tov_mean) - min(tov_mean))) + 1, 2)) |>
+              pivot_longer(cols = any_of(cols), names_to = "stat") |>
               (\(t_df) {
                 bind_rows(
                   mutate(slice_max(t_df, value, n = 3, by = c(player_id, player_name), with_ties = FALSE), performance = "Excels At") |> filter(value > 0),
@@ -525,17 +527,39 @@ server <- function(input, output, session) {
               mutate(stat_value = paste0(stat, " (", value, ")")) |>
               group_by(player_id, player_name, performance) |>
               summarise(stat_value = paste(stat_value, collapse = "\n"), .groups = "drop") |>
-              pivot_wider(names_from = performance, values_from = stat_value)
+              pivot_wider(names_from = performance, values_from = stat_value) |> 
+              mutate(across(ends_with("At"), \(x) str_remove_all(x, "_mean")))
           },
           by = join_by(player_name, player_id)
         )
-      })() |> 
-      mutate(
-        across(
-          any_of(anl_cols$stat_cols),
-          \(x) paste0(round(x, 2), " (", round(!!sym(paste0(toString(x), "_var"))),")")
-        )
-      ) |> 
+      })()
+      (\(t_df) {
+        colnames()
+      })
+
+    cols <- intersect(stat_selection$database_name, str_remove(str_subset(colnames(df_comparison), "_mean"), "_mean"))
+    cols <- str_subset(cols, "_z", negate = TRUE)
+    
+    list_cbind(map(cols, \(x) {
+      df_comparison |> 
+        mutate(cv = !!sym(paste0(x, "_sd")) / !!sym(paste0(x, "_mean"))) |> 
+        mutate(!!sym(x) := paste0(
+          round(!!sym(paste0(x, "_mean")), 1) |> 
+            str_pad(width = 2, side = "left", pad = "0") |> 
+            str_pad(width = 4, side = "left", pad = "0"), 
+          " (", round(cv, 1), ")")
+        ) |> 
+        mutate(!!sym(x) := str_replace(!!sym(x), "\\(\\w+\\)", "(-)"), .keep = "none")
+    })) |> View("")
+    
+    mutate(df_comparison, pts2 = str_pad(round(pts_mean, 1), width = 2, side = "left", pad = "0"), .keep = "none")
+    
+    
+    
+    
+      
+
+      
       select(player_name, any_of(stat_selection$database_name), contains("at"), -ends_with("pct")) |>
       rename(any_of(setNames(stat_selection$database_name, stat_selection$formatted_name)), Player = player_name) |>
       left_join(
