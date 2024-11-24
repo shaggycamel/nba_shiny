@@ -65,7 +65,7 @@ saveRDS(df_fty_base, here::here("fty_base.RDS"))
 
 #### Map leagues
 purrr::walk2(unique(df_fty_base$platform), unique(df_fty_base$league_id), \(platform, league_id){
-  cat(paste0(platform, "_", league_id))
+  cat(paste0(platform, "_", league_id, "\n"))
   
   # Fantasy competitor -------------------------------------------------
   cat("\t- df_fantasy_competitor\n")
