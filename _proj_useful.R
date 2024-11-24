@@ -1,15 +1,15 @@
 
 # Custom Functions --------------------------------------------------------
 
-calc_z_pcts <- function(df){
+calc_z_pcts <- function(df, name_suffix=NULL){
   df |> 
     dplyr::mutate(
-      fg_pct = dplyr::coalesce(fgm / fga, 0), 
-      ft_pct = dplyr::coalesce(ftm / fta, 0),
-      fg_impact = (fg_pct - (sum(fgm, na.rm = TRUE) / sum(fga, na.rm = TRUE))) * fga,
-      ft_impact = (ft_pct - (sum(ftm, na.rm = TRUE) / sum(fta, na.rm = TRUE))) * fta,
-      fg_z = (fg_impact - mean(fg_impact, na.rm = TRUE)) / sd(fg_impact, na.rm = TRUE), 
-      ft_z = (ft_impact - mean(ft_impact, na.rm = TRUE)) / sd(ft_impact, na.rm = TRUE)
+      !!sym(paste0("fg", name_suffix, "_pct")) := dplyr::coalesce(!!sym(paste0("fgm", name_suffix)) / !!sym(paste0("fga", name_suffix)), 0), 
+      !!sym(paste0("ft", name_suffix, "_pct")) := dplyr::coalesce(!!sym(paste0("ftm", name_suffix)) / !!sym(paste0("fta", name_suffix)), 0),
+      fg_impact = (!!sym(paste0("fg", name_suffix, "_pct")) - (sum(!!sym(paste0("fgm", name_suffix)), na.rm = TRUE) / sum(!!sym(paste0("fga", name_suffix)), na.rm = TRUE))) * !!sym(paste0("fga", name_suffix)),
+      ft_impact = (!!sym(paste0("ft", name_suffix, "_pct")) - (sum(!!sym(paste0("ftm", name_suffix)), na.rm = TRUE) / sum(!!sym(paste0("fta", name_suffix)), na.rm = TRUE))) * !!sym(paste0("fta", name_suffix)),
+      !!sym(paste0("fg", name_suffix, "_z")) := (fg_impact - mean(fg_impact, na.rm = TRUE)) / sd(fg_impact, na.rm = TRUE), 
+      !!sym(paste0("ft", name_suffix, "_z")) := (ft_impact - mean(ft_impact, na.rm = TRUE)) / sd(ft_impact, na.rm = TRUE)
     ) |> dplyr::select(-tidyr::ends_with("impact"))
 }
 

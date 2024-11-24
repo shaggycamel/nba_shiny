@@ -491,13 +491,23 @@ server <- function(input, output, session) {
     df_comparison <<- df_nba_player_box_score |>
       filter(
         game_date <= cur_date,
-        # game_date >= cur_date - days(15)
-        game_date >= cur_date - case_when(input$date_range_switch == "Two Weeks" ~ days(15), input$date_range_switch == "One Month" ~ days(30), .default = days(7))
+        game_date >= cur_date - days(15)
+        # game_date >= cur_date - case_when(input$date_range_switch == "Two Weeks" ~ days(15), input$date_range_switch == "One Month" ~ days(30), .default = days(7))
       ) |> 
-      summarise(across(any_of(anl_cols$stat_cols), \(x) mean(x)), .by = c(player_id, player_name)) |>
-      mutate(across(where(is.numeric), \(x) replace_na(x, 0L))) |>
-      calc_z_pcts() |>
-      select(-ends_with("_pct")) |>
+      summarise(
+        across(
+          any_of(anl_cols$stat_cols), 
+          .fns = list(
+            mean = \(x) mean(x, na.rm = TRUE), 
+            var = \(x) var(x, na.rm = TRUE)
+          ), 
+          .names = "{.col}_{.fn}"),
+        .by = c(player_id, player_name)
+      ) |> 
+      mutate(across(ends_with("_mean"), \(x) replace_na(x, 0L))) |>
+      calc_z_pcts(name_suffix = "_mean") |>
+      select(-contains("_pct")) |>
+      rename_with(\(x) str_remove(x, "_mean"), contains("_mean")) |> 
       (\(t_df) {
         left_join(
           t_df,
@@ -519,7 +529,13 @@ server <- function(input, output, session) {
           },
           by = join_by(player_name, player_id)
         )
-      })() |>
+      })() |> 
+      mutate(
+        across(
+          any_of(anl_cols$stat_cols),
+          \(x) paste0(round(x, 2), " (", round(!!sym(paste0(toString(x), "_var"))),")")
+        )
+      ) |> 
       select(player_name, any_of(stat_selection$database_name), contains("at"), -ends_with("pct")) |>
       rename(any_of(setNames(stat_selection$database_name, stat_selection$formatted_name)), Player = player_name) |>
       left_join(
@@ -657,7 +673,7 @@ server <- function(input, output, session) {
       wk_th <- wk_th + 1
     }
     
-    
+
     pin_index <- match(str_subset(colnames(tbl_schedule), format(input$pin_date, "%d/%m")), colnames(tbl_schedule))
     pin_sum_cols <- if(input$pin_dir == "+") (pin_index-1):(wk_th+1) else 2:pin_index
     
