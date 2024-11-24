@@ -661,7 +661,7 @@ server <- function(input, output, session) {
     pin_index <- match(str_subset(colnames(tbl_schedule), format(input$pin_date, "%d/%m")), colnames(tbl_schedule))
     pin_sum_cols <- if(input$pin_dir == "+") (pin_index-1):(wk_th+1) else 2:pin_index
     
-    tbl_schedule_grid <- tbl_schedule |>
+    tbl_schedule_grid <<- tbl_schedule |>
       rowwise() |>
       mutate(
         # `Games From Pin` = factor(sum(c_across(str_subset(ts_names, format(input$pin_date, "%d/%m")):ts_names[wk_th]), na.rm = TRUE)),
