@@ -13,7 +13,7 @@ df_nba_news <<- nba.dataRub::dh_getQuery(db_con, "SELECT * FROM nba.transaction_
 
 cat("\t- df_nba_player_box_score\n")
 df_nba_player_box_score <<- nba.dataRub::dh_getQuery(db_con, "sql/player_box_score.sql") |> 
-  dplyr::mutate(game_date = force_tz(game_date, tz = "EST")) |> 
+  dplyr::mutate(game_date = lubridate::force_tz(game_date, tz = "EST")) |> 
   dplyr::mutate(season = ordered(season)) |>
   dplyr::mutate(season_type = ordered(season_type, c("Pre Season", "Regular Season", "Playoffs"))) |>
   dplyr::mutate(year_season_type = forcats::fct_cross(season_type, stringr::str_sub(season, start = 6), sep=" "))
@@ -65,7 +65,7 @@ saveRDS(df_fty_base, here::here("fty_base.RDS"))
 
 #### Map leagues
 purrr::walk2(unique(df_fty_base$platform), unique(df_fty_base$league_id), \(platform, league_id){
-  print(paste0(platform, "_", league_id))
+  cat(paste0(platform, "_", league_id))
   
   # Fantasy competitor -------------------------------------------------
   cat("\t- df_fantasy_competitor\n")
