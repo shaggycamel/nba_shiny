@@ -32,8 +32,6 @@ df_rolling_stats <<- df_nba_player_box_score |>
   })()
 
 
-
-
 # PAST
 df_past <<- df_fty_roster |> 
   filter(timestamp < cur_date) |> 
@@ -46,10 +44,10 @@ df_past <<- df_fty_roster |>
 
 
 df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NULL){
-
+    
   # TODAY
   df_today <- df_fty_roster |> 
-    filter(timestamp >= cur_date) |> 
+    filter(timestamp >= force_tz(as.Date(max(timestamp)), tz = "EST")) |> 
     select(-c(league_week, starts_with("opponent"))) |>
     bind_rows(
       filter(df_nba_player_box_score, player_name %in% add) |>
