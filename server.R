@@ -661,7 +661,7 @@ server <- function(input, output, session) {
   output$schedule_table <- renderDT({
     
     # Prepare tables to be presented
-    # tbl_schedule <<- tbl_week_games$data[[24]] |>
+    # tbl_schedule <<- tbl_week_games$data[[6]] |>
     tbl_schedule <- tbl_week_games$data[[match(input$week_selection, week_drop_box_choices)]] |>
       mutate(across(ends_with(")"), \(x) if_else(as.character(x) == "NULL", 0, 1))) |>
       mutate(across(c(contains("games"), Team), as.factor))
@@ -675,10 +675,10 @@ server <- function(input, output, session) {
       names(ts_names)[ix] <- paste0(nm[[1]], "_", names(nm))
       
       if(as.Date(paste0(year(selected_week_dates[1]), "/", str_extract(tmp_names[ix], "\\d{2}/\\d{2}")), "%Y/%d/%m") == selected_week_dates[2])
-        wk_th <- ix
+        wk_th <<- ix
       
       if(!exists("wk_th") && as.Date(paste0(year(selected_week_dates[1]), "/", str_extract(tmp_names[ix], "\\d{2}/\\d{2}")), "%Y/%d/%m") == selected_week_dates[2] + days(1))
-        wk_th <- ix - 1
+        wk_th <<- ix - 1
       
     }
     expected_elements <- c("1_Mon", "1_Tue", "1_Wed", "1_Thu", "1_Fri", "1_Sat", "1_Sun", "2_Mon", "2_Tue")
@@ -694,14 +694,14 @@ server <- function(input, output, session) {
       
       ts_names <- append(ts_names, ms_dt, after = ms_dt_ix)
       tbl_schedule <- mutate(tbl_schedule, !!ms_dt := NA_real_, .after = ms_dt_ix + 1)
-      wk_th <- wk_th + 1
+      wk_th <<- wk_th + 1
     }
     
 
     pin_index <- match(str_subset(colnames(tbl_schedule), format(input$pin_date, "%d/%m")), colnames(tbl_schedule))
-    pin_sum_cols <- if(input$pin_dir == "+") (pin_index-1):(wk_th+1) else 2:pin_index
+    pin_sum_cols <- if(input$pin_dir == "+") pin_index:(wk_th+1) else 2:pin_index
     
-    tbl_schedule_grid <- tbl_schedule |>
+    tbl_schedule_grid <<- tbl_schedule |>
       rowwise() |>
       mutate(
         # `Games From Pin` = factor(sum(c_across(str_subset(ts_names, format(input$pin_date, "%d/%m")):ts_names[wk_th]), na.rm = TRUE)),
@@ -710,6 +710,8 @@ server <- function(input, output, session) {
       ) |>
       relocate(contains("games"), .after = wk_th + 1) |>
       mutate(across(ends_with(")"), \(x) as.factor(if_else(x == 0, ".", "1"))))
+    
+    
 
     # Present table -- TRY disabling vertical scroll on card and activating
     # on table instead...
@@ -789,7 +791,7 @@ server <- function(input, output, session) {
         ggplot(df_trend, aes(x = game_date, colour = player_name)) +
           geom_point(aes(y = {{ trend_selected_stat }}), alpha = 0.2) +
           geom_line(aes(y = smooth)) +
-          scale_x_date(name = NULL, breaks = df_nba_season_segments$mid_date, labels = df_nba_season_segments$year_season_type) +
+          scale_x_datetime(name = NULL, breaks = df_nba_season_segments$mid_date, labels = df_nba_season_segments$year_season_type) +
           geom_vline(xintercept = as.numeric(df_nba_season_segments$begin_date), colour = "grey") +
           ylim(0, NA) +
           labs(title = db_to_fmt_stat_name[[input$trend_select_stat]], x = NULL, y = NULL) +
