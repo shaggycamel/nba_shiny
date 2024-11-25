@@ -635,10 +635,10 @@ server <- function(input, output, session) {
       names(ts_names)[ix] <- paste0(nm[[1]], "_", names(nm))
       
       if(as.Date(paste0(year(selected_week_dates[1]), "/", str_extract(tmp_names[ix], "\\d{2}/\\d{2}")), "%Y/%d/%m") == selected_week_dates[2])
-        wk_th <- ix
+        wk_th <<- ix
       
       if(!exists("wk_th") && as.Date(paste0(year(selected_week_dates[1]), "/", str_extract(tmp_names[ix], "\\d{2}/\\d{2}")), "%Y/%d/%m") == selected_week_dates[2] + days(1))
-        wk_th <- ix - 1
+        wk_th <<- ix - 1
       
     }
     expected_elements <- c("1_Mon", "1_Tue", "1_Wed", "1_Thu", "1_Fri", "1_Sat", "1_Sun", "2_Mon", "2_Tue")
@@ -654,12 +654,12 @@ server <- function(input, output, session) {
       
       ts_names <- append(ts_names, ms_dt, after = ms_dt_ix)
       tbl_schedule <- mutate(tbl_schedule, !!ms_dt := NA_real_, .after = ms_dt_ix + 1)
-      wk_th <- wk_th + 1
+      wk_th <<- wk_th + 1
     }
     
     
     pin_index <- match(str_subset(colnames(tbl_schedule), format(input$pin_date, "%d/%m")), colnames(tbl_schedule))
-    pin_sum_cols <- if(input$pin_dir == "+") (pin_index-1):(wk_th+1) else 2:pin_index
+    pin_sum_cols <- if(input$pin_dir == "+") pin_index:(wk_th+1) else 2:pin_index
     
     tbl_schedule_grid <<- tbl_schedule |>
       rowwise() |>
