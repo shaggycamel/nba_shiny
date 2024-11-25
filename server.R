@@ -621,7 +621,7 @@ server <- function(input, output, session) {
   output$schedule_table <- renderDT({
     
     # Prepare tables to be presented
-    # tbl_schedule <<- tbl_week_games$data[[24]] |>
+    # tbl_schedule <<- tbl_week_games$data[[6]] |>
     tbl_schedule <- tbl_week_games$data[[match(input$week_selection, week_drop_box_choices)]] |>
       mutate(across(ends_with(")"), \(x) if_else(as.character(x) == "NULL", 0, 1))) |>
       mutate(across(c(contains("games"), Team), as.factor))
@@ -670,6 +670,8 @@ server <- function(input, output, session) {
       ) |>
       relocate(contains("games"), .after = wk_th + 1) |>
       mutate(across(ends_with(")"), \(x) as.factor(if_else(x == 0, ".", "1"))))
+    
+    
 
     # Present table -- TRY disabling vertical scroll on card and activating
     # on table instead...
@@ -749,7 +751,7 @@ server <- function(input, output, session) {
         ggplot(df_trend, aes(x = game_date, colour = player_name)) +
           geom_point(aes(y = {{ trend_selected_stat }}), alpha = 0.2) +
           geom_line(aes(y = smooth)) +
-          scale_x_date(name = NULL, breaks = df_nba_season_segments$mid_date, labels = df_nba_season_segments$year_season_type) +
+          scale_x_datetime(name = NULL, breaks = df_nba_season_segments$mid_date, labels = df_nba_season_segments$year_season_type) +
           geom_vline(xintercept = as.numeric(df_nba_season_segments$begin_date), colour = "grey") +
           ylim(0, NA) +
           labs(title = db_to_fmt_stat_name[[input$trend_select_stat]], x = NULL, y = NULL) +
