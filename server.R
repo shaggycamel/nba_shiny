@@ -67,11 +67,15 @@ server <- function(input, output, session) {
   login_modal <- function() {
     showModal(
       modalDialog(
+        tags$head(tags$style(HTML(".selectize-dropdown-content{min-width: 100%; box-sizing: border-box;}"))),
         selectizeInput(
           "fty_league_select", 
           label = NULL, 
           choices = unique(df_fty_base$league_name),
-          options = list(placeholder = "Select Fantasy League", onInitialize = I("function(){this.setValue('');}")),
+          options = list(
+            placeholder = "Select Fantasy League", 
+            onInitialize = I("function(){this.setValue('');}")
+          ),
           width = "100%"
         ),
         selectizeInput(

@@ -44,6 +44,15 @@ df_past <<- df_fty_roster |>
 
 
 df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NULL){
+  
+  print(paste("Sys.Date:", Sys.Date()))
+  print(paste("Sys.time:", Sys.time()))
+  print(paste("cur_date:", cur_date))
+  print(paste("EST date:", force_tz(as.Date(with_tz(Sys.time(), "EST")), tz = "EST")))
+  print(paste("EST time:", force_tz((with_tz(Sys.time(), "EST")), tz = "EST")))
+  print(paste("Max roster date:", force_tz(as.Date(max(df_fty_roster$timestamp)), tz = "EST")))
+  print(paste("Max roster timestamp:", force_tz((max(df_fty_roster$timestamp)), tz = "EST")))
+  
     
   # TODAY
   df_today <- df_fty_roster |> 
