@@ -37,18 +37,28 @@ df_nba_season_segments <<- nba.dataRub::dh_getQuery(db_con, "sql/season_segments
 
 # NBA schedule ------------------------------------------------------------
 
+# ALTERED THIS, NOW NEED TO CHECK IF IT WORKS
 cat("\t- df_nba_schedule\n")
-df_nba_schedule <<- nba.dataRub::dh_getQuery(db_con, "sql/nba_schedule.sql") |> 
+df_nba_schedule <<- nba.dataRub::dh_getQuery(db_con, "sql/season_segments.sql") |> 
+  dplyr::filter(season == cur_season, season_type == "Regular Season") |> 
+  dplyr::select(begin_date, end_date) |> 
+  dplyr::mutate(dplyr::across(tidyselect::ends_with("date"), as.Date)) |> 
+  tidyr::pivot_longer(cols = tidyselect::ends_with("date"), values_to = "game_date") |> 
+  tidyr::complete(game_date = seq.Date(min(game_date), max(game_date), by="day")) |> 
+  dplyr::select(game_date) |> 
+  dplyr::left_join(nba.dataRub::dh_getQuery(db_con, "sql/nba_schedule.sql")) |> 
   dplyr::mutate(
+    season = cur_season,
+    season_type = "Regular Season",
     game_date = lubridate::force_tz(game_date, tz = "EST"),
-    scheduled_to_play = 1 # used in h2h calculations
+    scheduled_to_play = ifelse(!is.na(game_id), 1, game_id) # used in h2h calculations
   )
 
 
 # NBA team roster -------------------------------------------------------
 
 cat("\t- df_nba_roster\n")
-df_nba_roster <<- nba.dataRub::dh_getQuery(db_con, "sql/nba_team_roster.sql")
+df_nba_roster <<- nba.dataRub::dh_getQuery(db_con, "sql/nba_team_roster.sql") 
 
 
 # Save base NBA objects -------------------------------------------------------
