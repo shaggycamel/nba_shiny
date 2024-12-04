@@ -26,7 +26,7 @@ server <- function(input, output, session) {
   fty_parameters_met <- reactiveVal(FALSE)
   
   db_con <<- if(Sys.info()["user"] == "fred") dh_createCon("postgres") else dh_createCon("cockroach") 
-  cur_date <<- force_tz(as.Date(with_tz(Sys.time(), "EST")), tz = "EST")
+  cur_date <<- strptime(Sys.time(), "%Y", tz = "EST")
   cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
   prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
   df_fty_base <<- readRDS("fty_base.RDS")

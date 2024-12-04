@@ -34,8 +34,12 @@ tbl_week_games <<- df_nba_schedule |>
   (\(t_df){
     bind_rows(
       t_df,
-      filter(t_df, game_day %in% c("Mon", "Tue")) |> 
-        mutate(week = week - 1)
+      inner_join(
+        t_df,
+        distinct(t_df, week, game_date) |> 
+          slice_min(game_date, n = 2, by = week)
+      ) |> 
+      mutate(week = week - 1)
     )
   })() |> 
   arrange(game_date) |> 

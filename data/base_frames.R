@@ -26,10 +26,11 @@ df_nba_season_segments <<- nba.dataRub::dh_getQuery(db_con, "sql/season_segments
   dplyr::mutate(dplyr::across(tidyselect::ends_with("date"), \(x) lubridate::force_tz(x, "EST"))) |> 
   (\(df){
     dplyr::bind_rows(
-      dplyr::filter(df, Sys.Date() > begin_date, Sys.Date() < end_date) |>
-        dplyr::mutate(end_date = Sys.Date()),
+      # REPLACE THIS SECTION WITH CUR_DATE?????
+      dplyr::filter(df, cur_date > begin_date, cur_date < end_date) |>
+        dplyr::mutate(end_date = cur_date),
 
-      setdiff(df, dplyr::filter(df, Sys.Date() > begin_date, Sys.Date() < end_date))
+      setdiff(df, dplyr::filter(df, cur_date > begin_date, cur_date < end_date))
     )
   })() |>
   dplyr::mutate(mid_date = begin_date + (end_date - begin_date) / 2)
@@ -44,7 +45,7 @@ df_nba_schedule <<- nba.dataRub::dh_getQuery(db_con, "sql/season_segments.sql") 
   dplyr::select(begin_date, end_date) |> 
   dplyr::mutate(dplyr::across(tidyselect::ends_with("date"), as.Date)) |> 
   tidyr::pivot_longer(cols = tidyselect::ends_with("date"), values_to = "game_date") |> 
-  tidyr::complete(game_date = seq.Date(min(game_date), max(game_date), by="day")) |> 
+  tidyr::complete(game_date = seq.Date(min(game_date), max(game_date), by = "day")) |> 
   dplyr::select(game_date) |> 
   dplyr::left_join(nba.dataRub::dh_getQuery(db_con, "sql/nba_schedule.sql")) |> 
   dplyr::mutate(
