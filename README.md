@@ -12,4 +12,4 @@
 - [ ] H2H table showing values as list stillll, why ??
 - [ ] Reserach graph state transition
 - [ ] Make categroies dynamin based on league selection
-- [ ] Complete fantasy overivew tab
+- [ ] Complete fantasy overivew ta

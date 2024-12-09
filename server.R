@@ -381,9 +381,14 @@ server <- function(input, output, session) {
       if(input$h2h_future_only) df_h <- filter(df_h, origin != "past")
       opp_id <- filter(df_h, competitor_id == as.numeric(input$h2h_competitor), league_week == input$h2h_week)$opponent_id[1]
 
+      cid = 2
+      oid = 7
+      lw = 7
       df_h2h_week_game_count <<- bind_rows(
-        filter(df_h, competitor_id == as.numeric(input$h2h_competitor), league_week == input$h2h_week),
-        filter(df_h, competitor_id == opp_id, league_week == input$h2h_week)
+        # filter(df_h, competitor_id == as.numeric(input$h2h_competitor), league_week == input$h2h_week),
+        # filter(df_h, competitor_id == opp_id, league_week == input$h2h_week)
+        filter(df_h, competitor_id == cid, league_week == lw),
+        filter(df_h, competitor_id == oid, league_week == lw)
       ) |> 
       mutate(inj_status = case_when(
         scheduled_to_play == 1 & str_detect(player_injury_status, "^O|INJ") ~ "1*",
@@ -398,10 +403,13 @@ server <- function(input, output, session) {
           summarise(across(starts_with("20"), \(x) as.character(sum(x == "1", na.rm = TRUE))), .by = c(player_team, player_name))
 
         bind_rows(
-          inner_func(df, opp_id),
-          inner_func(df, as.numeric(input$h2h_competitor)),
+          # inner_func(df, opp_id),
+          # inner_func(df, as.numeric(input$h2h_competitor)),
+          inner_func(df, oid),
+          inner_func(df, cid),
           setNames(as.data.frame(matrix(rep(NA, length(colnames(df))), nrow = 1)), colnames(df)),
-          select(filter(df, competitor_id == as.numeric(input$h2h_competitor)), starts_with(c("player", "20"))) |>
+          # select(filter(df, competitor_id == as.numeric(input$h2h_competitor)), starts_with(c("player", "20"))) |>
+          select(filter(df, competitor_id == cid), starts_with(c("player", "20"))) |>
             arrange(player_name) |>
             mutate(across(starts_with("20"), \(x) as.character(x)))
         )
@@ -416,7 +424,8 @@ server <- function(input, output, session) {
         mutate(df, Total = Ttl)
       })() |> 
       mutate(Total = if_else(Total == 0 & is.na(player_team), NA, Total)) |>
-      mutate(fty_matchup_week = as.numeric(input$h2h_week)) |> 
+      # mutate(fty_matchup_week = as.numeric(input$h2h_week)) |> 
+      mutate(fty_matchup_week = lw) |> 
       left_join(
         select(df_week_game_count, week, team, following_week_games),
         by = join_by(player_team == team, fty_matchup_week == week)

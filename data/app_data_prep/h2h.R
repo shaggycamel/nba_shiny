@@ -34,12 +34,13 @@ df_rolling_stats <<- df_nba_player_box_score |>
 
 # PAST
 df_past <<- df_fty_roster |> 
-  filter(timestamp < cur_date) |> 
+  filter(timestamp < force_tz(as.Date(max(timestamp)), tz = "EST")) |> 
   mutate(dow = lubridate::wday(date, week_start = 1), .after = date) |> 
   left_join(
     select(df_nba_schedule, team, game_date, scheduled_to_play),
     by = join_by(player_team == team, date == game_date)
   ) |> 
+  select(-c(season_type, begin_date, end_date)) |> 
   rename(game_date = date)
 
 
@@ -53,28 +54,52 @@ df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NUL
   print(paste("Max roster date:", force_tz(as.Date(max(df_fty_roster$timestamp)), tz = "EST")))
   print(paste("Max roster timestamp:", force_tz((max(df_fty_roster$timestamp)), tz = "EST")))
   
-    
   # TODAY
   df_today <- df_fty_roster |> 
     filter(timestamp >= force_tz(as.Date(max(timestamp)), tz = "EST")) |> 
-    select(-c(league_week, starts_with("opponent"))) |>
+    mutate(dow = lubridate::wday(date, week_start = 1), .after = date) |> 
+    left_join(
+      select(df_nba_schedule, team, game_date, scheduled_to_play),
+      by = join_by(player_team == team, date == game_date)
+    ) |> 
+    rename(game_date = date) |>
     bind_rows(
       filter(df_nba_player_box_score, player_name %in% add) |>
         slice_max(order_by = game_date, by = player_name) |> 
         select(player_id, player_fantasy_id:=paste0(str_to_lower(platform_selected), "_id"), player_name, player_team = team_slug) |> 
         mutate(season = cur_season, competitor_id = c_id)
-    )
+    ) |> 
+    select(-c(season_type, begin_date, end_date))
+  print("today done")
   
   # FUTURE
-  df_future <<- left_join(
-      df_today,
+  df_future <<- df_today |> 
+    select(season, platform, league_id, competitor_id, player_fantasy_id, player_id, player_name, player_team, player_injury_status) |> # temp selection
+    right_join( # YES, RIGHT JOIN! -- NEED TO EXPAND DATES & ADD COMPETITOR ID REPEITION SO JOIN WORKS
       df_nba_schedule |> 
-        filter(game_date >= cur_date) |>
+        select(game_date, team, scheduled_to_play) |> 
+        filter(game_date > max(df_fty_roster$timestamp)),
+      by = join_by(player_team == team),
+      relationship = "many-to-many"
+    )
+    left_join(
+      df_fty_schedule |> 
+        select(league_week = week, week_start, week_end, competitor_id, opponent_id),
+      by = join_by(competitor_id, between(game_date, week_start, week_end))
+    ) |> 
+    mutate(dow = lubridate::wday(game_date, week_start = 1))
+    # select(-c(week_start, week_end))
+  
+   
+    select(-c(league_week, starts_with("opponent"))) |>
+    left_join(
+      df_nba_schedule |> 
+        filter(game_date > force_tz(as.Date(max(df_fty_roster$timestamp)), tz = "EST")) |>
         left_join(
           distinct(select(df_fty_schedule, starts_with("week"))),
           by = join_by(game_date >= week_start, game_date <= week_end)
         ) |>
-        select(game_date, fty_matchup_week=week, team),
+        select(fty_matchup_week=week, team),
       by = join_by(player_team == team),
       relationship = "many-to-many"
     ) |> 
@@ -84,15 +109,18 @@ df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NUL
       relationship = "many-to-many"
     ) |> 
     rename(league_week = fty_matchup_week) |> 
-    mutate(dow = lubridate::wday(date, week_start = 1)) |> 
+    mutate(dow = lubridate::wday(game_date, week_start = 1)) |> 
     left_join(
       select(df_nba_schedule, team, game_date, scheduled_to_play),
       by = join_by(player_team == team, game_date)    
     ) |>
     select(all_of(colnames(df_past)))
+  print("future done")
   
   # COMBINE
-  df_h2h <- bind_rows(df_past, df_future) |> 
+  df_h2h <- df_past |> 
+    bind_rows(df_today) |> 
+    bind_rows(df_future) |> 
     left_join(
       select(df_rolling_stats, -c(espn_id, yahoo_id, player_name, team_slug)),
       by = join_by(player_id, game_date)

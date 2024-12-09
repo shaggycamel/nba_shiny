@@ -47,7 +47,7 @@ df_nba_schedule <<- nba.dataRub::dh_getQuery(db_con, "sql/season_segments.sql") 
   tidyr::pivot_longer(cols = tidyselect::ends_with("date"), values_to = "game_date") |> 
   tidyr::complete(game_date = seq.Date(min(game_date), max(game_date), by = "day")) |> 
   dplyr::select(game_date) |> 
-  dplyr::left_join(nba.dataRub::dh_getQuery(db_con, "sql/nba_schedule.sql")) |> 
+  dplyr::left_join(nba.dataRub::dh_getQuery(db_con, "sql/nba_schedule.sql"), by = dplyr::join_by(game_date)) |> 
   dplyr::mutate(
     season = cur_season,
     season_type = "Regular Season",
@@ -84,9 +84,7 @@ purrr::walk2(unique(df_fty_base$platform), unique(df_fty_base$league_id), \(plat
   
   # Fantasy league schedule -------------------------------------------------
   cat("\t- df_fantasy_schedule\n")
-  df_fty_schedule <- nba.dataRub::dh_getQuery(db_con, glue::glue(readr::read_file(here::here("data/sql/fty_league_schedule.sql")))) |>
-    dplyr::select(-tidyselect::ends_with("_name"))
-  
+  df_fty_schedule <- nba.dataRub::dh_getQuery(db_con, glue::glue(readr::read_file(here::here("data/sql/fty_league_schedule.sql"))))
 
   # Fantasy competitor roster -------------------------------------------------------
   cat("\t- df_fty_roster\n")
