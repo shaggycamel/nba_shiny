@@ -398,8 +398,7 @@ server <- function(input, output, session) {
         .default = NA_character_
       )) |> 
       arrange(game_date) |> 
-      distinct() %T>%
-      glimpse() |> 
+      distinct() |> # NEEDS TO BE HERE TO STOP DUPLICATION ON SHINY SERVER...WTF!
       pivot_wider(id_cols = c(competitor_id, opponent_id, player_team, player_name), names_from = game_date, values_from = inj_status) |> 
       (\(df){
 
