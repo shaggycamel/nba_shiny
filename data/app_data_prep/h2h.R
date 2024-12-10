@@ -44,14 +44,6 @@ df_past <<- df_fty_roster |>
 
 df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NULL){
   
-  print(paste("Sys.Date:", Sys.Date()))
-  print(paste("Sys.time:", Sys.time()))
-  print(paste("cur_date:", cur_date))
-  print(paste("EST date:", force_tz(as.Date(with_tz(Sys.time(), "EST")), tz = "EST")))
-  print(paste("EST time:", force_tz((with_tz(Sys.time(), "EST")), tz = "EST")))
-  print(paste("Max roster date:", force_tz(as.Date(max(df_fty_roster$timestamp)), tz = "EST")))
-  print(paste("Max roster timestamp:", force_tz((max(df_fty_roster$timestamp)), tz = "EST")))
-  
   # TODAY
   df_today <- df_fty_roster |> 
     filter(timestamp >= force_tz(as.Date(max(timestamp)), tz = "EST")) |> 
@@ -68,7 +60,6 @@ df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NUL
         mutate(season = cur_season, competitor_id = c_id)
     ) |> 
     select(-c(season_type, begin_date, end_date))
-  print("today done")
   
   
   # FUTURE
@@ -91,10 +82,8 @@ df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NUL
     ) |> 
     mutate(dow = lubridate::wday(game_date, week_start = 1)) |> 
     select(any_of(colnames(df_past)))
-  print("future done")
-  
-  
-  
+
+    
   # COMBINE
   df_h2h <- bind_rows(list(past=df_past, today=df_today, future=df_future), .id = "origin") |> 
     left_join(

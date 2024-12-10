@@ -423,10 +423,17 @@ server <- function(input, output, session) {
         by = join_by(player_team == team, fty_matchup_week == week)
       ) |> 
       select(-fty_matchup_week, next_week = following_week_games)
+      
+      print("count")
+      print(df_h2h_week_game_count)
 
       df_h2h_week_game_count_tbl <<- select(df_h2h_week_game_count, starts_with("player"), all_of(sort(str_subset(colnames(df_h2h_week_game_count), "\\d"))), Total, `Next Week` = next_week, Team = player_team, Player = player_name) |> 
         rename_with(.fn = \(x) format(as.Date(x), "%a (%d/%m)"), .cols = starts_with("20")) |> 
         mutate(Player = str_replace_all(Player, setNames(unlist(ls_fty_cid_to_name), map_chr(names(ls_fty_cid_to_name), \(x) paste0("^", x, "$")))))
+      
+      print()
+      print("tbl")
+      print(df_h2h_week_game_count_tbl)
 
       max_game_count <- max(df_h2h_week_game_count_tbl$Total, na.rm = TRUE)
       min_next_week_game_count <- min(df_h2h_week_game_count_tbl$`Next Week`, na.rm = TRUE)
