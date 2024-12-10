@@ -9,6 +9,8 @@ library(ggplot2)
 library(plotly)
 library(shinycssloaders)
 
+library(magrittr) # delete
+
 
 # Initialisation files ----------------------------------------------------
 
@@ -380,7 +382,10 @@ server <- function(input, output, session) {
       if(input$h2h_future_from_tomorrow) df_h <- mutate(df_h, origin = if_else(origin == "today", "past", origin))
       if(input$h2h_future_only) df_h <- filter(df_h, origin != "past")
       opp_id <- filter(df_h, competitor_id == as.numeric(input$h2h_competitor), league_week == input$h2h_week)$opponent_id[1]
-
+      
+      filter(df_h, league_week == input$h2h_week, competitor_id == as.numeric(input$h2h_competitor), game_date == cur_date) |> 
+        print()
+      
       df_h2h_week_game_count <<- bind_rows(
         filter(df_h, competitor_id == as.numeric(input$h2h_competitor), league_week == input$h2h_week),
         filter(df_h, competitor_id == opp_id, league_week == input$h2h_week)
@@ -424,17 +429,10 @@ server <- function(input, output, session) {
       ) |> 
       select(-fty_matchup_week, next_week = following_week_games)
       
-      print("count")
-      print(df_h2h_week_game_count)
-
       df_h2h_week_game_count_tbl <<- select(df_h2h_week_game_count, starts_with("player"), all_of(sort(str_subset(colnames(df_h2h_week_game_count), "\\d"))), Total, `Next Week` = next_week, Team = player_team, Player = player_name) |> 
         rename_with(.fn = \(x) format(as.Date(x), "%a (%d/%m)"), .cols = starts_with("20")) |> 
         mutate(Player = str_replace_all(Player, setNames(unlist(ls_fty_cid_to_name), map_chr(names(ls_fty_cid_to_name), \(x) paste0("^", x, "$")))))
       
-      print()
-      print("tbl")
-      print(df_h2h_week_game_count_tbl)
-
       max_game_count <- max(df_h2h_week_game_count_tbl$Total, na.rm = TRUE)
       min_next_week_game_count <- min(df_h2h_week_game_count_tbl$`Next Week`, na.rm = TRUE)
 
