@@ -391,15 +391,15 @@ server <- function(input, output, session) {
         filter(df_h, competitor_id == opp_id, league_week == input$h2h_week)
         # filter(df_h, competitor_id == cid, league_week == lw),
         # filter(df_h, competitor_id == oid, league_week == lw)
-      ) %T>%
-      glimpse() |> 
+      ) |> 
       mutate(inj_status = case_when(
         scheduled_to_play == 1 & str_detect(player_injury_status, "^O|INJ") ~ "1*",
          scheduled_to_play == 1 ~ "1",
         .default = NA_character_
-      )) %T>%
-      glimpse() |> 
+      )) |> 
       arrange(game_date) |> 
+      distinct() %T>%
+      glimpse() |> 
       pivot_wider(id_cols = c(competitor_id, opponent_id, player_team, player_name), names_from = game_date, values_from = inj_status) |> 
       (\(df){
 
