@@ -21,7 +21,7 @@ page_fty_league_overview <- layout_sidebar(
         "Z Scores" = keep(fmt_to_db_stat_name, \(x) str_detect(x, "_z"))
       )
     ),
-    switchInput("fty_lg_ov_rank_toggle", value = TRUE, onLabel = "Value", offLabel = "Rank", size = "small"),
+    switchInput("fty_lg_ov_rank_toggle", value = FALSE, onLabel = "Value", offLabel = "Rank", size = "small"),
     # open = "open"
   ),
   card(full_screen = TRUE, plotlyOutput("fty_league_overview_rank_plot")),
