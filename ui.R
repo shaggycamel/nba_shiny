@@ -11,6 +11,7 @@ library(readr)
 # FTY League Overview -----------------------------------------------------
 
 page_fty_league_overview <- layout_sidebar(
+  tags$head(tags$style(HTML(".selectize-dropdown-content{min-width: 100%; box-sizing: border-box;}"))),
   sidebar = sidebar(
     selectInput(
       "fty_lg_ov_cat", 
@@ -146,6 +147,8 @@ page_info <- card(
 # Main UI -----------------------------------------------------------------
 
 ui <- page_navbar(
+  tags$head(tags$style(HTML(".selectize-dropdown{z-index: 999}"))),
+  tags$head(tags$style(HTML(".selectize-dropdown-content{white-space: nowrap;}"))),
   title = "NBA Fantasy",
   id = "title_container",
   nav_spacer(),
