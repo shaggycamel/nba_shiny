@@ -9,8 +9,6 @@ library(ggplot2)
 library(plotly)
 library(shinycssloaders)
 
-library(magrittr) # delete
-
 
 # Initialisation files ----------------------------------------------------
 
@@ -288,11 +286,13 @@ server <- function(input, output, session) {
       if(input$h2h_future_only) df_h <- filter(df_h, origin != "past")
       opp_id <- filter(df_h, league_week == input$h2h_week, competitor_id == as.numeric(input$h2h_competitor))$opponent_id[1]
       
-      h2h_plt <- bind_rows(
-        filter(df_h, competitor_id == as.numeric(input$h2h_competitor), league_week == input$h2h_week),
-        filter(df_h, competitor_id == opp_id, league_week == input$h2h_week)
-      ) |> 
-      filter(!is.na(player_id), player_injury_status %in% c("ACTIVE", "DAY_TO_DAY") | is.na(player_injury_status)) |> 
+      h2h_plt <- df_h |> 
+        filter(
+          competitor_id %in% c(as.numeric(input$h2h_competitor), opp_id),
+          league_week == input$h2h_week,
+          scheduled_to_play == 1, 
+          player_injury_status %in% c("ACTIVE", "DAY_TO_DAY")
+        ) |> # DELETE
       pivot_longer(cols = c(ast, stl, blk, tov, pts, ftm, fta, fgm, fga, fg3_m, reb), names_to = "stat", values_to = "value") |>
       select(competitor_id, player_name, stat, value) |>
       summarise(value = sum(value, na.rm = TRUE), .by = c(competitor_id, player_name, stat)) |> 
@@ -383,54 +383,51 @@ server <- function(input, output, session) {
       if(input$h2h_future_only) df_h <- filter(df_h, origin != "past")
       opp_id <- filter(df_h, competitor_id == as.numeric(input$h2h_competitor), league_week == input$h2h_week)$opponent_id[1]
       
-      cid = 2
-      oid = 7
-      lw = 7
-      df_h2h_week_game_count <<- bind_rows(
-        filter(df_h, competitor_id == as.numeric(input$h2h_competitor), league_week == input$h2h_week),
-        filter(df_h, competitor_id == opp_id, league_week == input$h2h_week)
-        # filter(df_h, competitor_id == cid, league_week == lw),
-        # filter(df_h, competitor_id == oid, league_week == lw)
-      ) |> 
-      mutate(inj_status = case_when(
-        scheduled_to_play == 1 & str_detect(player_injury_status, "^O|INJ") ~ "1*",
-         scheduled_to_play == 1 ~ "1",
-        .default = NA_character_
-      )) |> 
-      arrange(game_date) |> 
-      distinct() |> # NEEDS TO BE HERE TO STOP DUPLICATION ON SHINY SERVER...WTF!
-      pivot_wider(id_cols = c(competitor_id, opponent_id, player_team, player_name), names_from = game_date, values_from = inj_status) |> 
-      (\(df){
-
-        inner_func <- function(x, nm) filter(x, competitor_id == nm) |>
-          mutate(player_team = "Total", player_name = str_trim(nm)) |>
-          summarise(across(starts_with("20"), \(x) as.character(sum(x == "1", na.rm = TRUE))), .by = c(player_team, player_name))
-
-        bind_rows(
-          inner_func(df, opp_id),
-          inner_func(df, as.numeric(input$h2h_competitor)),
-          setNames(as.data.frame(matrix(rep(NA, length(colnames(df))), nrow = 1)), colnames(df)),
-          select(filter(df, competitor_id == as.numeric(input$h2h_competitor)), starts_with(c("player", "20"))) |>
-            arrange(player_name) |>
-            mutate(across(starts_with("20"), \(x) as.character(x)))
-        )
-      })() |> 
-      select(-starts_with(c("competitor", "opponent"))) |> 
-      (\(df){
-        Ttl = as.data.frame(t(df)) |>
-          mutate(across(everything(), \(x) ifelse(is.na(as.numeric(x)) | as.numeric(x) <= 10, as.numeric(x), 10))) |>
-          summarise(across(everything(), \(x) sum(x, na.rm = TRUE))) |>
-          t()
-
-        mutate(df, Total = Ttl)
-      })() |> 
-      mutate(Total = if_else(Total == 0 & is.na(player_team), NA, Total)) |> 
-      mutate(fty_matchup_week = as.numeric(input$h2h_week)) |>
-      left_join(
-        select(df_week_game_count, week, team, following_week_games),
-        by = join_by(player_team == team, fty_matchup_week == week)
-      ) |> 
-      select(-fty_matchup_week, next_week = following_week_games)
+      
+      df_h2h_week_game_count <<- df_h |> 
+        filter(
+          competitor_id %in% c(as.numeric(input$h2h_competitor), opp_id), 
+          league_week == input$h2h_week 
+        ) |> 
+        distinct() |> # NEEDS TO BE HERE TO STOP DUPLICATION ON SHINY SERVER...WTF!
+        mutate(inj_status = case_when(
+          scheduled_to_play == 1 & str_detect(player_injury_status, "^O|INJ") ~ "1*",
+           scheduled_to_play == 1 ~ "1",
+          .default = NA_character_
+        )) |> 
+        arrange(game_date) |> 
+        pivot_wider(id_cols = c(competitor_id, opponent_id, player_team, player_name), names_from = game_date, values_from = inj_status) |> 
+        (\(df){
+  
+          inner_func <- function(x, nm) filter(x, competitor_id == nm) |>
+            mutate(player_team = "Total", player_name = str_trim(nm)) |>
+            summarise(across(starts_with("20"), \(x) as.character(sum(x == "1", na.rm = TRUE))), .by = c(player_team, player_name))
+  
+          bind_rows(
+            inner_func(df, opp_id),
+            inner_func(df, as.numeric(input$h2h_competitor)),
+            setNames(as.data.frame(matrix(rep(NA, length(colnames(df))), nrow = 1)), colnames(df)),
+            select(filter(df, competitor_id == as.numeric(input$h2h_competitor)), starts_with(c("player", "20"))) |>
+              arrange(player_name) |>
+              mutate(across(starts_with("20"), \(x) as.character(x)))
+          )
+        })() |> 
+        select(-starts_with(c("competitor", "opponent"))) |> 
+        (\(df){
+          Ttl = as.data.frame(t(df)) |>
+            mutate(across(everything(), \(x) ifelse(is.na(as.numeric(x)) | as.numeric(x) <= 10, as.numeric(x), 10))) |>
+            summarise(across(everything(), \(x) sum(x, na.rm = TRUE))) |>
+            t()
+  
+          mutate(df, Total = Ttl)
+        })() |> 
+        mutate(Total = if_else(Total == 0 & is.na(player_team), NA, Total)) |> 
+        mutate(fty_matchup_week = as.numeric(input$h2h_week)) |>
+        left_join(
+          select(df_week_game_count, week, team, following_week_games),
+          by = join_by(player_team == team, fty_matchup_week == week)
+        ) |> 
+        select(-fty_matchup_week, next_week = following_week_games)
       
       df_h2h_week_game_count_tbl <<- select(df_h2h_week_game_count, starts_with("player"), all_of(sort(str_subset(colnames(df_h2h_week_game_count), "\\d"))), Total, `Next Week` = next_week, Team = player_team, Player = player_name) |> 
         rename_with(.fn = \(x) format(as.Date(x), "%a (%d/%m)"), .cols = starts_with("20")) |> 
