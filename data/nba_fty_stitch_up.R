@@ -15,7 +15,8 @@ df_stitch <- bind_rows(
 df_nba_player_box_score <<- df_nba_player_box_score |> 
   left_join(
     df_stitch, 
-    by = setNames("player_fantasy_id", paste0(str_to_lower(platform_selected), "_id"))
+    by = setNames("player_fantasy_id", paste0(str_to_lower(platform_selected), "_id")),
+    relationship = "many-to-many"
   )
 
 print("Stiched")

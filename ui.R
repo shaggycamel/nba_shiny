@@ -147,8 +147,9 @@ page_info <- card(
 # Main UI -----------------------------------------------------------------
 
 ui <- page_navbar(
-  tags$head(tags$style(HTML(".selectize-dropdown{z-index: 999}"))),
-  tags$head(tags$style(HTML(".selectize-dropdown-content{white-space: nowrap;}"))),
+  # Move to respective page
+  # tags$head(tags$style(HTML(".selectize-dropdown{z-index: 999}"))),
+  # tags$head(tags$style(HTML(".selectize-dropdown-content{white-space: nowrap;}"))),
   title = "NBA Fantasy",
   id = "title_container",
   nav_spacer(),
