@@ -208,7 +208,7 @@ server <- function(input, output, session) {
     req(fty_parameters_met(), exists("df_fty_base"))
     
     plot_col <- input$fty_lg_ov_cat
-    if(!input$fty_lg_ov_rank_toggle) plot_col <- paste0(plot_col, "_rank")
+    if(input$fty_lg_ov_rank_toggle) plot_col <- paste0(plot_col, "_rank")
     df_fty_league_overview <- df_lo()
     df_point <- filter(df_fty_league_overview, as.integer(matchup_sigmoid) == matchup_sigmoid)
 
@@ -220,7 +220,7 @@ server <- function(input, output, session) {
         labs(title = paste("Competitor Category Ranking:", db_to_fmt_stat_name[[input$fty_lg_ov_cat]]), x = "Matchup Period", y = input$fty_lg_ov_cat) +
         theme_bw()
     
-    if(!input$fty_lg_ov_rank_toggle) plt <- plt + scale_y_reverse(n.breaks = length(ls_fty_name_to_cid))
+    if(input$fty_lg_ov_rank_toggle) plt <- plt + scale_y_reverse(n.breaks = length(ls_fty_name_to_cid))
 
     ggplotly(plt) |>
       # Remove hover for line traces: 0:8 for each competitor
