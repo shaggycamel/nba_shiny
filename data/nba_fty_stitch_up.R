@@ -1,7 +1,7 @@
 
 df_stitch <- bind_rows(
   df_fty_roster |> 
-    filter(timestamp > max(timestamp) - 1000) |> 
+    filter(timestamp > max(timestamp) - 1000, .by = competitor_id) |> 
     select(player_fantasy_id, player_injury_status) |> 
     mutate(player_availability = "rostered"),
 

@@ -111,7 +111,7 @@ server <- function(input, output, session) {
     load("nba_base.RData", envir = globalenv())
     .load_datasets <- function() walk(list.files(here("data", "app_data_prep"), full.names = TRUE), \(x) source(x, local = TRUE))
     .load_datasets()
-    source(here("data", "nba_fty_stitch_up.R"))
+     source(here("data", "nba_fty_stitch_up.R"))
     
     # Extra variable that relies on datasets
     cur_date <<- if(cur_date > max(df_fty_schedule$week_end)) max(df_fty_schedule$week_end) else cur_date
@@ -287,67 +287,75 @@ server <- function(input, output, session) {
       opp_id <- filter(df_h, league_week == input$h2h_week, competitor_id == as.numeric(input$h2h_competitor))$opponent_id[1]
       
       h2h_plt <- df_h |> 
+        # Need to join player injury status and coalesce it for add players (player_injury_status_temp).
+        # Initially I tried doing this in h2h prep file, but it kept breaking other things
+        left_join(
+          select(df_stitch, player_fantasy_id, player_injury_status_temp=player_injury_status), 
+          by = join_by(player_fantasy_id)
+        ) |> 
+        mutate(player_injury_status = coalesce(player_injury_status, player_injury_status_temp)) |> 
+        select(-player_injury_status_temp) |> 
         filter(
           competitor_id %in% c(as.numeric(input$h2h_competitor), opp_id),
           league_week == input$h2h_week,
           scheduled_to_play == 1, 
           player_injury_status %in% c("ACTIVE", "DAY_TO_DAY")
-        ) |> # DELETE
-      pivot_longer(cols = c(ast, stl, blk, tov, pts, ftm, fta, fgm, fga, fg3_m, reb), names_to = "stat", values_to = "value") |>
-      select(competitor_id, player_name, stat, value) |>
-      summarise(value = sum(value, na.rm = TRUE), .by = c(competitor_id, player_name, stat)) |> 
-      (\(t_df){
-        bind_rows(
-          # fg_pct
-          filter(t_df, stat %in%  c("fga", "fgm")) |>
-            pivot_wider(names_from = stat, values_from = value) |>
-            arrange(desc(fgm)) |>
-            mutate(fg_pct = round(fgm / fga, 2)) |>
-            summarise(
-              competitor_roster = paste0(player_name, " ", fg_pct, " (", round(fgm, 2), "/", round(fga, 2), ")", collapse = "\n"),
-              value = sum(fgm) / sum(fga),
-              .by = competitor_id
-            ) |>
-            mutate(stat = "fg_pct"),
-
-          #ft_pct
-          filter(t_df, stat %in%  c("fta", "ftm")) |>
-            pivot_wider(names_from = stat, values_from = value) |>
-            arrange(desc(ftm)) |>
-            mutate(ft_pct = round(ftm / fta, 2)) |>
-            summarise(
-              competitor_roster = paste0(player_name, " ", ft_pct, " (", round(ftm, 2), "/", round(fta, 2), ")", collapse = "\n"),
-              value = sum(ftm) / sum(fta),
-              .by = competitor_id
-            ) |>
-            mutate(stat = "ft_pct"),
-
-          # tov
-          filter(t_df, stat == "tov") |>
-            arrange(value) |>
-            summarise(
-              competitor_roster = paste(player_name, round(value), collapse = "\n"),
-              value = sum(value),
-              .by = c(competitor_id, stat)
-            ),
-
-          # the rest
-          filter(t_df, !stat %in% c("fga", "fgm", "fta", "ftm", "tov")) |>
-            arrange(desc(value)) |>
-            summarise(
-              competitor_roster = paste(player_name, round(value), collapse = "\n"),
-              value = sum(value),
-              .by = c(competitor_id, stat)
-            )
-        )
-      })() |> 
-      left_join(
-        filter(df_fty_base, platform == platform_selected, league_id == as.numeric(league_selected)) |> 
-          select(competitor_id, competitor_name),
-        by = join_by(competitor_id)
-      ) |> 
-      mutate(competitor_name = ordered(competitor_name, c(ls_fty_cid_to_name[as.character(opp_id)], ls_fty_cid_to_name[input$h2h_competitor])))
-      
+        ) |> 
+        pivot_longer(cols = c(ast, stl, blk, tov, pts, ftm, fta, fgm, fga, fg3_m, reb), names_to = "stat", values_to = "value") |>
+        select(competitor_id, player_name, stat, value) |>
+        summarise(value = sum(value, na.rm = TRUE), .by = c(competitor_id, player_name, stat)) |> 
+        (\(t_df){
+          bind_rows(
+            # fg_pct
+            filter(t_df, stat %in%  c("fga", "fgm")) |>
+              pivot_wider(names_from = stat, values_from = value) |>
+              arrange(desc(fgm)) |>
+              mutate(fg_pct = round(fgm / fga, 2)) |>
+              summarise(
+                competitor_roster = paste0(player_name, " ", fg_pct, " (", round(fgm, 2), "/", round(fga, 2), ")", collapse = "\n"),
+                value = sum(fgm) / sum(fga),
+                .by = competitor_id
+              ) |>
+              mutate(stat = "fg_pct"),
+  
+            #ft_pct
+            filter(t_df, stat %in%  c("fta", "ftm")) |>
+              pivot_wider(names_from = stat, values_from = value) |>
+              arrange(desc(ftm)) |>
+              mutate(ft_pct = round(ftm / fta, 2)) |>
+              summarise(
+                competitor_roster = paste0(player_name, " ", ft_pct, " (", round(ftm, 2), "/", round(fta, 2), ")", collapse = "\n"),
+                value = sum(ftm) / sum(fta),
+                .by = competitor_id
+              ) |>
+              mutate(stat = "ft_pct"),
+  
+            # tov
+            filter(t_df, stat == "tov") |>
+              arrange(value) |>
+              summarise(
+                competitor_roster = paste(player_name, round(value), collapse = "\n"),
+                value = sum(value),
+                .by = c(competitor_id, stat)
+              ),
+  
+            # the rest
+            filter(t_df, !stat %in% c("fga", "fgm", "fta", "ftm", "tov")) |>
+              arrange(desc(value)) |>
+              summarise(
+                competitor_roster = paste(player_name, round(value), collapse = "\n"),
+                value = sum(value),
+                .by = c(competitor_id, stat)
+              )
+          )
+        })() |> 
+        left_join(
+          filter(df_fty_base, platform == platform_selected, league_id == as.numeric(league_selected)) |> 
+            select(competitor_id, competitor_name),
+          by = join_by(competitor_id)
+        ) |> 
+        mutate(competitor_name = ordered(competitor_name, c(ls_fty_cid_to_name[as.character(opp_id)], ls_fty_cid_to_name[input$h2h_competitor])))
+        
       (
         ggplot(h2h_plt, aes(x = stat, y = value, fill = competitor_name, text = paste(round(value, 2), "\n\n", competitor_roster))) +
           geom_col(position = "fill") +
@@ -859,6 +867,3 @@ server <- function(input, output, session) {
   })
 
 }
-
-
-                                   

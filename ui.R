@@ -40,7 +40,7 @@ page_h2h <- layout_sidebar(
     ),
     layout_columns(
       selectInput("h2h_ex_player", "Exclude", choices = character(0), multiple = TRUE),
-      selectInput("h2h_add_player", "Add", choices = character(0), multiple = TRUE, width = "400px"),
+      selectInput("h2h_add_player", "Add", choices = character(0), multiple = TRUE),
     ),
     layout_columns(
       checkboxInput("h2h_future_only", "Future"),
