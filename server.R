@@ -1,5 +1,4 @@
 
-
 # Libraries ---------------------------------------------------------------
 
 library(dplyr)
@@ -25,7 +24,7 @@ server <- function(input, output, session) {
 
   fty_parameters_met <- reactiveVal(FALSE)
   
-  db_con <<- if(Sys.info()["user"] == "fred") dh_createCon("postgres") else dh_createCon("cockroach") 
+  db_con <<- if(Sys.info()["user"] == "fred") dh_createCon("postgres") else dh_createCon("cockroach")
   cur_date <<- strptime(Sys.time(), "%Y", tz = "EST")
   cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
   prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
@@ -114,7 +113,9 @@ server <- function(input, output, session) {
      source(here("data", "nba_fty_stitch_up.R"))
     
     # Extra variable that relies on datasets
+    print(cur_date)
     cur_date <<- if(cur_date > max(df_fty_schedule$week_end)) max(df_fty_schedule$week_end) else cur_date
+    print(cur_date)
     cur_week <<- df_week_game_count |>
       mutate(week_end = if_else(week_end - week_start < 6, week_start + 6, week_end)) |>
       filter(cur_date >= week_start, cur_date <= week_end) |>
@@ -509,8 +510,8 @@ server <- function(input, output, session) {
     df_comparison <<- df_nba_player_box_score |>
       filter(
         game_date <= cur_date,
-        # game_date >= cur_date - days(15)
-        game_date >= cur_date - case_when(input$date_range_switch == "Two Weeks" ~ days(15), input$date_range_switch == "One Month" ~ days(30), .default = days(7))
+        game_date >= cur_date - days(15)
+        # game_date >= cur_date - case_when(input$date_range_switch == "Two Weeks" ~ days(15), input$date_range_switch == "One Month" ~ days(30), .default = days(7))
       ) |> 
       summarise(across(any_of(anl_cols$stat_cols), \(x) mean(x)), .by = c(player_id, player_name)) |>
       mutate(across(where(is.numeric), \(x) replace_na(x, 0L))) |>

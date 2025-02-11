@@ -92,7 +92,7 @@ purrr::walk2(unique(df_fty_base$platform), unique(df_fty_base$league_id), \(plat
     dplyr::mutate(timestamp = lubridate::with_tz(timestamp, tzone = "EST")) |> 
     dplyr::mutate(date = lubridate::as_date(timestamp), .after = timestamp) |> 
     dplyr::filter(max(timestamp) - timestamp < 1000, .by = c(date, competitor_id)) |>
-    dplyr::select(-c(competitor_name, opponent_name)) |> 
+    dplyr::select(-c(competitor_name, opponent_name)) |>
     dplyr::left_join(
       dplyr::select(df_nba_season_segments, tidyr::starts_with("season"), begin_date, end_date),
       by = dplyr::join_by(season, timestamp >= begin_date, timestamp <= end_date)
