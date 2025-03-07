@@ -19,7 +19,7 @@ source(here("_proj_useful.R"))
 # Server code -------------------------------------------------------------
 
 server <- function(input, output, session) {
-
+  
 # Variables ---------------------------------------------------------------
 
   fty_parameters_met <- reactiveVal(FALSE)
@@ -293,9 +293,9 @@ server <- function(input, output, session) {
             filter(df_tmp, origin == "past"),
             filter(df_tmp, origin != "past") |> 
               select(-player_injury_status) |> 
-              left_join(select(df_stitch, player_fantasy_id, player_injury_status), by = join_by(player_fantasy_id))  
+              left_join(select(df_stitch, player_fantasy_id, player_injury_status), by = join_by(player_fantasy_id))
           )
-        })() |> 
+        })() |>
         filter(
           competitor_id %in% c(as.numeric(input$h2h_competitor), opp_id),
           league_week == input$h2h_week,
@@ -355,7 +355,8 @@ server <- function(input, output, session) {
             select(competitor_id, competitor_name),
           by = join_by(competitor_id)
         ) |> 
-        mutate(competitor_name = ordered(competitor_name, c(ls_fty_cid_to_name[as.character(opp_id)], ls_fty_cid_to_name[input$h2h_competitor])))
+        mutate(competitor_name = ordered(competitor_name, c(ls_fty_cid_to_name[as.character(opp_id)], ls_fty_cid_to_name[input$h2h_competitor]))) |> 
+        distinct()
         
       (
         ggplot(h2h_plt, aes(x = stat, y = value, fill = competitor_name, text = paste(round(value, 2), "\n\n", competitor_roster))) +
@@ -443,7 +444,8 @@ server <- function(input, output, session) {
           select(df_week_game_count, week, team, following_week_games),
           by = join_by(player_team == team, fty_matchup_week == week)
         ) |> 
-        select(-fty_matchup_week, next_week = following_week_games)
+        select(-fty_matchup_week, next_week = following_week_games) |> 
+        distinct()
       
       df_h2h_week_game_count_tbl <<- select(df_h2h_week_game_count, starts_with("player"), all_of(sort(str_subset(colnames(df_h2h_week_game_count), "\\d"))), Total, `Next Week` = next_week, Team = player_team, Player = player_name) |> 
         rename_with(.fn = \(x) format(as.Date(x), "%a (%d/%m)"), .cols = starts_with("20")) |> 
