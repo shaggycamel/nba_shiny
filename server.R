@@ -288,14 +288,14 @@ server <- function(input, output, session) {
       opp_id <- filter(df_h, league_week == input$h2h_week, competitor_id == as.numeric(input$h2h_competitor))$opponent_id[1]
       
       h2h_plt <- df_h |> 
-        # Need to join player injury status and coalesce it for add players (player_injury_status_temp).
-        # Initially I tried doing this in h2h prep file, but it kept breaking other things
-        left_join(
-          select(df_stitch, player_fantasy_id, player_injury_status_temp=player_injury_status), 
-          by = join_by(player_fantasy_id)
-        ) |> 
-        mutate(player_injury_status = coalesce(player_injury_status, player_injury_status_temp)) |> 
-        select(-player_injury_status_temp) |> 
+        (\(df_tmp){
+          bind_rows(
+            filter(df_tmp, origin == "past"),
+            filter(df_tmp, origin != "past") |> 
+              select(-player_injury_status) |> 
+              left_join(select(df_stitch, player_fantasy_id, player_injury_status), by = join_by(player_fantasy_id))  
+          )
+        })() |> 
         filter(
           competitor_id %in% c(as.numeric(input$h2h_competitor), opp_id),
           league_week == input$h2h_week,
@@ -305,10 +305,10 @@ server <- function(input, output, session) {
         pivot_longer(cols = c(ast, stl, blk, tov, pts, ftm, fta, fgm, fga, fg3_m, reb), names_to = "stat", values_to = "value") |>
         select(competitor_id, player_name, stat, value) |>
         summarise(value = sum(value, na.rm = TRUE), .by = c(competitor_id, player_name, stat)) |> 
-        (\(t_df){
+        (\(df_tmp){
           bind_rows(
             # fg_pct
-            filter(t_df, stat %in%  c("fga", "fgm")) |>
+            filter(df_tmp, stat %in%  c("fga", "fgm")) |>
               pivot_wider(names_from = stat, values_from = value) |>
               arrange(desc(fgm)) |>
               mutate(fg_pct = round(fgm / fga, 2)) |>
@@ -320,7 +320,7 @@ server <- function(input, output, session) {
               mutate(stat = "fg_pct"),
   
             #ft_pct
-            filter(t_df, stat %in%  c("fta", "ftm")) |>
+            filter(df_tmp, stat %in%  c("fta", "ftm")) |>
               pivot_wider(names_from = stat, values_from = value) |>
               arrange(desc(ftm)) |>
               mutate(ft_pct = round(ftm / fta, 2)) |>
@@ -332,7 +332,7 @@ server <- function(input, output, session) {
               mutate(stat = "ft_pct"),
   
             # tov
-            filter(t_df, stat == "tov") |>
+            filter(df_tmp, stat == "tov") |>
               arrange(value) |>
               summarise(
                 competitor_roster = paste(player_name, round(value), collapse = "\n"),
@@ -341,7 +341,7 @@ server <- function(input, output, session) {
               ),
   
             # the rest
-            filter(t_df, !stat %in% c("fga", "fgm", "fta", "ftm", "tov")) |>
+            filter(df_tmp, !stat %in% c("fga", "fgm", "fta", "ftm", "tov")) |>
               arrange(desc(value)) |>
               summarise(
                 competitor_roster = paste(player_name, round(value), collapse = "\n"),
@@ -394,11 +394,18 @@ server <- function(input, output, session) {
       
       
       df_h2h_week_game_count <<- df_h |> 
+        (\(df_tmp){
+          bind_rows(
+            filter(df_tmp, origin == "past"),
+            filter(df_tmp, origin != "past") |> 
+              select(-player_injury_status) |> 
+              left_join(select(df_stitch, player_fantasy_id, player_injury_status), by = join_by(player_fantasy_id))  
+          )
+        })() |> 
         filter(
           competitor_id %in% c(as.numeric(input$h2h_competitor), opp_id), 
           league_week == input$h2h_week 
         ) |> 
-        distinct() |> # NEEDS TO BE HERE TO STOP DUPLICATION ON SHINY SERVER...WTF!
         mutate(inj_status = case_when(
           scheduled_to_play == 1 & str_detect(player_injury_status, "^O|INJ") ~ "1*",
            scheduled_to_play == 1 ~ "1",
@@ -517,18 +524,18 @@ server <- function(input, output, session) {
       mutate(across(where(is.numeric), \(x) replace_na(x, 0L))) |>
       calc_z_pcts() |>
       select(-ends_with("_pct")) |>
-      (\(t_df) {
+      (\(df_tmp) {
         left_join(
-          t_df,
+          df_tmp,
           {
-            select(t_df, player_id, player_name, any_of(stat_selection$database_name), -min) |>
+            select(df_tmp, player_id, player_name, any_of(stat_selection$database_name), -min) |>
               mutate(across(any_of(stat_selection$database_name[stat_selection$database_name != "tov"]), ~ round(scales::rescale(.x), 2))) |>
               mutate(tov = round((((tov * -1) - min(tov)) / (max(tov) - min(tov))) + 1, 2)) |>
               pivot_longer(cols = any_of(stat_selection$database_name), names_to = "stat") |>
-              (\(t_df) {
+              (\(df_tmp) {
                 bind_rows(
-                  mutate(slice_max(t_df, value, n = 3, by = c(player_id, player_name), with_ties = FALSE), performance = "Excels At") |> filter(value > 0),
-                  mutate(slice_min(t_df, value, n = 3, by = c(player_id, player_name)), performance = "Weak At")
+                  mutate(slice_max(df_tmp, value, n = 3, by = c(player_id, player_name), with_ties = FALSE), performance = "Excels At") |> filter(value > 0),
+                  mutate(slice_min(df_tmp, value, n = 3, by = c(player_id, player_name)), performance = "Weak At")
                 )
               })() |>
               mutate(stat_value = paste0(stat, " (", value, ")")) |>
