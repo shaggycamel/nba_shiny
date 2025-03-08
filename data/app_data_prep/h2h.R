@@ -13,7 +13,7 @@ df_rolling_stats <<- df_nba_player_box_score |>
 df_rolling_stats <<- df_rolling_stats |> 
   bind_rows(
     df_nba_schedule |> 
-      filter(game_date >= (cur_date - days(1))) |> 
+      filter(game_date > (cur_date - days(1))) |> 
       left_join(
         select(df_nba_roster, player_id, espn_id, yahoo_id, player_name=player, team_slug), 
         by = join_by(team == team_slug),
@@ -26,8 +26,8 @@ df_rolling_stats <<- df_rolling_stats |>
         by = join_by(player_id),
         relationship = "many-to-many"
       )
-  ) |> 
-  distinct() # putting this here just in case...
+  ) 
+  # distinct() # putting this here just in case...
   # specifically for the section: filter(game_date >= (cur_date - days(1)))
 
 
@@ -46,7 +46,7 @@ df_past <<- df_fty_roster |>
 df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NULL){
   
   # TODAY
-  df_today <- df_fty_roster |> 
+  df_today <- df_fty_roster |>
     filter(timestamp >= force_tz(as.Date(max(timestamp)), tz = "EST")) |> 
     mutate(dow = lubridate::wday(date, week_start = 1), .after = date) |> 
     left_join(
@@ -64,7 +64,7 @@ df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NUL
   
   
   # FUTURE
-  df_future <- distinct(df_nba_schedule, game_date) |> 
+  df_future <- distinct(df_nba_schedule, game_date) |>
     filter(game_date> max(df_fty_roster$timestamp)) |> 
     cross_join(select(df_fty_competitor, competitor_id)) |> 
     left_join(
