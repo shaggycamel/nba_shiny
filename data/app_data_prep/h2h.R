@@ -46,10 +46,9 @@ df_past <<- df_fty_roster |>
 df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NULL){
 
   # DELTE
-count(df_past, player_name, game_date) |> 
-  filter(n > 1) |> 
-  arrange(desc(game_date)) |> 
-  print()
+df_past |> 
+  filter(player_name == "Aaron Nesmith", league_week == 19) |> 
+  glimpse()
   
     
   # TODAY
