@@ -44,7 +44,14 @@ df_past <<- df_fty_roster |>
 
 
 df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NULL){
+
+  # DELTE
+count(df_past, player_name, game_date) |> 
+  filter(n > 1) |> 
+  arrange(desc(game_date)) |> 
+  print()
   
+    
   # TODAY
   df_today <- df_fty_roster |>
     filter(timestamp >= force_tz(as.Date(max(timestamp)), tz = "EST")) |> 
