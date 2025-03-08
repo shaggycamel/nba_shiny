@@ -9,10 +9,6 @@ library(plotly)
 library(shinycssloaders)
 
 
-# Set timezone ------------------------------------------------------------
-
-Sys.setenv(TZ = "EST")
-
 # Initialisation files ----------------------------------------------------
 
 # only init python if running in shiny
