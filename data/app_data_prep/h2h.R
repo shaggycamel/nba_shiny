@@ -46,12 +46,6 @@ df_past <<- df_fty_roster |>
 
 
 df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NULL){
-
-  # DELTE
-df_past |> 
-  filter(player_name == "Aaron Nesmith", league_week == 19) |> 
-  glimpse()
-  
     
   # TODAY
   df_today <- df_fty_roster |>

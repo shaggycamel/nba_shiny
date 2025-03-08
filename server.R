@@ -113,9 +113,7 @@ server <- function(input, output, session) {
      source(here("data", "nba_fty_stitch_up.R"))
     
     # Extra variable that relies on datasets
-    print(cur_date)
     cur_date <<- if(cur_date > max(df_fty_schedule$week_end)) max(df_fty_schedule$week_end) else cur_date
-    print(cur_date)
     cur_week <<- df_week_game_count |>
       mutate(week_end = if_else(week_end - week_start < 6, week_start + 6, week_end)) |>
       filter(cur_date >= week_start, cur_date <= week_end) |>
