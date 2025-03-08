@@ -522,8 +522,8 @@ server <- function(input, output, session) {
     df_comparison <<- df_nba_player_box_score |>
       filter(
         game_date <= cur_date,
-        game_date >= cur_date - days(15)
-        # game_date >= cur_date - case_when(input$date_range_switch == "Two Weeks" ~ days(15), input$date_range_switch == "One Month" ~ days(30), .default = days(7))
+        # game_date >= cur_date - days(15)
+        game_date >= cur_date - case_when(input$date_range_switch == "Two Weeks" ~ days(15), input$date_range_switch == "One Month" ~ days(30), .default = days(7))
       ) |> 
       summarise(across(any_of(anl_cols$stat_cols), \(x) mean(x)), .by = c(player_id, player_name)) |>
       mutate(across(where(is.numeric), \(x) replace_na(x, 0L))) |>
