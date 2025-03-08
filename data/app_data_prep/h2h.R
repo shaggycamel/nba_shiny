@@ -40,7 +40,9 @@ df_past <<- df_fty_roster |>
     by = join_by(player_team == team, date == game_date)
   ) |> 
   select(-c(season_type, begin_date, end_date)) |> 
-  rename(game_date = date)
+  rename(game_date = date) |> 
+  distinct() 
+  # distinct to combat duplication that happens on server ONLY
 
 
 df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NULL){
