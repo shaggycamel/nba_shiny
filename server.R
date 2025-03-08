@@ -8,9 +8,6 @@ library(ggplot2)
 library(plotly)
 library(shinycssloaders)
 
-# delete
-library(magrittr)
-
 
 # Set timezone ------------------------------------------------------------
 
@@ -295,14 +292,14 @@ server <- function(input, output, session) {
       opp_id <- filter(df_h, league_week == input$h2h_week, competitor_id == as.numeric(input$h2h_competitor))$opponent_id[1]
       
       h2h_plt <- df_h |> 
-        (\(df_tmp){
-          bind_rows(
-            filter(df_tmp, origin == "past"),
-            filter(df_tmp, origin != "past") |> 
-              select(-player_injury_status) |> 
-              left_join(select(df_stitch, player_fantasy_id, player_injury_status), by = join_by(player_fantasy_id))
-          )
-        })() |>
+        # Need to join player injury status and coalesce it for add players (player_injury_status_temp).
+        # Initially I tried doing this in h2h prep file, but it kept breaking other things
+        left_join(
+          select(df_stitch, player_fantasy_id, player_injury_status_temp=player_injury_status), 
+          by = join_by(player_fantasy_id)
+        ) |> 
+        mutate(player_injury_status = coalesce(player_injury_status, player_injury_status_temp)) |> 
+        select(-player_injury_status_temp) |> 
         filter(
           competitor_id %in% c(as.numeric(input$h2h_competitor), opp_id),
           league_week == input$h2h_week,
@@ -401,14 +398,14 @@ server <- function(input, output, session) {
       
       
       df_h2h_week_game_count <<- df_h |> 
-        (\(df_tmp){
-          bind_rows(
-            filter(df_tmp, origin == "past"),
-            filter(df_tmp, origin != "past") |> 
-              select(-player_injury_status) |> 
-              left_join(select(df_stitch, player_fantasy_id, player_injury_status), by = join_by(player_fantasy_id))  
-          )
-        })() |> 
+        # Need to join player injury status and coalesce it for add players (player_injury_status_temp).
+        # Initially I tried doing this in h2h prep file, but it kept breaking other things
+        left_join(
+          select(df_stitch, player_fantasy_id, player_injury_status_temp=player_injury_status), 
+          by = join_by(player_fantasy_id)
+        ) |> 
+        mutate(player_injury_status = coalesce(player_injury_status, player_injury_status_temp)) |> 
+        select(-player_injury_status_temp) |> 
         filter(
           competitor_id %in% c(as.numeric(input$h2h_competitor), opp_id), 
           league_week == input$h2h_week 
