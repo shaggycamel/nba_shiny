@@ -8,6 +8,13 @@ library(ggplot2)
 library(plotly)
 library(shinycssloaders)
 
+# delete
+library(magrittr)
+
+
+# Set timezone ------------------------------------------------------------
+
+Sys.setenv(TZ = "EST")
 
 # Initialisation files ----------------------------------------------------
 
@@ -302,8 +309,8 @@ server <- function(input, output, session) {
           scheduled_to_play == 1, 
           player_injury_status %in% c("ACTIVE", "DAY_TO_DAY")
         ) |> 
-        pivot_longer(cols = c(ast, stl, blk, tov, pts, ftm, fta, fgm, fga, fg3_m, reb), names_to = "stat", values_to = "value") |>
-        select(competitor_id, player_name, stat, value) |>
+        pivot_longer(cols = c(ast, stl, blk, tov, pts, ftm, fta, fgm, fga, fg3_m, reb), names_to = "stat", values_to = "value") |>  
+        select(competitor_id, player_name, stat, value) |> 
         summarise(value = sum(value, na.rm = TRUE), .by = c(competitor_id, player_name, stat)) |> 
         (\(df_tmp){
           bind_rows(
@@ -355,8 +362,7 @@ server <- function(input, output, session) {
             select(competitor_id, competitor_name),
           by = join_by(competitor_id)
         ) |> 
-        mutate(competitor_name = ordered(competitor_name, c(ls_fty_cid_to_name[as.character(opp_id)], ls_fty_cid_to_name[input$h2h_competitor]))) |> 
-        distinct()
+        mutate(competitor_name = ordered(competitor_name, c(ls_fty_cid_to_name[as.character(opp_id)], ls_fty_cid_to_name[input$h2h_competitor])))
         
       (
         ggplot(h2h_plt, aes(x = stat, y = value, fill = competitor_name, text = paste(round(value, 2), "\n\n", competitor_roster))) +
