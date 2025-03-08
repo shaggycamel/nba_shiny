@@ -1,19 +1,21 @@
 
 df_stitch <- bind_rows(
+  
   df_fty_roster |> 
-    filter(timestamp > max(timestamp) - 1000, .by = competitor_id) |> 
-    select(player_fantasy_id, player_injury_status) |> 
+    select(timestamp, player_fantasy_id, , player_injury_status) |> 
     mutate(player_availability = "rostered"),
 
   df_fty_free_agents |> 
-    select(player_fantasy_id=player_id, player_injury_status) |> 
-    mutate(player_availability = "free_agent")  
-)
+    select(timestamp, player_fantasy_id=player_id, player_injury_status) |> 
+    mutate(player_availability = "free_agent")
+  
+) |> 
+  slice_max(timestamp, by = player_fantasy_id)
 
 
 
 df_nba_player_box_score <<- df_nba_player_box_score |> 
   left_join(
-    df_stitch, 
+    select(df_stitch, -timestamp), 
     by = setNames("player_fantasy_id", paste0(str_to_lower(platform_selected), "_id")),
   )

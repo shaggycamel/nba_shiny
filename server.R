@@ -8,6 +8,13 @@ library(ggplot2)
 library(plotly)
 library(shinycssloaders)
 
+# delete
+library(magrittr)
+
+
+# Set timezone ------------------------------------------------------------
+
+Sys.setenv(TZ = "EST")
 
 # Initialisation files ----------------------------------------------------
 
@@ -19,7 +26,7 @@ source(here("_proj_useful.R"))
 # Server code -------------------------------------------------------------
 
 server <- function(input, output, session) {
-
+  
 # Variables ---------------------------------------------------------------
 
   fty_parameters_met <- reactiveVal(FALSE)
@@ -293,17 +300,17 @@ server <- function(input, output, session) {
             filter(df_tmp, origin == "past"),
             filter(df_tmp, origin != "past") |> 
               select(-player_injury_status) |> 
-              left_join(select(df_stitch, player_fantasy_id, player_injury_status), by = join_by(player_fantasy_id))  
+              left_join(select(df_stitch, player_fantasy_id, player_injury_status), by = join_by(player_fantasy_id))
           )
-        })() |> 
+        })() |>
         filter(
           competitor_id %in% c(as.numeric(input$h2h_competitor), opp_id),
           league_week == input$h2h_week,
           scheduled_to_play == 1, 
           player_injury_status %in% c("ACTIVE", "DAY_TO_DAY")
         ) |> 
-        pivot_longer(cols = c(ast, stl, blk, tov, pts, ftm, fta, fgm, fga, fg3_m, reb), names_to = "stat", values_to = "value") |>
-        select(competitor_id, player_name, stat, value) |>
+        pivot_longer(cols = c(ast, stl, blk, tov, pts, ftm, fta, fgm, fga, fg3_m, reb), names_to = "stat", values_to = "value") |>  
+        select(competitor_id, player_name, stat, value) |> 
         summarise(value = sum(value, na.rm = TRUE), .by = c(competitor_id, player_name, stat)) |> 
         (\(df_tmp){
           bind_rows(
@@ -443,7 +450,8 @@ server <- function(input, output, session) {
           select(df_week_game_count, week, team, following_week_games),
           by = join_by(player_team == team, fty_matchup_week == week)
         ) |> 
-        select(-fty_matchup_week, next_week = following_week_games)
+        select(-fty_matchup_week, next_week = following_week_games) |> 
+        distinct()
       
       df_h2h_week_game_count_tbl <<- select(df_h2h_week_game_count, starts_with("player"), all_of(sort(str_subset(colnames(df_h2h_week_game_count), "\\d"))), Total, `Next Week` = next_week, Team = player_team, Player = player_name) |> 
         rename_with(.fn = \(x) format(as.Date(x), "%a (%d/%m)"), .cols = starts_with("20")) |> 

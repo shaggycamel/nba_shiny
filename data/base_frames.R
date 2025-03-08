@@ -91,7 +91,7 @@ purrr::walk2(unique(df_fty_base$platform), unique(df_fty_base$league_id), \(plat
   df_fty_roster <- nba.dataRub::dh_getQuery(db_con,  glue::glue(readr::read_file(here::here("data/sql/fty_team_roster.sql")))) |>
     dplyr::mutate(timestamp = lubridate::with_tz(timestamp, tzone = "EST")) |> 
     dplyr::mutate(date = lubridate::as_date(timestamp), .after = timestamp) |> 
-    dplyr::filter(max(timestamp) - timestamp < 1000, .by = c(date, competitor_id)) |>
+    dplyr::filter((max(timestamp) - timestamp) < 1000, .by = c(date, competitor_id)) |>
     dplyr::select(-c(competitor_name, opponent_name)) |>
     dplyr::left_join(
       dplyr::select(df_nba_season_segments, tidyr::starts_with("season"), begin_date, end_date),
