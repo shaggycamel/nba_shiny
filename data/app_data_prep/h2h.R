@@ -29,6 +29,7 @@ df_rolling_stats <<- df_rolling_stats |>
   ) 
   # distinct() # putting this here just in case...
   # specifically for the section: filter(game_date >= (cur_date - days(1)))
+# NEED TO TAKE TIME TO UNDERSTAND WHY THIS IS DIFFERENT ON SERVER NS LOCAL
 
 
 # PAST
