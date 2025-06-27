@@ -25,7 +25,8 @@ server <- function(input, output, session) {
   fty_parameters_met <- reactiveVal(FALSE)
   
   db_con <<- if(Sys.info()["user"] == "fred") dh_createCon("postgres") else dh_createCon("cockroach")
-  cur_date <<- strptime(Sys.time(), "%Y", tz = "EST")
+  # cur_date <<- strptime(Sys.time(), "%Y", tz = "EST")
+  cur_date <<- as.Date("2025-02-01")
   cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
   prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
   df_fty_base <<- readRDS("fty_base.RDS")
@@ -232,6 +233,75 @@ server <- function(input, output, session) {
       ) |> 
       config(displayModeBar = FALSE)
 
+  })
+  
+  output$competitor_snapshot <- renderPlotly({
+    req(fty_parameters_met(), exists("df_fty_base"))
+    
+    df_fty_roster |> 
+      filter(
+        date == max(date), 
+        player_injury_status %in% c("ACTIVE", "DAY_TO_DAY")
+      ) |> 
+      left_join(
+        slice_max(df_rolling_stats, game_date, by = player_id) |> 
+          select(player_id, all_of(str_subset(anl_cols$stat_cols, "_z$", negate = TRUE))), 
+      ) |> 
+      summarise(
+        across(all_of(str_subset(anl_cols$h2h_cols, "_pct", negate = TRUE)), \(x) sum(x)),
+        across(c(ftm, fta, fgm, fga), \(x) sum(x)),
+        .by = competitor_id
+      ) |> 
+      mutate(ft_pct = ftm / fta, fg_pct = fgm / fga) |> 
+      mutate(across(where(is.numeric), \(x) round(x, 2))) |> 
+      select(-matches("(ft|fg)(m|a)$")) |> 
+      left_join(df_fty_competitor) |> 
+      pivot_longer(all_of(anl_cols$h2h_cols), names_to = "category") |> 
+      mutate(
+        rank = if_else(
+          category == "tov",
+          rank(value, ties.method = "first"),
+          rank(value * -1, ties.method = "first")
+        ),
+        .by = category
+      ) |> 
+      mutate(competitor_cat = category) |>
+      pivot_wider(id_cols = rank, values_from = c(value, competitor_name), names_from = category) |> 
+      rename_with(\(x) str_remove(x, "value_")) |> 
+      arrange(rank) |>
+      (\(x){
+        
+        reactable(
+          x,
+          columns = list(
+            
+              # Hide these cols
+              colnames(x) |>
+                str_subset("competitor_name_") |>
+                set_names() |>
+                map(\(col) colDef(show = FALSE)),
+              
+              # Colour these cells - NOT WORKING YET
+              colnames(x) |>
+                str_subset("competitor_name_|rank", negate = TRUE) |>
+                set_names() |>
+                map(\(col){
+                  colDef(
+                    cell = function(value, index) {
+                      competitor <- x[paste0("competitor_name_", col), index]
+                      color <- if (score >= 90) "green" else "red"
+                      htmltools::tags$span(style = paste("color:", color), value)
+                    }
+                  )
+                  
+                }),
+              
+              
+          ),
+          pagination = FALSE
+        )
+      })()
+      
   })
 
 

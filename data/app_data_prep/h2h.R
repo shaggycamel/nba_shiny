@@ -5,8 +5,8 @@
 # Assigns stats to player's most recent team (within one season)
 df_rolling_stats <<- df_nba_player_box_score |> 
   arrange(game_date) |>
+  filter(game_date < cur_date) |> # SHOULD THIS FILTER BE PLACED BEFORE OR AFTER SLIDER??
   mutate(across(any_of(anl_cols$stat_cols), \(x) slider::slide_period_dbl(x, game_date, "day", ~ mean(.x, na.rm = TRUE), .before = 15, .after = -1)), .by = player_id) |>
-  filter(game_date < cur_date) |> 
   mutate(across(any_of(anl_cols$stat_cols), \(x) coalesce(x, 0))) |> 
   select(-c(season, season_type, year_season_type, game_id))
 

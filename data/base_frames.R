@@ -1,6 +1,16 @@
 
-# SPLIT PROCESS INTO NBA DATA & FTY LEAGUE DATA
+# Genreal query template
+query_template <- function(qry_obj, sn="cur", pf=TRUE, lg=TRUE) paste0(
+  "SELECT *
+  FROM ", qry_obj,
+  " WHERE season >= '{", sn, "_season}'",
+  if(pf) " AND platform = '{platform}'",
+  if(lg) " AND league_id = {league_id}"
+)  
 
+
+
+#  -- SPLIT PROCESS INTO NBA DATA & FTY LEAGUE DATA
 #  ---------------------------------- NBA
 # News --------------------------------------------------------------------
 
@@ -12,7 +22,7 @@ df_nba_news <<- nba.dataRub::dh_getQuery(db_con, "SELECT * FROM nba.transaction_
 # Player Box Score --------------------------------------------------------------
 
 cat("\t- df_nba_player_box_score\n")
-df_nba_player_box_score <<- nba.dataRub::dh_getQuery(db_con, "sql/player_box_score.sql") |> 
+df_nba_player_box_score <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_player_box_score_vw", sn="prev", pf=FALSE, lg=FALSE)) |> 
   dplyr::mutate(game_date = lubridate::force_tz(game_date, tz = "EST")) |> 
   dplyr::mutate(season = ordered(season)) |>
   dplyr::mutate(season_type = ordered(season_type, c("Pre Season", "Regular Season", "Playoffs"))) |>
@@ -22,7 +32,7 @@ df_nba_player_box_score <<- nba.dataRub::dh_getQuery(db_con, "sql/player_box_sco
 # Season segments ---------------------------------------------------------
 
 cat("\t- df_nba_season_segments\n")
-df_nba_season_segments <<- nba.dataRub::dh_getQuery(db_con, "sql/season_segments.sql") |>
+df_nba_season_segments <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_season_segments_vw", sn="prev", pf=FALSE, lg=FALSE)) |>
   dplyr::mutate(dplyr::across(tidyselect::ends_with("date"), \(x) lubridate::force_tz(x, "EST"))) |> 
   (\(df){
     dplyr::bind_rows(
@@ -40,14 +50,17 @@ df_nba_season_segments <<- nba.dataRub::dh_getQuery(db_con, "sql/season_segments
 
 # ALTERED THIS, NOW NEED TO CHECK IF IT WORKS
 cat("\t- df_nba_schedule\n")
-df_nba_schedule <<- nba.dataRub::dh_getQuery(db_con, "sql/season_segments.sql") |> 
+df_nba_schedule <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_season_segments_vw", sn="prev", pf=FALSE, lg=FALSE)) |> 
   dplyr::filter(season == cur_season, season_type == "Regular Season") |> 
   dplyr::select(begin_date, end_date) |> 
   dplyr::mutate(dplyr::across(tidyselect::ends_with("date"), as.Date)) |> 
   tidyr::pivot_longer(cols = tidyselect::ends_with("date"), values_to = "game_date") |> 
   tidyr::complete(game_date = seq.Date(min(game_date), max(game_date), by = "day")) |> 
   dplyr::select(game_date) |> 
-  dplyr::left_join(nba.dataRub::dh_getQuery(db_con, "sql/nba_schedule.sql"), by = dplyr::join_by(game_date)) |> 
+  dplyr::left_join(
+    nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_schedule_vw", pf=FALSE, lg=FALSE)), 
+    by = dplyr::join_by(game_date)
+  ) |> 
   dplyr::mutate(
     season = cur_season,
     season_type = "Regular Season",
@@ -59,7 +72,7 @@ df_nba_schedule <<- nba.dataRub::dh_getQuery(db_con, "sql/season_segments.sql") 
 # NBA team roster -------------------------------------------------------
 
 cat("\t- df_nba_roster\n")
-df_nba_roster <<- nba.dataRub::dh_getQuery(db_con, "sql/nba_team_roster.sql") 
+df_nba_roster <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_latest_team_roster_vw", pf=FALSE, lg=FALSE)) 
 
 
 # Save base NBA objects -------------------------------------------------------
@@ -70,7 +83,7 @@ save(list = stringr::str_subset(objects(), "df_nba"), file = here::here("nba_bas
 # Fty base object ---------------------------------------------------------
 
 cat("\t- df_fty_base\n")
-df_fty_base <<- nba.dataRub::dh_getQuery(db_con, "sql/fty_base.sql") 
+df_fty_base <<- nba.dataRub::dh_getQuery(db_con, query_template("fty.fty_base_vw", pf=FALSE, lg=FALSE)) 
 saveRDS(df_fty_base, here::here("fty_base.RDS"))
 
 
@@ -80,15 +93,15 @@ purrr::walk2(unique(df_fty_base$platform), unique(df_fty_base$league_id), \(plat
   
   # Fantasy competitor -------------------------------------------------
   cat("\t- df_fantasy_competitor\n")
-  df_fty_competitor <- nba.dataRub::dh_getQuery(db_con, glue::glue(readr::read_file(here::here("data/sql/fty_league_competitor.sql"))))
+  df_fty_competitor <- nba.dataRub::dh_getQuery(db_con, glue::glue(query_template("fty.league_competitor")))
   
   # Fantasy league schedule -------------------------------------------------
   cat("\t- df_fantasy_schedule\n")
-  df_fty_schedule <- nba.dataRub::dh_getQuery(db_con, glue::glue(readr::read_file(here::here("data/sql/fty_league_schedule.sql"))))
+  df_fty_schedule <- nba.dataRub::dh_getQuery(db_con, glue::glue(query_template("fty.league_schedule")))
 
   # Fantasy competitor roster -------------------------------------------------------
   cat("\t- df_fty_roster\n")
-  df_fty_roster <- nba.dataRub::dh_getQuery(db_con,  glue::glue(readr::read_file(here::here("data/sql/fty_team_roster.sql")))) |>
+  df_fty_roster <- nba.dataRub::dh_getQuery(db_con, glue::glue(query_template("fty.fty_team_roster_schedule_vw"))) |>
     dplyr::mutate(timestamp = lubridate::with_tz(timestamp, tzone = "EST")) |> 
     dplyr::mutate(date = lubridate::as_date(timestamp), .after = timestamp) |> 
     dplyr::filter((max(timestamp) - timestamp) < 1000, .by = c(date, competitor_id)) |>
@@ -101,13 +114,13 @@ purrr::walk2(unique(df_fty_base$platform), unique(df_fty_base$league_id), \(plat
   
   # Fantasy Box Score -------------------------------------------------------
   cat("\t- df_fty_box_score\n")
-  df_fty_box_score <- nba.dataRub::dh_getQuery(db_con, glue::glue(readr::read_file(here::here("data/sql/fty_box_score.sql")))) |>
+  df_fty_box_score <- nba.dataRub::dh_getQuery(db_con, glue::glue(query_template("fty.fty_matchup_box_score_vw"))) |>
     dplyr::relocate(tidyselect::starts_with("competitor"), .before = matchup) |>
     dplyr::select(-tidyselect::matches("r_name|r_abbrev"))
   
   # Fantasy free agents -------------------------------------------------------
   cat("\t- df_fty_free_agents\n")
-  df_fty_free_agents <- nba.dataRub::dh_getQuery(db_con,  glue::glue(readr::read_file(here::here("data/sql/fty_free_agents.sql"))))
+  df_fty_free_agents <- nba.dataRub::dh_getQuery(db_con, glue::glue(query_template("fty.free_agents")))
   
   # Save data objects
   save(list = stringr::str_subset(objects(), "df_fty"), file = here::here(paste0("fty_", platform, "_", league_id, ".RData")))
