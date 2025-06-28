@@ -23,6 +23,7 @@ page_fty_league_overview <- layout_sidebar(
       )
     ),
     switchInput("fty_lg_ov_rank_toggle", value = TRUE, onLabel = "Rank", offLabel = "Value", size = "small"),
+    switchInput("fty_lg_ov_cum_toggle", value = TRUE, onLabel = "W2W", offLabel = "Cum", size = "small"),
     # open = "open"
   ),
   card(full_screen = TRUE, plotlyOutput("fty_league_overview_rank_plot")),
@@ -38,6 +39,7 @@ page_h2h <- layout_sidebar(
       selectInput("h2h_competitor", "Competitor", choices = character(0)),
       selectInput("h2h_week", "Week", choices = 0) 
     ),
+    radioButtons("h2h_grain", "Rolling days", c(7, 15, 30), inline = TRUE),
     layout_columns(
       selectInput("h2h_ex_player", "Exclude", choices = character(0), multiple = TRUE),
       selectInput("h2h_add_player", "Add", choices = character(0), multiple = TRUE),
@@ -150,8 +152,9 @@ ui <- page_navbar(
   # Move to respective page
   # tags$head(tags$style(HTML(".selectize-dropdown{z-index: 999}"))),
   # tags$head(tags$style(HTML(".selectize-dropdown-content{white-space: nowrap;}"))),
-  title = "NBA Fantasy",
   id = "title_container",
+  window_title = "NBA Fantasy",
+  title = uiOutput("navbar_title"),
   nav_spacer(),
   nav_panel("Fantasy Overview", page_fty_league_overview),
   nav_panel("Head to Head", page_h2h),

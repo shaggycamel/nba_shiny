@@ -24,8 +24,8 @@ Sys.setenv(TZ = "NZ")
 stat_selection <- 
   tibble::tribble(
     ~formatted_name, ~database_name,
-    "All Nine Categories", "nine_cat",
     "Top Five Categories", "five_cat",
+    "All Nine Categories", "nine_cat",
      "Minutes", "min",
      "3-pointers", "fg3_m",
      "Points", "pts",

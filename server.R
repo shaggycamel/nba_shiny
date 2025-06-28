@@ -95,7 +95,7 @@ server <- function(input, output, session) {
     )
   }
   login_modal()
-  
+  output$navbar_title <- renderUI(span(input$fty_league_select))
 
 # Load datasets -----------------------------------------------------------
 
@@ -212,13 +212,30 @@ server <- function(input, output, session) {
     df_fty_league_overview <- df_lo()
     df_point <- filter(df_fty_league_overview, as.integer(matchup_sigmoid) == matchup_sigmoid)
 
-    plt <- df_fty_league_overview |>
+    plt <- if(input$fty_lg_ov_cum_toggle){
+      
+      df_fty_league_overview |>
         ggplot(aes(x = matchup_sigmoid, y = !!sym(plot_col), colour = competitor_name)) +
         geom_line(linewidth = 0.5) +
         geom_point(data = df_point, size = 2) +
         scale_x_continuous(breaks = sort(unique(df_point$matchup)), labels = sort(unique(df_point$matchup))) +
         labs(title = paste("Competitor Category Ranking:", db_to_fmt_stat_name[[input$fty_lg_ov_cat]]), x = "Matchup Period", y = input$fty_lg_ov_cat) +
         theme_bw()
+    } else {
+      
+      df_point |> 
+        arrange(matchup) |> 
+        group_by(competitor_id) |> 
+        mutate(across(
+          c(all_of(anl_cols$h2h_cols), matches("cat$|rank$")),
+          \(x) cumsum(x)
+        )) |> 
+        ggplot(aes(x = matchup_sigmoid, y = !!sym(plot_col), colour = competitor_name)) +
+        geom_path() +
+        scale_x_continuous(breaks = sort(unique(df_point$matchup)), labels = sort(unique(df_point$matchup))) +
+        labs(title = paste("Competitor Category Ranking:", db_to_fmt_stat_name[[input$fty_lg_ov_cat]]), x = "Matchup Period", y = input$fty_lg_ov_cat) +
+        theme_bw()  
+    }
     
     if(input$fty_lg_ov_rank_toggle) plt <- plt + scale_y_reverse(n.breaks = length(ls_fty_name_to_cid))
 
@@ -227,7 +244,7 @@ server <- function(input, output, session) {
       style(hoverinfo = "none", traces = 0:length(unique(df_point$competitor_id))) |>
       layout(xaxis = list(fixedrange = TRUE), yaxis = list(fixedrange = TRUE)) |> 
       rangeslider(
-        start = max(df_point$matchup) - 5.1,
+        start = ifelse(!input$fty_lg_ov_cum_toggle, 1, max(df_point$matchup) - 5.1),
         end = max(df_point$matchup) + 0.1,
         range = list(min(df_point$matchup) - 0.2, max(df_point$matchup) + 0.2)
       ) |> 
@@ -308,8 +325,8 @@ server <- function(input, output, session) {
 # FTY Head to Head --------------------------------------------------------
   
   # Reactive H2H data creation
-  df_h2h <- reactive(df_h2h_prepare(as.numeric(input$h2h_competitor), input$h2h_ex_player, input$h2h_add_player, input$h2h_future_from_tomorrow)) |> 
-    bindEvent(input$h2h_competitor, input$h2h_ex_player, input$h2h_add_player, input$h2h_future_from_tomorrow)
+  df_h2h <- reactive(df_h2h_prepare(input$h2h_grain, as.numeric(input$h2h_competitor), input$h2h_ex_player, input$h2h_add_player, input$h2h_future_from_tomorrow)) |> 
+    bindEvent(input$h2h_grain, input$h2h_competitor, input$h2h_ex_player, input$h2h_add_player, input$h2h_future_from_tomorrow)
   
   observe({
     
@@ -942,5 +959,6 @@ server <- function(input, output, session) {
       ) |>
       formatStyle(columns = colnames(df_t), background = "white", color = "black")
   })
+
 
 }

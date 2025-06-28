@@ -6,27 +6,37 @@
 df_rolling_stats <<- df_nba_player_box_score |> 
   arrange(game_date) |>
   filter(game_date < cur_date) |> # SHOULD THIS FILTER BE PLACED BEFORE OR AFTER SLIDER??
-  mutate(across(any_of(anl_cols$stat_cols), \(x) slider::slide_period_dbl(x, game_date, "day", ~ mean(.x, na.rm = TRUE), .before = 15, .after = -1)), .by = player_id) |>
-  mutate(across(any_of(anl_cols$stat_cols), \(x) coalesce(x, 0))) |> 
-  select(-c(season, season_type, year_season_type, game_id))
-
-df_rolling_stats <<- df_rolling_stats |> 
-  bind_rows(
-    df_nba_schedule |> 
-      filter(game_date > (cur_date - days(1))) |> 
-      left_join(
-        select(df_nba_roster, player_id, espn_id, yahoo_id, player_name=player, team_slug), 
-        by = join_by(team == team_slug),
-        relationship = "many-to-many"
-      ) |> 
-      select(player_id, espn_id, yahoo_id, player_name, team_slug=team, game_date) |> 
-      left_join(
-        slice_max(df_rolling_stats, order_by = game_date, by = player_id) |> 
-          select(player_id, any_of(anl_cols$stat_cols)),
-        by = join_by(player_id),
-        relationship = "many-to-many"
-      )
-  ) 
+  select(-c(season, season_type, year_season_type, game_id)) |> 
+  (\(df_t) lst(
+    "7" = df_t |> 
+      mutate(across(any_of(anl_cols$stat_cols), \(x) slider::slide_period_dbl(x, game_date, "day", ~ mean(.x, na.rm = TRUE), .before = 7, .after = -1)), .by = player_id) |>
+      mutate(across(any_of(anl_cols$stat_cols), \(x) coalesce(x, 0))),
+    "15" = df_t |> 
+      mutate(across(any_of(anl_cols$stat_cols), \(x) slider::slide_period_dbl(x, game_date, "day", ~ mean(.x, na.rm = TRUE), .before = 15, .after = -1)), .by = player_id) |>
+      mutate(across(any_of(anl_cols$stat_cols), \(x) coalesce(x, 0))),  
+    "30" = df_t |> 
+      mutate(across(any_of(anl_cols$stat_cols), \(x) slider::slide_period_dbl(x, game_date, "day", ~ mean(.x, na.rm = TRUE), .before = 30, .after = -1)), .by = player_id) |>
+      mutate(across(any_of(anl_cols$stat_cols), \(x) coalesce(x, 0))) 
+  ))() |> 
+  map(\(df_t){
+    df_t |> 
+      bind_rows(
+        df_nba_schedule |> 
+          filter(game_date > (cur_date - days(1))) |> 
+          left_join(
+            select(df_nba_roster, player_id, espn_id, yahoo_id, player_name=player, team_slug), 
+            by = join_by(team == team_slug),
+            relationship = "many-to-many"
+          ) |> 
+          select(player_id, espn_id, yahoo_id, player_name, team_slug=team, game_date) |> 
+          left_join(
+            slice_max(df_t, order_by = game_date, by = player_id) |> 
+              select(player_id, any_of(anl_cols$stat_cols)),
+            by = join_by(player_id),
+            relationship = "many-to-many"
+          )
+      ) 
+})
   # distinct() # putting this here just in case...
   # specifically for the section: filter(game_date >= (cur_date - days(1)))
 # NEED TO TAKE TIME TO UNDERSTAND WHY THIS IS DIFFERENT ON SERVER NS LOCAL
@@ -46,7 +56,9 @@ df_past <<- df_fty_roster |>
   # distinct to combat duplication that happens on server ONLY
 
 
-df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NULL){
+df_h2h_prepare <<- function(grain=7,c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NULL){
+  
+  df_rs <- df_rolling_stats[[as.character(grain)]]
     
   # TODAY
   df_today <- df_fty_roster |>
@@ -68,7 +80,7 @@ df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NUL
   
   # FUTURE
   df_future <- distinct(df_nba_schedule, game_date) |>
-    filter(game_date> max(df_fty_roster$timestamp)) |> 
+    filter(game_date > max(df_fty_roster$timestamp)) |> 
     cross_join(select(df_fty_competitor, competitor_id)) |> 
     left_join(
       select(df_today, season, platform, league_id, competitor_id, player_fantasy_id, player_id, player_name, player_team, player_injury_status),
@@ -91,7 +103,7 @@ df_h2h_prepare <<- function(c_id=NULL, exclude=NULL, add=NULL, from_tomorrow=NUL
   # COMBINE
   df_h2h <- bind_rows(list(past=df_past, today=df_today, future=df_future), .id = "origin") |> 
     left_join(
-      select(df_rolling_stats, -c(espn_id, yahoo_id, player_name, team_slug)),
+      select(df_rs, -c(espn_id, yahoo_id, player_name, team_slug)),
       by = join_by(player_id, game_date)
     )
   
