@@ -109,7 +109,10 @@ server <- function(input, output, session) {
     # Data Frames
     if(Sys.info()["user"] == "fred") source(here("data", "base_frames.R"))
     load("nba_base.RData", envir = globalenv())
-    .load_datasets <- function() walk(list.files(here("data", "app_data_prep"), full.names = TRUE), \(x) source(x, local = TRUE))
+    .load_datasets <- function() walk(list.files(here("data", "app_data_prep"), full.names = TRUE), \(x){
+      cat(paste("Sourcing:", str_extract(x, "app_data_prep\\/\\w+.R"), "\n"))
+      source(x, local = TRUE)
+    })
     .load_datasets()
      source(here("data", "nba_fty_stitch_up.R"))
     
@@ -148,7 +151,7 @@ server <- function(input, output, session) {
 # Init app filter list creation -------------------------------------------
   
     # Player Comparison tab
-    updateSelectInput(session, "comparison_team_filter", choices = teams)
+    updateSelectInput(session, "comparison_team_or_player_filter", choices = teams)
     
     # Player trend tab
     updateSelectInput(session, "trend_select_player", choices = active_players)
@@ -196,6 +199,20 @@ server <- function(input, output, session) {
     # Is it possible to highlight newly added players? - Can they be included in list?
   }) |> 
     bindEvent(input$h2h_competitor)
+  
+  # Additional Team or Player comparison filter alteration
+  observe(updateSelectInput(
+    session, 
+    "comparison_team_or_player_filter", 
+    choices = if(input$comparison_team_or_player){
+      teams
+    } else if(!input$comparison_team_or_player & input$comparison_free_agent_filter){
+      free_agents
+    } else {
+      active_players
+    }
+  )) |> 
+    bindEvent(input$comparison_team_or_player, input$comparison_free_agent_filter)
   
 
 # FTY League Overview -------------------------------------------------
@@ -325,8 +342,8 @@ server <- function(input, output, session) {
 # FTY Head to Head --------------------------------------------------------
   
   # Reactive H2H data creation
-  df_h2h <- reactive(df_h2h_prepare(input$h2h_grain, as.numeric(input$h2h_competitor), input$h2h_ex_player, input$h2h_add_player, input$h2h_future_from_tomorrow)) |> 
-    bindEvent(input$h2h_grain, input$h2h_competitor, input$h2h_ex_player, input$h2h_add_player, input$h2h_future_from_tomorrow)
+  df_h2h <- reactive(df_h2h_prepare(input$h2h_window, as.numeric(input$h2h_competitor), input$h2h_ex_player, input$h2h_add_player, input$h2h_future_from_tomorrow)) |> 
+    bindEvent(input$h2h_window, input$h2h_competitor, input$h2h_ex_player, input$h2h_add_player, input$h2h_future_from_tomorrow)
   
   observe({
     
@@ -598,14 +615,10 @@ server <- function(input, output, session) {
   } 
   
   output$player_comparison_table <- renderDT({
-
+    
     # Some players have teams missing | Some players are missing (eg filter to one team)
     df_comparison <<- df_nba_player_box_score |>
-      filter(
-        game_date <= cur_date,
-        # game_date >= cur_date - days(15)
-        game_date >= cur_date - case_when(input$date_range_switch == "Two Weeks" ~ days(15), input$date_range_switch == "One Month" ~ days(30), .default = days(7))
-      ) |> 
+      filter(game_date <= cur_date, game_date >= cur_date - days(input$comparison_window)) |> 
       summarise(across(any_of(anl_cols$stat_cols), \(x) mean(x)), .by = c(player_id, player_name)) |>
       mutate(across(where(is.numeric), \(x) replace_na(x, 0L))) |>
       calc_z_pcts() |>
@@ -660,7 +673,15 @@ server <- function(input, output, session) {
 
     df_comparison_table <- filter(df_comparison, Minutes >= input$comparison_minute_filter)
     if(input$comparison_free_agent_filter) df_comparison_table <- filter(df_comparison_table, player_availability == "free_agent")
-    if(!is_null(input$comparison_team_filter)) df_comparison_table <- filter(df_comparison_table, Team %in% input$comparison_team_filter)
+    
+    print(input$comparison_team_or_player_filter)
+    if(!is_null(input$comparison_team_or_player_filter)) df_comparison_table <- {
+      if(input$comparison_team_or_player)
+        filter(df_comparison_table, Team %in% input$comparison_team_or_player_filter)
+      else
+        filter(df_comparison_table, str_detect(Player, paste0(input$comparison_team_or_player_filter, collapse = "|")))
+    } 
+    # LUKA NAME APPEARING TWICE IN LIST?
     if(!is_null(input$comparison_excels_at_filter)) df_comparison_table <- filter(df_comparison_table, str_detect(`Excels At`, paste0(filter(stat_selection, database_name %in% input$comparison_excels_at_filter)$database_name, collapse = "|")))
     df_comparison_table <- select(df_comparison_table, -c(player_availability, ends_with("_status"))) |>
       arrange(desc(Minutes))

@@ -39,7 +39,7 @@ page_h2h <- layout_sidebar(
       selectInput("h2h_competitor", "Competitor", choices = character(0)),
       selectInput("h2h_week", "Week", choices = 0) 
     ),
-    radioButtons("h2h_grain", "Rolling days", c(7, 15, 30), inline = TRUE),
+    radioButtons("h2h_window", "Rolling days", c(7, 15, 30), inline = TRUE),
     layout_columns(
       selectInput("h2h_ex_player", "Exclude", choices = character(0), multiple = TRUE),
       selectInput("h2h_add_player", "Add", choices = character(0), multiple = TRUE),
@@ -71,10 +71,11 @@ page_h2h <- layout_sidebar(
 
 page_player_comparison <- layout_sidebar(
   sidebar = sidebar(
-    selectInput("comparison_team_filter", "Team", choices = character(0), multiple = TRUE),
+    switchInput("comparison_team_or_player", value = TRUE, onLabel = "Team", offLabel = "Player", size = "small"),
+    selectInput("comparison_team_or_player_filter", NULL, choices = character(0), multiple = TRUE),
     selectizeInput("comparison_excels_at_filter", "Excels at", choices = discard(fmt_to_db_stat_name, \(x) str_detect(x, "_pct|_cat")), options = list(maxItems = 5, onInitialize = I('function() { this.setValue(""); }'))),
+    radioButtons("comparison_window", "Rolling days", c(7, 15, 30), inline = TRUE),
     sliderInput("comparison_minute_filter", "Minute Filter", min = 0, max = 50, value = 20, round = TRUE),
-    radioButtons("date_range_switch", NULL, choices = c("Seven Days", "Two Weeks", "One Month")),
     checkboxInput("comparison_free_agent_filter", "Free Agents only", value = TRUE),
     # open = "open"
   ),

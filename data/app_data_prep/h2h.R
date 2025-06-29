@@ -7,17 +7,13 @@ df_rolling_stats <<- df_nba_player_box_score |>
   arrange(game_date) |>
   filter(game_date < cur_date) |> # SHOULD THIS FILTER BE PLACED BEFORE OR AFTER SLIDER??
   select(-c(season, season_type, year_season_type, game_id)) |> 
-  (\(df_t) lst(
-    "7" = df_t |> 
-      mutate(across(any_of(anl_cols$stat_cols), \(x) slider::slide_period_dbl(x, game_date, "day", ~ mean(.x, na.rm = TRUE), .before = 7, .after = -1)), .by = player_id) |>
-      mutate(across(any_of(anl_cols$stat_cols), \(x) coalesce(x, 0))),
-    "15" = df_t |> 
-      mutate(across(any_of(anl_cols$stat_cols), \(x) slider::slide_period_dbl(x, game_date, "day", ~ mean(.x, na.rm = TRUE), .before = 15, .after = -1)), .by = player_id) |>
-      mutate(across(any_of(anl_cols$stat_cols), \(x) coalesce(x, 0))),  
-    "30" = df_t |> 
-      mutate(across(any_of(anl_cols$stat_cols), \(x) slider::slide_period_dbl(x, game_date, "day", ~ mean(.x, na.rm = TRUE), .before = 30, .after = -1)), .by = player_id) |>
-      mutate(across(any_of(anl_cols$stat_cols), \(x) coalesce(x, 0))) 
-  ))() |> 
+  (\(df_t){
+    map(set_names(c(7, 15, 30)), \(window){
+      df_t |>
+        mutate(across(any_of(anl_cols$stat_cols), \(x) slider::slide_period_dbl(x, game_date, "day", ~ mean(.x, na.rm = TRUE), .before = window, .after = -1)), .by = player_id) |>
+        mutate(across(any_of(anl_cols$stat_cols), \(x) coalesce(x, 0)))
+    })
+  })() |> 
   map(\(df_t){
     df_t |> 
       bind_rows(
@@ -36,7 +32,7 @@ df_rolling_stats <<- df_nba_player_box_score |>
             relationship = "many-to-many"
           )
       ) 
-})
+  })
   # distinct() # putting this here just in case...
   # specifically for the section: filter(game_date >= (cur_date - days(1)))
 # NEED TO TAKE TIME TO UNDERSTAND WHY THIS IS DIFFERENT ON SERVER NS LOCAL
