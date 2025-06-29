@@ -201,17 +201,30 @@ server <- function(input, output, session) {
     bindEvent(input$h2h_competitor)
   
   # Additional Team or Player comparison filter alteration
-  observe(updateSelectInput(
-    session, 
-    "comparison_team_or_player_filter", 
-    choices = if(input$comparison_team_or_player){
-      teams
-    } else if(!input$comparison_team_or_player & input$comparison_free_agent_filter){
-      free_agents
-    } else {
-      active_players
-    }
-  )) |> 
+  observe({
+    req(exists("teams"))
+    updateSelectInput(
+      session, 
+      "comparison_team_or_player_filter", 
+      choices = if(input$comparison_team_or_player){
+        teams
+      } else if(!input$comparison_team_or_player & input$comparison_free_agent_filter){
+        intersect(
+          free_agents, 
+          filter(df_comparison, Minutes >= input$comparison_minute_filter)$Player |> 
+            str_remove("\\(.*\\)") |> 
+            str_squish()
+        )
+      } else {
+        intersect(
+          active_players, 
+          filter(df_comparison, Minutes >= input$comparison_minute_filter)$Player |> 
+            str_remove("\\(.*\\)") |> 
+            str_squish()
+        )
+      }
+    )}
+  ) |> 
     bindEvent(input$comparison_team_or_player, input$comparison_free_agent_filter)
   
 
@@ -673,15 +686,12 @@ server <- function(input, output, session) {
 
     df_comparison_table <- filter(df_comparison, Minutes >= input$comparison_minute_filter)
     if(input$comparison_free_agent_filter) df_comparison_table <- filter(df_comparison_table, player_availability == "free_agent")
-    
-    print(input$comparison_team_or_player_filter)
     if(!is_null(input$comparison_team_or_player_filter)) df_comparison_table <- {
       if(input$comparison_team_or_player)
         filter(df_comparison_table, Team %in% input$comparison_team_or_player_filter)
       else
         filter(df_comparison_table, str_detect(Player, paste0(input$comparison_team_or_player_filter, collapse = "|")))
     } 
-    # LUKA NAME APPEARING TWICE IN LIST?
     if(!is_null(input$comparison_excels_at_filter)) df_comparison_table <- filter(df_comparison_table, str_detect(`Excels At`, paste0(filter(stat_selection, database_name %in% input$comparison_excels_at_filter)$database_name, collapse = "|")))
     df_comparison_table <- select(df_comparison_table, -c(player_availability, ends_with("_status"))) |>
       arrange(desc(Minutes))
