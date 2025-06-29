@@ -7,6 +7,7 @@ library(lubridate)
 library(ggplot2)
 library(plotly)
 library(shinycssloaders)
+library(reactable)
 
 
 # Initialisation files ----------------------------------------------------
@@ -695,6 +696,55 @@ server <- function(input, output, session) {
     if(!is_null(input$comparison_excels_at_filter)) df_comparison_table <- filter(df_comparison_table, str_detect(`Excels At`, paste0(filter(stat_selection, database_name %in% input$comparison_excels_at_filter)$database_name, collapse = "|")))
     df_comparison_table <- select(df_comparison_table, -c(player_availability, ends_with("_status"))) |>
       arrange(desc(Minutes))
+    
+    reactable(
+      df_comparison,
+      pagination = FALSE,
+      bordered = TRUE,
+      highlight = TRUE,
+      defaultSorted = list(Minutes = "desc", Player = "asc"),
+      defaultSortOrder = "desc",
+      defaultColDef = colDef(
+        align = "left",
+        minWidth = 120,
+        headerStyle = list(background = "blue", color = "white"),
+        format = colFormat(digits = 1)
+      ),
+      columns = list(
+        "Minutes" = colDef(style = \(val) if(val == max(df_comparison$Minutes)) list(background = "lightgreen") else NULL),
+        "3-pointers" = colDef(style = \(val) if(val == max(df_comparison$`3-pointers`)) list(background = "lightgreen") else NULL),
+        "Points" = colDef(style = \(val) if(val == max(df_comparison$Points)) list(background = "lightgreen") else NULL),
+        "Field Goal Z" = colDef(style = \(val) if(val == max(df_comparison$`Field Goal Z`)) list(background = "lightgreen") else NULL),
+        "Free Throw Z" = colDef(style = \(val) if(val == max(df_comparison$`Free Throw Z`)) list(background = "lightgreen") else NULL),
+        "Rebounds" = colDef(style = \(val) if(val == max(df_comparison$Rebounds)) list(background = "lightgreen") else NULL),
+        "Assists" = colDef(style = \(val) if(val == max(df_comparison$Assists)) list(background = "lightgreen") else NULL),
+        "Steals" = colDef(style = \(val) if(val == max(df_comparison$Steals)) list(background = "lightgreen") else NULL),
+        "Blocks" = colDef(style = \(val) if(val == max(df_comparison$Blocks)) list(background = "lightgreen") else NULL),
+        "Turnovers" = colDef(style = \(val) if(val == max(df_comparison$Turnovers)) list(background = "lightgreen") else NULL),
+        "Player" = colDef(style = \(val) if(str_detect(val, "\\(out\\)")) list(background = "red") else if(str_detect(val, "\\(d2d\\)")) list(background = "pink") else list(background = "azure")), 
+        "Excels At" = colDef(style = \(val, ix){
+          xl_at <- df_comparison$xl_at_count[ix]
+          if(xl_at==3) list(background = "wheat", fontSize = "80%", whiteSpace = "pre-line") 
+          else if (xl_at==2) list(background = "cornsilk2", fontSize = "80%", whiteSpace = "pre-line")  
+          else if (xl_at==1) list(background = "cornsilk1", fontSize = "80%", whiteSpace = "pre-line") 
+          else list(fontSize = "80%", whiteSpace = "pre-line")
+        }),
+        "Weak At" = colDef(style = list(fontSize = "80%", whiteSpace = "pre-line")),
+        "player_availability" = colDef(show = FALSE),
+        "player_injury_status" = colDef(show = FALSE),
+        "inj_status" = colDef(show = FALSE),
+        "player_colour" = colDef(show = FALSE),
+        "xl_at_count" = colDef(show = FALSE)
+      ),
+      onClick = "expand",
+      details = function(ix) {
+        div(
+          style = "padding: 16px;",
+          tags$b("Team Injury History: "), 
+          tags$p(df_comparison$player_colour[ix])
+        )
+      }
+    )
 
     df_comparison_table |>
       datatable(
