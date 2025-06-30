@@ -75,6 +75,16 @@ cat("\t- df_nba_roster\n")
 df_nba_roster <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_latest_team_roster_vw", pf=FALSE, lg=FALSE)) 
 
 
+# NBA Injuries ------------------------------------------------------------
+
+cat("\t- df_nba_injuries\n")
+df_nba_injuries <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_injuries_vw", pf=FALSE, lg=FALSE)) |> 
+  mutate(
+    reason = if_else(status == "Available", NA, str_remove(reason, "Injury/Illness - ")),
+    status = ordered(status, c("Available", "Probable", "Questionable", "Doubtful", "Out"))
+  )
+
+
 # Save base NBA objects -------------------------------------------------------
 save(list = stringr::str_subset(objects(), "df_nba"), file = here::here("nba_base.RData"))
 

@@ -630,6 +630,23 @@ server <- function(input, output, session) {
   
   output$player_comparison_table <- renderDT({
     
+    ls_inj <- df_nba_injuries |> 
+      filter(
+        status != "Available",
+        game_date <= cur_date, 
+        game_date >= cur_date - days(7)
+        # game_date >= cur_date - days(input$comparison_window)
+      ) |> 
+      select(team_slug, game_date, matchup, player_name) |> 
+      arrange(desc(game_date), desc(player_name)) |>  # replace name with salary
+      summarise(
+        player_names = paste(player_name, collapse = ", "), 
+        .by = c(team_slug, game_date, matchup)
+      ) |> 
+      nest_by(team_slug)
+    
+    ls_inj <- setNames(ls_inj$data, ls_inj$team_slug)
+    
     # Some players have teams missing | Some players are missing (eg filter to one team)
     df_comparison <<- df_nba_player_box_score |>
       filter(game_date <= cur_date, game_date >= cur_date - days(input$comparison_window)) |> 
@@ -738,11 +755,11 @@ server <- function(input, output, session) {
       ),
       onClick = "expand",
       details = function(ix) {
-        div(
-          style = "padding: 16px;",
-          tags$b("Team Injury History: "), 
-          tags$p(df_comparison$player_colour[ix])
-        )
+        
+        # format this table nicely somehow...
+        tm <- df_comparison$Team[ix]
+        div(style = "padding: 16px;", tags$b(paste(tm, "Injury History: ")))
+        if(!is.na(tm)) reactable(ls_inj[[tm]], pagination = FALSE) else "Team not found..."
       }
     )
 
