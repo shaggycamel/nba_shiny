@@ -110,12 +110,12 @@ server <- function(input, output, session) {
     # Data Frames
     if(Sys.info()["user"] == "fred") source(here("data", "base_frames.R"))
     load("nba_base.RData", envir = globalenv())
+    
     .load_datasets <- function() walk(list.files(here("data", "app_data_prep"), full.names = TRUE), \(x){
       cat(paste("Sourcing:", str_extract(x, "app_data_prep\\/\\w+.R"), "\n"))
       source(x, local = TRUE)
     })
     .load_datasets()
-     source(here("data", "nba_fty_stitch_up.R"))
     
     # Extra variable that relies on datasets
     cur_date <<- if(cur_date > max(df_fty_schedule$week_end)) max(df_fty_schedule$week_end) else cur_date
@@ -628,14 +628,14 @@ server <- function(input, output, session) {
     df
   } 
   
-  output$player_comparison_table <- renderDT({
+  output$player_comparison_table <- renderReactable({
     
     ls_inj <- df_nba_injuries |> 
       filter(
         status != "Available",
         game_date <= cur_date, 
-        game_date >= cur_date - days(7)
-        # game_date >= cur_date - days(input$comparison_window)
+        # game_date >= cur_date - days(7)
+        game_date >= cur_date - days(input$comparison_window)
       ) |> 
       select(team_slug, game_date, matchup, player_name) |> 
       arrange(desc(game_date), desc(player_name)) |>  # replace name with salary
@@ -643,9 +643,9 @@ server <- function(input, output, session) {
         player_names = paste(player_name, collapse = ", "), 
         .by = c(team_slug, game_date, matchup)
       ) |> 
-      nest_by(team_slug)
+      nest_by(team_slug) |> 
+      (\(df_t) setNames(df_t$data, df_t$team_slug))()
     
-    ls_inj <- setNames(ls_inj$data, ls_inj$team_slug)
     
     # Some players have teams missing | Some players are missing (eg filter to one team)
     df_comparison <<- df_nba_player_box_score |>
@@ -715,7 +715,7 @@ server <- function(input, output, session) {
       arrange(desc(Minutes))
     
     reactable(
-      df_comparison,
+      df_comparison_table,
       pagination = FALSE,
       bordered = TRUE,
       highlight = TRUE,
@@ -728,19 +728,19 @@ server <- function(input, output, session) {
         format = colFormat(digits = 1)
       ),
       columns = list(
-        "Minutes" = colDef(style = \(val) if(val == max(df_comparison$Minutes)) list(background = "lightgreen") else NULL),
-        "3-pointers" = colDef(style = \(val) if(val == max(df_comparison$`3-pointers`)) list(background = "lightgreen") else NULL),
-        "Points" = colDef(style = \(val) if(val == max(df_comparison$Points)) list(background = "lightgreen") else NULL),
-        "Field Goal Z" = colDef(style = \(val) if(val == max(df_comparison$`Field Goal Z`)) list(background = "lightgreen") else NULL),
-        "Free Throw Z" = colDef(style = \(val) if(val == max(df_comparison$`Free Throw Z`)) list(background = "lightgreen") else NULL),
-        "Rebounds" = colDef(style = \(val) if(val == max(df_comparison$Rebounds)) list(background = "lightgreen") else NULL),
-        "Assists" = colDef(style = \(val) if(val == max(df_comparison$Assists)) list(background = "lightgreen") else NULL),
-        "Steals" = colDef(style = \(val) if(val == max(df_comparison$Steals)) list(background = "lightgreen") else NULL),
-        "Blocks" = colDef(style = \(val) if(val == max(df_comparison$Blocks)) list(background = "lightgreen") else NULL),
-        "Turnovers" = colDef(style = \(val) if(val == max(df_comparison$Turnovers)) list(background = "lightgreen") else NULL),
+        "Minutes" = colDef(style = \(val) if(val == max(df_comparison_table$Minutes)) list(background = "lightgreen") else NULL),
+        "3-pointers" = colDef(style = \(val) if(val == max(df_comparison_table$`3-pointers`)) list(background = "lightgreen") else NULL),
+        "Points" = colDef(style = \(val) if(val == max(df_comparison_table$Points)) list(background = "lightgreen") else NULL),
+        "Field Goal Z" = colDef(style = \(val) if(val == max(df_comparison_table$`Field Goal Z`)) list(background = "lightgreen") else NULL),
+        "Free Throw Z" = colDef(style = \(val) if(val == max(df_comparison_table$`Free Throw Z`)) list(background = "lightgreen") else NULL),
+        "Rebounds" = colDef(style = \(val) if(val == max(df_comparison_table$Rebounds)) list(background = "lightgreen") else NULL),
+        "Assists" = colDef(style = \(val) if(val == max(df_comparison_table$Assists)) list(background = "lightgreen") else NULL),
+        "Steals" = colDef(style = \(val) if(val == max(df_comparison_table$Steals)) list(background = "lightgreen") else NULL),
+        "Blocks" = colDef(style = \(val) if(val == max(df_comparison_table$Blocks)) list(background = "lightgreen") else NULL),
+        "Turnovers" = colDef(style = \(val) if(val == min(df_comparison_table$Turnovers)) list(background = "lightgreen") else NULL),
         "Player" = colDef(style = \(val) if(str_detect(val, "\\(out\\)")) list(background = "red") else if(str_detect(val, "\\(d2d\\)")) list(background = "pink") else list(background = "azure")), 
         "Excels At" = colDef(style = \(val, ix){
-          xl_at <- df_comparison$xl_at_count[ix]
+          xl_at <- df_comparison_table$xl_at_count[ix]
           if(xl_at==3) list(background = "wheat", fontSize = "80%", whiteSpace = "pre-line") 
           else if (xl_at==2) list(background = "cornsilk2", fontSize = "80%", whiteSpace = "pre-line")  
           else if (xl_at==1) list(background = "cornsilk1", fontSize = "80%", whiteSpace = "pre-line") 
@@ -757,55 +757,26 @@ server <- function(input, output, session) {
       details = function(ix) {
         
         # format this table nicely somehow...
-        tm <- df_comparison$Team[ix]
-        div(style = "padding: 16px;", tags$b(paste(tm, "Injury History: ")))
-        if(!is.na(tm)) reactable(ls_inj[[tm]], pagination = FALSE) else "Team not found..."
+        tm <- df_comparison_table$Team[ix]
+        if(is.na(tm)) tags$div(tags$h2(class = "title", "Team not found..."))
+        else tags$div(
+          style = "margin-left: 10px; margin-top: 10px; margin-bottom: 30px;",
+          tags$h2(class = "title", paste(tm, "Last", input$comparison_window, "Day Injury History: ")),
+          reactable(
+            ls_inj[[tm]],
+            pagination = FALSE,
+            fullWidth = FALSE,
+            defaultColDef = colDef(
+              align = "left",
+              minWidth = 120,
+              headerStyle = list(background = "lightblue", color = "white")
+            ),
+            columns = list(player_names = colDef(minWidth = 1000))
+          )
+        )
       }
     )
 
-    df_comparison_table |>
-      datatable(
-        rownames = FALSE,
-        escape = FALSE,
-        style = "default",
-        options = lst(
-          dom = "t",
-          paging = FALSE,
-          fixerHeader = TRUE,
-          columnDefs = list(list(visible = FALSE, targets = str_which(colnames(df_comparison_table), "_count|_colour") - 1)),
-          initComplete = JS(
-            "function(settings, json) {",
-              "$(this.api().table().header()).css({'background-color': 'blue', 'color': 'white'});",
-            "}"
-          )
-        )
-      ) |>
-      formatStyle(columns = "Player", valueColumns = "player_colour", backgroundColor = styleEqual(c("red", "pink", "azure"), c("red", "pink", "azure"))) |>
-      formatStyle(columns = colnames(df_comparison_table), border = "1px solid #000000") |>
-      formatCurrency(c(3:5, 8:12), "", digits=1) |>
-      formatCurrency(6:7, "") |>
-      formatStyle(
-        "Turnovers",
-        backgroundColor = styleInterval(min(df_comparison_table$Turnovers) + 0.01, c("lightgreen", "white")),
-      ) |>
-      formatStyle(columns = c("Excels At", "Weak At"), fontSize = "80%") |> 
-      # NOT WORKING... WHY???
-      # formatStyle(
-      #   columns = "Excels At",
-      #   valueColumns = "xl_at_count",
-      #   backgroundColor = styleEqual(0:3, c("black", "cornsilk2", "cornsilk1", "wheat"))
-      # ) |>
-      (\(dt){
-          cols <- c("Minutes", "3-pointers", "Points", "Field Goal Z", "Free Throw Z", "Rebounds", "Assists", "Steals", "Blocks")
-          for(col in cols){
-            dt <- formatStyle(
-              dt,
-              columns = col,
-              backgroundColor = styleInterval(max(df_comparison_table[[col]]) - 0.01, c('white', 'lightgreen'))
-            )
-          }
-          dt
-        })()
   })
 
 

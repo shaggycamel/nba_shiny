@@ -79,7 +79,7 @@ page_player_comparison <- layout_sidebar(
     checkboxInput("comparison_free_agent_filter", "Free Agents only", value = TRUE),
     # open = "open"
   ),
-  card(full_screen = TRUE, DTOutput("player_comparison_table")),
+  card(full_screen = TRUE, reactableOutput("player_comparison_table")),
   fillable = TRUE
 )
 

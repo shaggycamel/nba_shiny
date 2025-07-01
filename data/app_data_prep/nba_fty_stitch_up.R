@@ -1,5 +1,5 @@
 
-df_stitch <- bind_rows(
+df_stitch <<- bind_rows(
   
   df_fty_roster |> 
     select(timestamp, player_fantasy_id, , player_injury_status) |> 
