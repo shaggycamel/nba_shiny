@@ -270,7 +270,7 @@ server <- function(input, output, session) {
     
     if(input$fty_lg_ov_rank_toggle) plt <- plt + scale_y_reverse(n.breaks = length(ls_fty_name_to_cid))
 
-    ggplotly(plt) |>
+    plt <- ggplotly(plt) |>
       # Remove hover for line traces: 0:8 for each competitor
       style(hoverinfo = "none", traces = 0:length(unique(df_point$competitor_id))) |>
       layout(xaxis = list(fixedrange = TRUE), yaxis = list(fixedrange = TRUE)) |> 
@@ -280,9 +280,26 @@ server <- function(input, output, session) {
         range = list(min(df_point$matchup) - 0.2, max(df_point$matchup) + 0.2)
       ) |> 
       config(displayModeBar = FALSE)
+    
+    if(input$fty_lg_ov_just_h2h) plt <- {
+      
+      c_id <- ls_fty_name_to_cid[input$fty_competitor_select]
+      o_id <- filter(df_fty_schedule, competitor_id == c_id, week == cur_week)$opponent_id
+      
+      ts <- map_int(1:length(plt$x$data), \(x) unlist(ls_fty_name_to_cid[pluck(plt$x$data, x, "name")]))
+      ts_vis <- c(which(ts == c_id), which(ts == o_id))
+      
+      plt |>
+        style(
+          visible = "legendonly",
+          traces = setdiff(1:length(plt$x$data), ts_vis)
+        )
+    }
+    plt
 
   })
   
+  # NOT FINISHED -- MIGHT SCRAP
   output$competitor_snapshot <- renderPlotly({
     req(fty_parameters_met(), exists("df_fty_base"))
     
@@ -637,8 +654,9 @@ server <- function(input, output, session) {
         # game_date >= cur_date - days(7)
         game_date >= cur_date - days(input$comparison_window)
       ) |> 
-      select(team_slug, game_date, matchup, player_name) |> 
-      arrange(desc(game_date), desc(player_name)) |>  # replace name with salary
+      left_join(select(df_nba_roster, nba_id=player_id, salary)) |> 
+      select(team_slug, game_date, matchup, player_name, salary) |> 
+      arrange(desc(game_date), desc(salary)) |> 
       summarise(
         player_names = paste(player_name, collapse = ", "), 
         .by = c(team_slug, game_date, matchup)
@@ -701,6 +719,8 @@ server <- function(input, output, session) {
       ) |>
       relocate(Team, .after = Player) |>
       .calc_xl_at_count()
+    
+    count(df_comparison, xl_at_count) |> print()
 
     df_comparison_table <- filter(df_comparison, Minutes >= input$comparison_minute_filter)
     if(input$comparison_free_agent_filter) df_comparison_table <- filter(df_comparison_table, player_availability == "free_agent")
@@ -738,12 +758,12 @@ server <- function(input, output, session) {
         "Steals" = colDef(style = \(val) if(val == max(df_comparison_table$Steals)) list(background = "lightgreen") else NULL),
         "Blocks" = colDef(style = \(val) if(val == max(df_comparison_table$Blocks)) list(background = "lightgreen") else NULL),
         "Turnovers" = colDef(style = \(val) if(val == min(df_comparison_table$Turnovers)) list(background = "lightgreen") else NULL),
-        "Player" = colDef(style = \(val) if(str_detect(val, "\\(out\\)")) list(background = "red") else if(str_detect(val, "\\(d2d\\)")) list(background = "pink") else list(background = "azure")), 
+        "Player" = colDef(style = \(val) if(str_detect(val, "\\(out\\)")) list(background = "red") else if(str_detect(val, "\\((d2d|sus)\\)")) list(background = "pink") else list(background = "azure")), 
         "Excels At" = colDef(style = \(val, ix){
           xl_at <- df_comparison_table$xl_at_count[ix]
-          if(xl_at==3) list(background = "wheat", fontSize = "80%", whiteSpace = "pre-line") 
-          else if (xl_at==2) list(background = "cornsilk2", fontSize = "80%", whiteSpace = "pre-line")  
-          else if (xl_at==1) list(background = "cornsilk1", fontSize = "80%", whiteSpace = "pre-line") 
+          if (xl_at==1) list(background = "#00CDCD", fontSize = "80%", whiteSpace = "pre-line") 
+          else if (xl_at==2) list(background = "#8DEEEE", fontSize = "80%", whiteSpace = "pre-line") 
+          else if(xl_at==3) list(background = "#00FFFF", fontSize = "80%", whiteSpace = "pre-line") 
           else list(fontSize = "80%", whiteSpace = "pre-line")
         }),
         "Weak At" = colDef(style = list(fontSize = "80%", whiteSpace = "pre-line")),

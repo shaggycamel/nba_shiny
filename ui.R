@@ -24,6 +24,7 @@ page_fty_league_overview <- layout_sidebar(
     ),
     switchInput("fty_lg_ov_rank_toggle", value = TRUE, onLabel = "Rank", offLabel = "Value", size = "small"),
     switchInput("fty_lg_ov_cum_toggle", value = TRUE, onLabel = "W2W", offLabel = "Cum", size = "small"),
+    checkboxInput("fty_lg_ov_just_h2h", "Just H2H")
     # open = "open"
   ),
   card(full_screen = TRUE, plotlyOutput("fty_league_overview_rank_plot")),
