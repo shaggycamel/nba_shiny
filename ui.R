@@ -127,11 +127,29 @@ page_draft <- layout_sidebar(
     sliderInput("draft_top_n", "Top N Players", min = 10, max = 20, value = 15, ticks = FALSE),
     checkboxInput("draft_scale_minutes", "Scale by Minutes"),
     switchInput("draft_tot_avg_toggle", value = TRUE, onLabel = "Total", offLabel = "Mean", size = "small"),
-    # open = "open"
+  ), 
+  layout_sidebar(
+    sidebar = sidebar(selectInput("draft_player_log", NULL, choices = character(0), multiple = TRUE), position = "right"),
+    card(full_screen = TRUE, plotlyOutput("draft_stat_plot")),
+    border = FALSE
   ),
-  card(full_screen = TRUE, plotlyOutput("draft_stat_plot")),
+  border_radius = FALSE,
   fillable = TRUE,
+  class = "p-0"
 )
+
+
+ layout_sidebar(
+    sidebar = sidebar("Left sidebar"),
+    layout_sidebar(
+        sidebar = sidebar("Right sidebar", position = "right", open = FALSE),
+        "Main contents",
+        border = FALSE
+    ),
+    border_radius = FALSE,
+    fillable = TRUE,
+    class = "p-0"
+  )
 
 
 # News Transactions -------------------------------------------------------

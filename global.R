@@ -10,6 +10,7 @@ library(here)
 library(purrr)
 library(stringr)
 library(lubridate)
+library(reactable)
 
 
 # Set timezone ------------------------------------------------------------

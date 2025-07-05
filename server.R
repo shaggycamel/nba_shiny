@@ -7,7 +7,6 @@ library(lubridate)
 library(ggplot2)
 library(plotly)
 library(shinycssloaders)
-library(reactable)
 
 
 # Initialisation files ----------------------------------------------------
@@ -32,6 +31,7 @@ server <- function(input, output, session) {
   prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
   df_fty_base <<- readRDS("fty_base.RDS")
   ls_fty_base <<- magrittr::`%$%`(distinct(df_fty_base, platform, league_id, league_name), purrr::map(setNames(paste0(platform, "_", league_id), league_name), \(x) as.vector(x)))
+  vec_player_log_stream <<- dh_getQuery(db_con, "SELECT * FROM util.draft_player_log")$player_name
 
 # Login -------------------------------------------------------------------
   
@@ -165,7 +165,8 @@ server <- function(input, output, session) {
     # NBA schedule tab
     updateSelectInput(session, "week_selection", choices = week_drop_box_choices, selected = week_drop_box_choices[[cur_week]])
     
-    update
+    # Draft tab
+    updateSelectInput(session, "draft_player_log", choices = active_players, selected = vec_player_log_stream)
    
     # Stop loading page
     hidePageSpinner() 
@@ -720,8 +721,6 @@ server <- function(input, output, session) {
       relocate(Team, .after = Player) |>
       .calc_xl_at_count()
     
-    count(df_comparison, xl_at_count) |> print()
-
     df_comparison_table <- filter(df_comparison, Minutes >= input$comparison_minute_filter)
     if(input$comparison_free_agent_filter) df_comparison_table <- filter(df_comparison_table, player_availability == "free_agent")
     if(!is_null(input$comparison_team_or_player_filter)) df_comparison_table <- {
@@ -964,6 +963,27 @@ server <- function(input, output, session) {
 
 
 # Draft Assistance --------------------------------------------------------
+  
+    observe({
+      req(exists("vec_player_log_stream"))
+      
+      if(length(unique(vec_player_log_stream)) < length(input$draft_player_log)){
+        nm <- tibble(player_name = setdiff(input$draft_player_log, vec_player_log_stream))
+        dh_ingestData(db_con, nm, "util", "draft_player_log")
+      
+      } else if(length(unique(vec_player_log_stream)) > length(input$draft_player_log)){
+        nm <- str_replace_all(setdiff(vec_player_log_stream, input$draft_player_log), "'", "''")
+        nm <- paste(nm, collapse = "', '")
+        DBI::dbBegin(db_con)
+        DBI::dbExecute(db_con, glue::glue("DELETE FROM util.draft_player_log WHERE player_name IN ('{nm}')"))
+        DBI::dbCommit(db_con)
+      
+      }
+      vec_player_log_stream <<- dh_getQuery(db_con, "SELECT * FROM util.draft_player_log")$player_name
+      
+    }) |> 
+      bindEvent(input$draft_player_log, ignoreNULL=FALSE, ignoreInit=TRUE)
+  
   
   # MEAN VIEW ISN'T WORKING - check quantile stuff
   output$draft_stat_plot <- renderPlotly({
