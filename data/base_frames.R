@@ -27,6 +27,16 @@ df_nba_player_box_score <<- nba.dataRub::dh_getQuery(db_con, query_template("nba
   dplyr::mutate(season = ordered(season)) |>
   dplyr::mutate(season_type = ordered(season_type, c("Pre Season", "Regular Season", "Playoffs"))) |>
   dplyr::mutate(year_season_type = forcats::fct_cross(season_type, stringr::str_sub(season, start = 6), sep=" "))
+ 
+ 
+# Team Box Score --------------------------------------------------------------
+
+cat("\t- df_nba_team_box_score\n")
+df_nba_team_box_score <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_team_box_score_vw", sn="prev", pf=FALSE, lg=FALSE)) |> 
+  dplyr::mutate(game_date = lubridate::force_tz(game_date, tz = "EST")) |> 
+  dplyr::mutate(season = ordered(season)) |>
+  dplyr::mutate(season_type = ordered(season_type, c("Pre Season", "Regular Season", "Playoffs"))) |>
+  dplyr::mutate(year_season_type = forcats::fct_cross(season_type, stringr::str_sub(season, start = 6), sep=" "))
   
 
 # Season segments ---------------------------------------------------------

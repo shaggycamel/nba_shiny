@@ -123,8 +123,9 @@ page_draft <- layout_sidebar(
       "Statistic", 
       choices = filter(stat_selection, !str_detect(database_name, "_pct|_cat"))$formatted_name
     ),
-    sliderTextInput("draft_min_filter", "Limit Minutes", choices = 0), # updated dynamically in server.R
+    sliderInput("draft_min_filter", "Limit Minutes", step = 1, min = 0, max = as.numeric(0), value = as.numeric(0)),
     sliderInput("draft_top_n", "Top N Players", min = 10, max = 20, value = 15, ticks = FALSE),
+    # ADD COEFFICIENT OF VARIATION FILTER HERE
     checkboxInput("draft_scale_minutes", "Scale by Minutes"),
     switchInput("draft_tot_avg_toggle", value = TRUE, onLabel = "Total", offLabel = "Mean", size = "small"),
   ), 
