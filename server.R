@@ -312,6 +312,7 @@ server <- function(input, output, session) {
       getFunction("mean")
     }
     
+    # Minute Range Filter
     min_range <- filter(df_nba_player_box_score, season == prev_season) |> 
       summarise(min = stat_calc(min, na.rm = TRUE), .by = player_id) |>
       pull(min) |>
@@ -319,8 +320,21 @@ server <- function(input, output, session) {
       round()
     
     updateSliderInput(session, "draft_min_filter", max = min_range[["100%"]], value = min_range[["75%"]])
+    
+    # Variance Coefficient filter
+    cov_range <- df_nba_player_box_score |>
+      filter(season == prev_season, !(is.na(player_id) | is.na(player_name))) |>
+      summarise(
+        across(any_of(anl_cols$stat_cols), \(x) sd(x, na.rm=TRUE) / mean(x, na.rm=TRUE), .names = "{.col}_cov"),
+        .by = c(player_id, player_name)
+      ) |> 
+      pull(!!sym(paste0(input$draft_stat, "_cov"))) |>
+      quantile(na.rm = TRUE)
+    
+    updateSliderInput(session, "draft_cov_filter", max = round(cov_range[["75%"]], 2), value = cov_range[["50%"]])
+    
   }) |>
-    bindEvent(input$draft_tot_avg_toggle)
+    bindEvent(input$draft_tot_avg_toggle, input$draft_stat)
 
   # Additional H2H filter alteration
   observe({
@@ -1676,8 +1690,6 @@ server <- function(input, output, session) {
 
   # Draft Assistance --------------------------------------------------------
 
-  # ADD FILTER BY VARIANCE OF SELECTEd METRIC
-
   observe({
     req(exists("vec_player_log_stream"))
 
@@ -1706,10 +1718,7 @@ server <- function(input, output, session) {
       )
       DBI::dbCommit(db_con)
     }
-    vec_player_log_stream <<- dh_getQuery(
-      db_con,
-      "SELECT * FROM util.draft_player_log"
-    )$player_name
+    vec_player_log_stream <<- dh_getQuery(db_con, "SELECT * FROM util.draft_player_log")$player_name
   }) |>
     bindEvent(input$draft_player_log, ignoreNULL = FALSE, ignoreInit = TRUE)
 
@@ -1736,28 +1745,29 @@ server <- function(input, output, session) {
     df_overview <- df_nba_player_box_score |>
       filter(season == prev_season, !(is.na(player_id) | is.na(player_name))) |>
       summarise(
+        across(any_of(anl_cols$stat_cols), \(x) sd(x, na.rm=TRUE) / mean(x, na.rm=TRUE), .names = "{.col}_cov"),
         across(any_of(anl_cols$stat_cols), \(x) stat_calc(x, na.rm = TRUE)),
-        across(all_of(anl_cols$h2h_cols), \(x) sd(x, na.rm = TRUE) / mean(x, na.rm = TRUE), .names = "{.col}_cov"),
         .by = c(player_id, player_name)
       ) |>
       calc_z_pcts()
     
-    # Coefficient of variation filter -- caluclate in above mutate step!
-
     # User defined filters
     df_overview <- filter(df_overview, min >= input$draft_min_filter)
     df_overview <- filter(df_overview, !player_name %in% input$draft_player_log)
-
+    df_overview <- filter(df_overview, !!sym(paste0(input$draft_stat, "_cov")) <= input$draft_cov_filter)
+    # ADD VARIANCE FILTER AFTER PROCESSING!!!
+    # CREATE VARIANCE FILTER OBSERVE BLOCK FOR ITSELF
+    
     # Scale by minutes (if selected)
     if (input$draft_scale_minutes) df_overview <- df_overview |> 
         mutate(across(all_of(stat_selection$database_name[-c(1, 2)]), ~ .x / min))
 
     # Create df for plot
     df_overview <- map(
-      str_subset(stat_selection$database_name, "_pct|_cat", negate = TRUE),
+      discard(fmt_to_db_stat_name, \(x) str_detect(x, "_pct|_cat")),
       \(x) {
         col = sym(x)
-
+        
         if (col == sym("tov")) {
           slice_max(df_overview, order_by = min, prop = 0.35) |>
             select(player_name, {{ col }}) |>
@@ -1772,18 +1782,13 @@ server <- function(input, output, session) {
         }
       }
     ) |>
-      set_names(
-        filter(
-          stat_selection,
-          !str_detect(database_name, "_pct|_cat")
-        )$formatted_name
-      ) |>
       bind_rows(.id = "stat") |>
       mutate(top_cat_count = n(), .by = player_name) |>
       mutate(top_cats = paste(stat, collapse = ", "), .by = player_name)
-
+    
     # Stat selection and render plot
-    plt <- filter(df_overview, stat == input$draft_stat) |>
+    plt <- df_overview |> 
+      filter(stat == db_to_fmt_stat_name[[input$draft_stat]]) |>
       ggplot(aes(
         x = value,
         y = if (input$draft_stat == "Turnovers") {
@@ -1805,7 +1810,7 @@ server <- function(input, output, session) {
           "): ",
           ifelse(input$draft_tot_avg_toggle, "Total", "Average"),
           " ",
-          input$draft_stat,
+          db_to_fmt_stat_name[[input$draft_stat]],
           ifelse(input$draft_scale_minutes, " Scaled", "")
         ),
         x = NULL,

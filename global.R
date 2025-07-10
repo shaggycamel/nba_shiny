@@ -22,36 +22,21 @@ Sys.setenv(TZ = "NZ")
 # Dataframe used to select NBA stats
 stat_selection <-
   tibble::tribble(
-    ~formatted_name,
-    ~database_name,
-    "Top Five Categories",
-    "five_cat",
-    "All Nine Categories",
-    "nine_cat",
-    "Minutes",
-    "min",
-    "3-pointers",
-    "fg3_m",
-    "Points",
-    "pts",
-    "Field Goal %",
-    "fg_pct",
-    "Free Throw %",
-    "ft_pct",
-    "Field Goal Z",
-    "fg_z",
-    "Free Throw Z",
-    "ft_z",
-    "Rebounds",
-    "reb",
-    "Assists",
-    "ast",
-    "Steals",
-    "stl",
-    "Blocks",
-    "blk",
-    "Turnovers",
-    "tov"
+    ~formatted_name, ~database_name,
+    "Top Five Categories", "five_cat",
+    "All Nine Categories", "nine_cat",
+    "Minutes", "min",
+    "3-pointers", "fg3_m",
+    "Points", "pts",
+    "Field Goal %", "fg_pct",
+    "Free Throw %", "ft_pct",
+    "Field Goal Z", "fg_z",
+    "Free Throw Z", "ft_z",
+    "Rebounds", "reb",
+    "Assists", "ast",
+    "Steals", "stl",
+    "Blocks", "blk",
+    "Turnovers", "tov"
   )
 
 # Useful lists of stat names
@@ -59,6 +44,7 @@ fmt_to_db_stat_name <- magrittr::`%$%`(
   stat_selection,
   purrr::map(setNames(database_name, formatted_name), \(x) as.vector(x))
 )
+
 db_to_fmt_stat_name <- magrittr::`%$%`(
   stat_selection,
   purrr::map(setNames(formatted_name, database_name), \(x) as.vector(x))
