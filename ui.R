@@ -121,7 +121,7 @@ page_draft <- layout_sidebar(
     selectInput("draft_stat", "Statistic", choices = discard(fmt_to_db_stat_name, \(x) str_detect(x, "_pct|_cat"))),
     sliderInput("draft_min_filter", "Limit Minutes", step = 1, min = 0, max = as.numeric(0), value = as.numeric(0), ticks = FALSE),
     sliderInput("draft_top_n", "Top N Players", min = 10, max = 20, value = 15, ticks = FALSE),
-    sliderInput("draft_cov_filter", "Variance Coefficient", min = 0, max = 5, value = 5, step = 0.01, ticks = FALSE),
+    sliderInput("draft_cov_filter", "Variance Coefficient", step = 0.01, min = as.numeric(0), max = as.numeric(0), value = as.numeric(0), ticks = FALSE),
     checkboxInput("draft_scale_minutes", "Scale by Minutes"),
     switchInput("draft_tot_avg_toggle", value = TRUE, onLabel = "Total", offLabel = "Mean", size = "small"),
   ), 

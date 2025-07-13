@@ -251,11 +251,7 @@ server <- function(input, output, session) {
     # Init app filter list creation -------------------------------------------
 
     # Player Comparison tab
-    updateSelectInput(
-      session,
-      "comparison_team_or_player_filter",
-      choices = teams
-    )
+    updateSelectInput(session, "comparison_team_or_player_filter", choices = teams)
 
     # Player trend tab
     updateSelectInput(session, "trend_select_player", choices = active_players)
@@ -267,6 +263,7 @@ server <- function(input, output, session) {
       choices = ls_fty_name_to_cid,
       selected = ls_fty_name_to_cid[input$fty_competitor_select]
     )
+    
     updateSelectInput(
       session,
       "h2h_week",
@@ -288,12 +285,7 @@ server <- function(input, output, session) {
     )
 
     # Draft tab
-    updateSelectInput(
-      session,
-      "draft_player_log",
-      choices = active_players,
-      selected = vec_player_log_stream
-    )
+    updateSelectInput(session, "draft_player_log", choices = active_players, selected = vec_player_log_stream)
 
     # Stop loading page
     hidePageSpinner()
@@ -322,17 +314,16 @@ server <- function(input, output, session) {
     updateSliderInput(session, "draft_min_filter", max = min_range[["100%"]], value = min_range[["75%"]])
     
     # Variance Coefficient filter
-    cov_range <- df_nba_player_box_score |>
-      filter(season == prev_season, !(is.na(player_id) | is.na(player_name))) |>
+    cov_quantiles <- df_nba_player_box_score |>
+      filter(season == prev_season) |>
       summarise(
-        across(any_of(anl_cols$stat_cols), \(x) sd(x, na.rm=TRUE) / mean(x, na.rm=TRUE), .names = "{.col}_cov"),
+        cov = sd(!!sym(str_replace(input$draft_stat, "_z", "_pct")), na.rm=TRUE) / mean(!!sym(str_replace(input$draft_stat, "_z", "_pct")), na.rm=TRUE), 
         .by = c(player_id, player_name)
       ) |> 
-      pull(!!sym(paste0(input$draft_stat, "_cov"))) |>
+      pull(cov) |>
       quantile(na.rm = TRUE)
     
-    updateSliderInput(session, "draft_cov_filter", max = round(cov_range[["75%"]], 2), value = cov_range[["50%"]])
-    
+    updateSliderInput(session, "draft_cov_filter", min = floor(cov_quantiles[["0%"]] * 10^2) / 10^2, max = round(cov_quantiles[["100%"]], 2), value = cov_quantiles[["50%"]])
   }) |>
     bindEvent(input$draft_tot_avg_toggle, input$draft_stat)
 
@@ -1703,19 +1694,10 @@ server <- function(input, output, session) {
     } else if (
       length(unique(vec_player_log_stream)) > length(input$draft_player_log)
     ) {
-      nm <- str_replace_all(
-        setdiff(vec_player_log_stream, input$draft_player_log),
-        "'",
-        "''"
-      )
+      nm <- str_replace_all(setdiff(vec_player_log_stream, input$draft_player_log), "'", "''")
       nm <- paste(nm, collapse = "', '")
       DBI::dbBegin(db_con)
-      DBI::dbExecute(
-        db_con,
-        glue::glue(
-          "DELETE FROM util.draft_player_log WHERE player_name IN ('{nm}')"
-        )
-      )
+      DBI::dbExecute(db_con, glue::glue("DELETE FROM util.draft_player_log WHERE player_name IN ('{nm}')"))
       DBI::dbCommit(db_con)
     }
     vec_player_log_stream <<- dh_getQuery(db_con, "SELECT * FROM util.draft_player_log")$player_name
@@ -1742,7 +1724,7 @@ server <- function(input, output, session) {
     } else {
       getFunction("mean")
     }
-    df_overview <- df_nba_player_box_score |>
+    df_overview <<- df_nba_player_box_score |>
       filter(season == prev_season, !(is.na(player_id) | is.na(player_name))) |>
       summarise(
         across(any_of(anl_cols$stat_cols), \(x) sd(x, na.rm=TRUE) / mean(x, na.rm=TRUE), .names = "{.col}_cov"),
@@ -1751,47 +1733,43 @@ server <- function(input, output, session) {
       ) |>
       calc_z_pcts()
     
-    # User defined filters
+    # User defined filters | Scale by minutes (if selected)
     df_overview <- filter(df_overview, min >= input$draft_min_filter)
     df_overview <- filter(df_overview, !player_name %in% input$draft_player_log)
-    df_overview <- filter(df_overview, !!sym(paste0(input$draft_stat, "_cov")) <= input$draft_cov_filter)
-    # ADD VARIANCE FILTER AFTER PROCESSING!!!
-    # CREATE VARIANCE FILTER OBSERVE BLOCK FOR ITSELF
-    
-    # Scale by minutes (if selected)
     if (input$draft_scale_minutes) df_overview <- df_overview |> 
         mutate(across(all_of(stat_selection$database_name[-c(1, 2)]), ~ .x / min))
-
+    
     # Create df for plot
-    df_overview <- map(
-      discard(fmt_to_db_stat_name, \(x) str_detect(x, "_pct|_cat")),
-      \(x) {
-        col = sym(x)
-        
-        if (col == sym("tov")) {
-          slice_max(df_overview, order_by = min, prop = 0.35) |>
-            select(player_name, {{ col }}) |>
-            arrange({{ col }}) |>
-            slice_head(n = input$draft_top_n) |>
-            set_names(c("player_name", "value"))
-        } else {
-          select(df_overview, player_name, {{ col }}) |>
-            arrange(desc({{ col }})) |>
-            slice_head(n = input$draft_top_n) |>
-            set_names(c("player_name", "value"))
-        }
-      }
-    ) |>
-      bind_rows(.id = "stat") |>
-      mutate(top_cat_count = n(), .by = player_name) |>
-      mutate(top_cats = paste(stat, collapse = ", "), .by = player_name)
+    max_min_players <- slice_max(df_overview, order_by = min, prop = 0.35)$player_id
+    df_overview <- left_join(
+      
+      select(df_overview, -ends_with("_cov")) |> 
+        pivot_longer(any_of(anl_cols$stat_cols), names_to = "stat") |> 
+        filter(!str_detect(stat, "_pct")),
+      
+      select(df_overview, player_id, player_name, ends_with("_cov")) |> 
+        pivot_longer(ends_with("_cov"), names_to = "stat", values_to = "covariance") |> 
+        mutate(stat = str_remove(stat, "_cov")) |> 
+        mutate(stat = str_replace(stat, "_pct", "_z"))
+      
+    ) |> 
+      filter(
+        stat %in% discard(fmt_to_db_stat_name, \(x) str_detect(x, "_pct|_cat")),
+        !(stat == input$draft_stat & covariance > input$draft_cov_filter)
+      ) |> 
+      mutate(value = if_else(stat=="tov" & !player_id %in% max_min_players, NA, value)) |> 
+      mutate(rank = if_else(stat=="tov", dense_rank(value), dense_rank(desc(value))), .by = stat) |> 
+      mutate(top_cats = if_else(rank <= input$draft_top_n, stat, NA)) |>
+      mutate(top_cats = na_if(paste(na.omit(top_cats), collapse = ", "), ""), .by = player_id) |> 
+      mutate(top_cat_count = str_count(top_cats, ",") + 1)
     
     # Stat selection and render plot
     plt <- df_overview |> 
-      filter(stat == db_to_fmt_stat_name[[input$draft_stat]]) |>
+      filter(stat == input$draft_stat) |>
+      slice_min(order_by = rank, n = input$draft_top_n) |> 
       ggplot(aes(
         x = value,
-        y = if (input$draft_stat == "Turnovers") {
+        y = if (input$draft_stat == "tov") {
           reorder(player_name, -value)
         } else {
           reorder(player_name, value)
@@ -1800,16 +1778,10 @@ server <- function(input, output, session) {
         text = top_cats
       )) +
       geom_col() +
-      guides(
-        fill = guide_legend(title = "Other Category Count", reverse = TRUE)
-      ) +
-      labs(
-        title = paste0(
-          "Previous Seasion (",
-          prev_season,
-          "): ",
-          ifelse(input$draft_tot_avg_toggle, "Total", "Average"),
-          " ",
+      guides(fill = guide_legend(title = "Other Category Count", reverse = TRUE)) +
+      labs(title = paste0(
+        "Previous Seasion (", prev_season, "): ",
+          ifelse(input$draft_tot_avg_toggle, "Total", "Average"), " ",
           db_to_fmt_stat_name[[input$draft_stat]],
           ifelse(input$draft_scale_minutes, " Scaled", "")
         ),
