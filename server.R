@@ -29,8 +29,8 @@ server <- function(input, output, session) {
   } else {
     dh_createCon("cockroach")
   }
-  # cur_date <<- strptime(Sys.time(), "%Y", tz = "EST")
-  cur_date <<- as.Date("2025-02-01")
+  cur_date <<- strptime(Sys.time(), "%Y", tz = "EST")
+  # cur_date <<- as.Date("2025-02-01")
   cur_season <<- reticulate::import(
     "nba_api"
   )$stats$library$parameters$Season$current_season
@@ -44,10 +44,7 @@ server <- function(input, output, session) {
       as.vector(x)
     })
   )
-  vec_player_log_stream <<- dh_getQuery(
-    db_con,
-    "SELECT * FROM util.draft_player_log"
-  )$player_name
+  vec_player_log_stream <<- dh_getQuery(db_con, "SELECT * FROM util.draft_player_log")$player_name
 
   # Login -------------------------------------------------------------------
 
@@ -66,13 +63,8 @@ server <- function(input, output, session) {
           league_name == input$fty_league_select
         )$competitor_name
       )
-      platform_selected <<- str_split(
-        ls_fty_base[input$fty_league_select],
-        "_"
-      )[[1]][1]
-      league_selected <<- str_split(ls_fty_base[input$fty_league_select], "_")[[
-        1
-      ]][2]
+      platform_selected <<- str_split(ls_fty_base[input$fty_league_select], "_")[[1]][1]
+      league_selected <<- str_split(ls_fty_base[input$fty_league_select], "_")[[1]][2]
     }),
     input$fty_league_select,
     ignoreNULL = TRUE
@@ -81,9 +73,7 @@ server <- function(input, output, session) {
   bindEvent(
     observe({
       if (input$fty_competitor_select == "" && input$fty_league_select == "") {
-        output$login_messages <- renderText(
-          "Select a league, then select a competitor."
-        )
+        output$login_messages <- renderText("Select a league, then select a competitor.")
       } else if (input$fty_competitor_select != "") {
         fty_parameters_met(TRUE)
         removeModal()
@@ -98,9 +88,7 @@ server <- function(input, output, session) {
   bindEvent(
     observe({
       if (!fty_parameters_met()) {
-        output$login_messages <- renderText(
-          "You gotta go fill the form at least once!"
-        )
+        output$login_messages <- renderText("You gotta go fill the form at least once!")
       } else {
         removeModal()
         output$login_messages <- NULL
@@ -114,9 +102,7 @@ server <- function(input, output, session) {
   login_modal <- function() {
     showModal(
       modalDialog(
-        tags$head(tags$style(HTML(
-          ".selectize-dropdown-content{min-width: 100%; box-sizing: border-box;}"
-        ))),
+        tags$head(tags$style(HTML(".selectize-dropdown-content{min-width: 100%; box-sizing: border-box;}"))),
         selectizeInput(
           "fty_league_select",
           label = NULL,
@@ -168,9 +154,7 @@ server <- function(input, output, session) {
     showPageSpinner(type = 6, caption = data_collection_caption)
 
     # Data Frames
-    if (Sys.info()["user"] == "fred") {
-      source(here("data", "base_frames.R"))
-    }
+    if (Sys.info()["user"] == "fred") source(here("data", "base_frames.R"))
     load("nba_base.RData", envir = globalenv())
 
     .load_datasets <- function() {
@@ -188,9 +172,7 @@ server <- function(input, output, session) {
       cur_date
     }
     cur_week <<- df_week_game_count |>
-      mutate(
-        week_end = if_else(week_end - week_start < 6, week_start + 6, week_end)
-      ) |>
+      mutate(week_end = if_else(week_end - week_start < 6, week_start + 6, week_end)) |>
       filter(cur_date >= week_start, cur_date <= week_end) |>
       pull(week) |>
       unique()
@@ -208,22 +190,10 @@ server <- function(input, output, session) {
     }
 
     # Maybe get to the point where I place free agents at top of list
-    active_players <<- sort_players_by_min_desc(filter(
-      df_nba_player_box_score,
-      player_injury_status != "NA" | is.na(player_injury_status)
-    ))
-    free_agents <<- sort_players_by_min_desc(filter(
-      df_nba_player_box_score,
-      player_availability == "free_agent"
-    ))
-    ls_fty_name_to_cid <<- magrittr::`%$%`(
-      df_fty_competitor,
-      map(setNames(competitor_id, competitor_name), \(x) as.vector(x))
-    )
-    ls_fty_cid_to_name <<- magrittr::`%$%`(
-      df_fty_competitor,
-      map(setNames(competitor_name, competitor_id), \(x) as.vector(x))
-    )
+    active_players <<- sort_players_by_min_desc(filter(df_nba_player_box_score, player_injury_status != "NA" | is.na(player_injury_status)))
+    free_agents <<- sort_players_by_min_desc(filter(df_nba_player_box_score, player_availability == "free_agent"))
+    ls_fty_name_to_cid <<- magrittr::`%$%`(df_fty_competitor, map(setNames(competitor_id, competitor_name), \(x) as.vector(x)))
+    ls_fty_cid_to_name <<- magrittr::`%$%`(df_fty_competitor, map(setNames(competitor_name, competitor_id), \(x) as.vector(x)))
     ls_log_config <<- list(
       "reset" = paste0(
         "h2h_competitor=",
@@ -234,19 +204,8 @@ server <- function(input, output, session) {
       )
     )
     ss_week <- select(df_fty_schedule, week, week_start, week_end)
-    week_drop_box_choices <<- unique(paste0(
-      "Week ",
-      ss_week$week,
-      ": (",
-      ss_week$week_start,
-      " to ",
-      ss_week$week_end,
-      ")"
-    ))
-    week_drop_box_choices <<- sort(setNames(
-      str_extract(week_drop_box_choices, "\\d{4}.*-\\d{2}"),
-      week_drop_box_choices
-    ))
+    week_drop_box_choices <<- unique(paste0("Week ", ss_week$week, ": (", ss_week$week_start, " to ", ss_week$week_end, ")"))
+    week_drop_box_choices <<- sort(setNames(str_extract(week_drop_box_choices, "\\d{4}.*-\\d{2}"), week_drop_box_choices))
 
     # Init app filter list creation -------------------------------------------
 
@@ -257,12 +216,7 @@ server <- function(input, output, session) {
     updateSelectInput(session, "trend_select_player", choices = active_players)
 
     # H2H tab
-    updateSelectInput(
-      session,
-      "h2h_competitor",
-      choices = ls_fty_name_to_cid,
-      selected = ls_fty_name_to_cid[input$fty_competitor_select]
-    )
+    updateSelectInput(session, "h2h_competitor", choices = ls_fty_name_to_cid, selected = ls_fty_name_to_cid[input$fty_competitor_select])
     
     updateSelectInput(
       session,
@@ -277,12 +231,7 @@ server <- function(input, output, session) {
     updateSelectInput(session, "h2h_log_config", choices = ls_log_config)
 
     # NBA schedule tab
-    updateSelectInput(
-      session,
-      "week_selection",
-      choices = week_drop_box_choices,
-      selected = week_drop_box_choices[[cur_week]]
-    )
+    updateSelectInput(session, "week_selection", choices = week_drop_box_choices, selected = week_drop_box_choices[[cur_week]])
 
     # Draft tab
     updateSelectInput(session, "draft_player_log", choices = active_players, selected = vec_player_log_stream)
@@ -297,12 +246,7 @@ server <- function(input, output, session) {
   observe({
     # Draft Assistance tab
     req(fty_parameters_met, exists("df_nba_player_box_score"))
-
-    stat_calc <- if (input$draft_tot_avg_toggle) {
-      getFunction("sum")
-    } else {
-      getFunction("mean")
-    }
+    stat_calc <- if(input$draft_tot_avg_toggle) getFunction("sum") else getFunction("mean")
     
     # Minute Range Filter
     min_range <- filter(df_nba_player_box_score, season == prev_season) |> 
@@ -330,18 +274,9 @@ server <- function(input, output, session) {
   # Additional H2H filter alteration
   observe({
     req(fty_parameters_met, exists("df_h2h_og"))
-    competitor_players <- sort(
-      filter(
-        slice_max(df_h2h_og, game_date, by = competitor_id),
-        competitor_id == input$h2h_competitor
-      )$player_name
-    )
+    competitor_players <- sort(filter(slice_max(df_h2h_og, game_date, by = competitor_id), competitor_id == input$h2h_competitor)$player_name)
     updateSelectInput(session, "h2h_ex_player", choices = competitor_players)
-    updateSelectInput(
-      session,
-      "h2h_add_player",
-      choices = setdiff(active_players, competitor_players)
-    )
+    updateSelectInput(session, "h2h_add_player", choices = setdiff(active_players, competitor_players))
     updateSelectInput(session, "h2h_hl_player", choices = competitor_players)
     # Is it possible to highlight newly added players? - Can they be included in list?
   }) |>
@@ -355,43 +290,29 @@ server <- function(input, output, session) {
       "comparison_team_or_player_filter",
       choices = if (input$comparison_team_or_player) {
         teams
-      } else if (
-        !input$comparison_team_or_player & input$comparison_free_agent_filter
-      ) {
+      } else if (!input$comparison_team_or_player & input$comparison_free_agent_filter) {
         intersect(
           free_agents,
-          filter(
-            df_comparison,
-            Minutes >= input$comparison_minute_filter
-          )$Player |>
+          filter(df_comparison, Minutes >= input$comparison_minute_filter)$Player |>
             str_remove("\\(.*\\)") |>
             str_squish()
         )
       } else {
         intersect(
           active_players,
-          filter(
-            df_comparison,
-            Minutes >= input$comparison_minute_filter
-          )$Player |>
+          filter(df_comparison, Minutes >= input$comparison_minute_filter)$Player |>
             str_remove("\\(.*\\)") |>
             str_squish()
         )
       }
     )
   }) |>
-    bindEvent(
-      input$comparison_team_or_player,
-      input$comparison_free_agent_filter
-    )
+    bindEvent(input$comparison_team_or_player, input$comparison_free_agent_filter)
 
   # FTY League Overview -------------------------------------------------
 
   # Reactive H2H data creation
-  df_lo <- reactive(df_fty_league_overview_prepare(
-    platform_selected,
-    league_selected
-  )) |>
+  df_lo <- reactive(df_fty_league_overview_prepare(platform_selected, league_selected)) |>
     bindEvent(input$fty_dash_init)
 
   output$fty_league_overview_rank_plot <- renderPlotly({
@@ -402,29 +323,16 @@ server <- function(input, output, session) {
       plot_col <- paste0(plot_col, "_rank")
     }
     df_fty_league_overview <- df_lo()
-    df_point <- filter(
-      df_fty_league_overview,
-      as.integer(matchup_sigmoid) == matchup_sigmoid
-    )
+    df_point <- filter(df_fty_league_overview, as.integer(matchup_sigmoid) == matchup_sigmoid)
 
     plt <- if (input$fty_lg_ov_cum_toggle) {
       df_fty_league_overview |>
-        ggplot(aes(
-          x = matchup_sigmoid,
-          y = !!sym(plot_col),
-          colour = competitor_name
-        )) +
+        ggplot(aes(x = matchup_sigmoid, y = !!sym(plot_col), colour = competitor_name)) +
         geom_line(linewidth = 0.5) +
         geom_point(data = df_point, size = 2) +
-        scale_x_continuous(
-          breaks = sort(unique(df_point$matchup)),
-          labels = sort(unique(df_point$matchup))
-        ) +
+        scale_x_continuous(breaks = sort(unique(df_point$matchup)), labels = sort(unique(df_point$matchup))) +
         labs(
-          title = paste(
-            "Competitor Category Ranking:",
-            db_to_fmt_stat_name[[input$fty_lg_ov_cat]]
-          ),
+          title = paste("Competitor Category Ranking:", db_to_fmt_stat_name[[input$fty_lg_ov_cat]]),
           x = "Matchup Period",
           y = input$fty_lg_ov_cat
         ) +
@@ -437,21 +345,14 @@ server <- function(input, output, session) {
           c(all_of(anl_cols$h2h_cols), matches("cat$|rank$")),
           \(x) cumsum(x)
         )) |>
-        ggplot(aes(
-          x = matchup_sigmoid,
-          y = !!sym(plot_col),
-          colour = competitor_name
-        )) +
+        ggplot(aes(x = matchup_sigmoid, y = !!sym(plot_col), colour = competitor_name)) +
         geom_path() +
         scale_x_continuous(
           breaks = sort(unique(df_point$matchup)),
           labels = sort(unique(df_point$matchup))
         ) +
         labs(
-          title = paste(
-            "Competitor Category Ranking:",
-            db_to_fmt_stat_name[[input$fty_lg_ov_cat]]
-          ),
+          title = paste("Competitor Category Ranking:", db_to_fmt_stat_name[[input$fty_lg_ov_cat]]),
           x = "Matchup Period",
           y = input$fty_lg_ov_cat
         ) +
@@ -464,20 +365,10 @@ server <- function(input, output, session) {
 
     plt <- ggplotly(plt) |>
       # Remove hover for line traces: 0:8 for each competitor
-      style(
-        hoverinfo = "none",
-        traces = 0:length(unique(df_point$competitor_id))
-      ) |>
-      layout(
-        xaxis = list(fixedrange = TRUE),
-        yaxis = list(fixedrange = TRUE)
-      ) |>
+      style(hoverinfo = "none", traces = 0:length(unique(df_point$competitor_id))) |>
+      layout(xaxis = list(fixedrange = TRUE), yaxis = list(fixedrange = TRUE)) |>
       rangeslider(
-        start = ifelse(
-          !input$fty_lg_ov_cum_toggle,
-          1,
-          max(df_point$matchup) - 5.1
-        ),
+        start = ifelse(!input$fty_lg_ov_cum_toggle, 1, max(df_point$matchup) - 5.1),
         end = max(df_point$matchup) + 0.1,
         range = list(min(df_point$matchup) - 0.2, max(df_point$matchup) + 0.2)
       ) |>
@@ -486,22 +377,12 @@ server <- function(input, output, session) {
     if (input$fty_lg_ov_just_h2h) {
       plt <- {
         c_id <- ls_fty_name_to_cid[input$fty_competitor_select]
-        o_id <- filter(
-          df_fty_schedule,
-          competitor_id == c_id,
-          week == cur_week
-        )$opponent_id
+        o_id <- filter(df_fty_schedule, competitor_id == c_id, week == cur_week)$opponent_id
 
-        ts <- map_int(1:length(plt$x$data), \(x) {
-          unlist(ls_fty_name_to_cid[pluck(plt$x$data, x, "name")])
-        })
+        ts <- map_int(1:length(plt$x$data), \(x) unlist(ls_fty_name_to_cid[pluck(plt$x$data, x, "name")]))
         ts_vis <- c(which(ts == c_id), which(ts == o_id))
 
-        plt |>
-          style(
-            visible = "legendonly",
-            traces = setdiff(1:length(plt$x$data), ts_vis)
-          )
+        style(plt, cisible = "legendonly", traces = setdiff(1:length(plt$x$data), ts_vis))
       }
     }
     plt
@@ -1438,20 +1319,17 @@ server <- function(input, output, session) {
 
   observe({
     tms <- tbl_schedule_grid[input$schedule_table_rows_current, ]$Team
-    updateSelectInput(session, "comparison_team_filter", selected = tms)
+    updateSwitchInput(session, "comparison_team_or_player", value = TRUE)
+    later::later(\() updateSelectInput(session, "comparison_team_or_player_filter", choices = teams, selected = tms), delay = 0.05)
+    show_toast(title = NULL, text = "Teams added to comparison...", position = "bottom-start", type = "info", timer = 2000)
   }) |>
     bindEvent(input$copy_teams, ignoreInit = TRUE)
 
   output$schedule_table <- renderDT({
     # Prepare tables to be presented
     # tbl_schedule <<- tbl_week_games$data[[6]] |>
-    tbl_schedule <- tbl_week_games$data[[match(
-      input$week_selection,
-      week_drop_box_choices
-    )]] |>
-      mutate(across(ends_with(")"), \(x) {
-        if_else(as.character(x) == "NULL", 0, 1)
-      })) |>
+    tbl_schedule <- tbl_week_games$data[[match(input$week_selection, week_drop_box_choices)]] |>
+      mutate(across(ends_with(")"), \(x) if_else(as.character(x) == "NULL", 0, 1))) |>
       mutate(across(c(contains("games"), Team), as.factor))
 
     ts_names <- tmp_names <- str_subset(colnames(tbl_schedule), "\\(")
@@ -1462,32 +1340,11 @@ server <- function(input, output, session) {
       nm <- table(names(tmp_names)[1:ix])[names(tmp_names)[ix]]
       names(ts_names)[ix] <- paste0(nm[[1]], "_", names(nm))
 
-      if (
-        as.Date(
-          paste0(
-            year(selected_week_dates[1]),
-            "/",
-            str_extract(tmp_names[ix], "\\d{2}/\\d{2}")
-          ),
-          "%Y/%d/%m"
-        ) ==
-          selected_week_dates[2]
-      ) {
+      if (as.Date(paste0(year(selected_week_dates[1]), "/", str_extract(tmp_names[ix], "\\d{2}/\\d{2}")), "%Y/%d/%m") == selected_week_dates[2]) {
         wk_th <<- ix
       }
 
-      if (
-        !exists("wk_th") &&
-          as.Date(
-            paste0(
-              year(selected_week_dates[1]),
-              "/",
-              str_extract(tmp_names[ix], "\\d{2}/\\d{2}")
-            ),
-            "%Y/%d/%m"
-          ) ==
-            selected_week_dates[2] + days(1)
-      ) {
+      if (!exists("wk_th") && as.Date(paste0(year(selected_week_dates[1]), "/", str_extract(tmp_names[ix], "\\d{2}/\\d{2}")), "%Y/%d/%m") == selected_week_dates[2] + days(1)) {
         wk_th <<- ix - 1
       }
     }
@@ -1506,28 +1363,18 @@ server <- function(input, output, session) {
 
     # If a day is missing from ts_names add it in
     if (length(keep_at(ts_names, \(x) str_detect(x, "1_"))) < 7) {
-      ms_dt_nm <- setdiff(
-        keep(expected_elements, \(x) str_detect(x, "1_")),
-        names(ts_names)
-      )
+      ms_dt_nm <- setdiff(keep(expected_elements, \(x) str_detect(x, "1_")), names(ts_names))
       ms_dt_ix <- which(expected_elements == ms_dt_nm) - 1
       ms_dt <- (selected_week_dates[1] + days(ms_dt_ix)) |>
         format("%a (%d/%m)") |>
         setNames(ms_dt_nm)
 
       ts_names <- append(ts_names, ms_dt, after = ms_dt_ix)
-      tbl_schedule <- mutate(
-        tbl_schedule,
-        !!ms_dt := NA_real_,
-        .after = ms_dt_ix + 1
-      )
+      tbl_schedule <- mutate(tbl_schedule, !!ms_dt := NA_real_, .after = ms_dt_ix + 1)
       wk_th <<- wk_th + 1
     }
 
-    pin_index <- match(
-      str_subset(colnames(tbl_schedule), format(input$pin_date, "%d/%m")),
-      colnames(tbl_schedule)
-    )
+    pin_index <- match(str_subset(colnames(tbl_schedule), format(input$pin_date, "%d/%m")), colnames(tbl_schedule))
     pin_sum_cols <- if (input$pin_dir == "+") {
       pin_index:(wk_th + 1)
     } else {
