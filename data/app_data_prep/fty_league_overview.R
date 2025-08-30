@@ -5,8 +5,8 @@ df_fty_league_overview_prepare <<- function(platform_selected, league_selected){
     df_fty_box_score |> 
     left_join(
       df_fty_box_score |> 
-        select(competitor_id, matchup, all_of(anl_cols$h2h_cols)) |> 
-        mutate(across(anl_cols$h2h_cols, \(x) percent_rank(x)), .by = matchup) |> 
+        select(competitor_id, matchup, all_of(anl_cols$h2h_cols)) |>
+        mutate(across(anl_cols$h2h_cols, \(x) percent_rank(x)), .by = matchup) |>
         mutate(tov = 1 - tov) |> # Reverse turnover distribution | Eventually fix this in any hover boxes
         pivot_longer(all_of(anl_cols$h2h_cols), names_to = "stat", values_to = "perc_rank") |> 
         mutate(nine_cat = sum(perc_rank), .by = c(competitor_id, matchup)) |>
@@ -45,12 +45,13 @@ df_fty_league_overview_prepare <<- function(platform_selected, league_selected){
   
   df_latest_matchup <- filter(df_fty_league_overview, matchup == max(matchup))
   df_fty_league_overview <- filter(df_fty_league_overview, matchup < max(matchup))
-    
+  
   df_fty_league_overview <- 
     df_fty_league_overview |> 
     mutate(across(where(is.numeric), \(x) replace_na(x, 0))) |> 
     group_by(competitor_id, matchup) |> 
     group_map(.keep = TRUE, \(df_t, ...){
+      
       x <- seq(-5, 5, 0.3)
       df_ls <- list()
       for(stat in fmt_to_db_stat_name[fmt_to_db_stat_name != "min"]){
@@ -62,7 +63,15 @@ df_fty_league_overview_prepare <<- function(platform_selected, league_selected){
         stat_rank_sigmoid <- scales::rescale(pracma::sigmoid(matchup_sigmoid), to = c(df_t[[paste0(stat, "_rank")]], df_t[[paste0(stat, "_rank_lead")]]))
         matchup_sigmoid <- scales::rescale(matchup_sigmoid, to = c(df_t$matchup, df_t$matchup_lead))
         
-        df_ls <- append(df_ls, list(tibble(competitor_id = df_t$competitor_id, matchup = df_t$matchup, matchup_sigmoid = matchup_sigmoid, stat = stat, sigmoid = stat_sigmoid, rank_sigmoid = stat_rank_sigmoid)))
+        df_ls <- df_ls |> 
+          append(list(tibble(
+            competitor_id = df_t$competitor_id, 
+            matchup = df_t$matchup, 
+            matchup_sigmoid = matchup_sigmoid, 
+            stat = stat, 
+            sigmoid = stat_sigmoid, 
+            rank_sigmoid = stat_rank_sigmoid
+          )))
       }
       
       df_ls

@@ -23,6 +23,8 @@ page_fty_league_overview <- layout_sidebar(
       )
     ),
     switchInput("fty_lg_ov_rank_toggle", value = TRUE, onLabel = "Rank", offLabel = "Value", size = "small"),
+    switchInput("fty_lg_ov_cum_toggle", value = TRUE, onLabel = "W2W", offLabel = "Cum", size = "small"),
+    checkboxInput("fty_lg_ov_just_h2h", "Just H2H")
     # open = "open"
   ),
   card(full_screen = TRUE, plotlyOutput("fty_league_overview_rank_plot")),
@@ -38,6 +40,7 @@ page_h2h <- layout_sidebar(
       selectInput("h2h_competitor", "Competitor", choices = character(0)),
       selectInput("h2h_week", "Week", choices = 0) 
     ),
+    radioButtons("h2h_window", "Rolling days", c(7, 15, 30), inline = TRUE),
     layout_columns(
       selectInput("h2h_ex_player", "Exclude", choices = character(0), multiple = TRUE),
       selectInput("h2h_add_player", "Add", choices = character(0), multiple = TRUE),
@@ -69,14 +72,15 @@ page_h2h <- layout_sidebar(
 
 page_player_comparison <- layout_sidebar(
   sidebar = sidebar(
-    selectInput("comparison_team_filter", "Team", choices = character(0), multiple = TRUE),
+    switchInput("comparison_team_or_player", value = TRUE, onLabel = "Team", offLabel = "Player", size = "small"),
+    selectInput("comparison_team_or_player_filter", NULL, choices = character(0), multiple = TRUE),
     selectizeInput("comparison_excels_at_filter", "Excels at", choices = discard(fmt_to_db_stat_name, \(x) str_detect(x, "_pct|_cat")), options = list(maxItems = 5, onInitialize = I('function() { this.setValue(""); }'))),
+    radioButtons("comparison_window", "Rolling days", c(7, 15, 30), inline = TRUE),
     sliderInput("comparison_minute_filter", "Minute Filter", min = 0, max = 50, value = 20, round = TRUE),
-    radioButtons("date_range_switch", NULL, choices = c("Seven Days", "Two Weeks", "One Month")),
     checkboxInput("comparison_free_agent_filter", "Free Agents only", value = TRUE),
     # open = "open"
   ),
-  card(full_screen = TRUE, DTOutput("player_comparison_table")),
+  card(full_screen = TRUE, reactableOutput("player_comparison_table")),
   fillable = TRUE
 )
 
@@ -114,20 +118,35 @@ page_player_trend <- layout_sidebar(
 
 page_draft <- layout_sidebar(
   sidebar = sidebar(
-    selectInput(
-      "draft_stat", 
-      "Statistic", 
-      choices = filter(stat_selection, !str_detect(database_name, "_pct|_cat"))$formatted_name
-    ),
-    sliderTextInput("draft_min_filter", "Limit Minutes", choices = 0), # updated dynamically in server.R
+    selectInput("draft_stat", "Statistic", choices = discard(fmt_to_db_stat_name, \(x) str_detect(x, "_pct|_cat"))),
+    sliderInput("draft_min_filter", "Limit Minutes", step = 1, min = 0, max = as.numeric(0), value = as.numeric(0), ticks = FALSE),
     sliderInput("draft_top_n", "Top N Players", min = 10, max = 20, value = 15, ticks = FALSE),
+    sliderInput("draft_cov_filter", "Variance Coefficient", step = 0.01, min = as.numeric(0), max = as.numeric(0), value = as.numeric(0), ticks = FALSE),
     checkboxInput("draft_scale_minutes", "Scale by Minutes"),
     switchInput("draft_tot_avg_toggle", value = TRUE, onLabel = "Total", offLabel = "Mean", size = "small"),
-    # open = "open"
+  ), 
+  layout_sidebar(
+    sidebar = sidebar(selectInput("draft_player_log", NULL, choices = character(0), multiple = TRUE), position = "right"),
+    card(full_screen = TRUE, plotlyOutput("draft_stat_plot")),
+    border = FALSE
   ),
-  card(full_screen = TRUE, plotlyOutput("draft_stat_plot")),
+  border_radius = FALSE,
   fillable = TRUE,
+  class = "p-0"
 )
+
+
+ layout_sidebar(
+    sidebar = sidebar("Left sidebar"),
+    layout_sidebar(
+        sidebar = sidebar("Right sidebar", position = "right", open = FALSE),
+        "Main contents",
+        border = FALSE
+    ),
+    border_radius = FALSE,
+    fillable = TRUE,
+    class = "p-0"
+  )
 
 
 # News Transactions -------------------------------------------------------
@@ -150,8 +169,9 @@ ui <- page_navbar(
   # Move to respective page
   # tags$head(tags$style(HTML(".selectize-dropdown{z-index: 999}"))),
   # tags$head(tags$style(HTML(".selectize-dropdown-content{white-space: nowrap;}"))),
-  title = "NBA Fantasy",
   id = "title_container",
+  window_title = "NBA Fantasy",
+  title = uiOutput("navbar_title"),
   nav_spacer(),
   nav_panel("Fantasy Overview", page_fty_league_overview),
   nav_panel("Head to Head", page_h2h),
