@@ -89,7 +89,7 @@ df_nba_roster <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_lates
 
 cat("\t- df_nba_injuries\n")
 df_nba_injuries <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_injuries_vw", pf=FALSE, lg=FALSE)) |> 
-  mutate(
+  dplyr::mutate(
     reason = if_else(status == "Available", NA, str_remove(reason, "Injury/Illness - ")),
     status = ordered(status, c("Available", "Probable", "Questionable", "Doubtful", "Out"))
   )
