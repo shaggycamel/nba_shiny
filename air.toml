@@ -1,0 +1,10 @@
+[format]
+line-width = 150
+indent-width = 2
+indent-style = "space"
+line-ending = "auto"
+persistent-line-breaks = true
+exclude = []
+default-exclude = true
+skip = ["tribble"]
+              

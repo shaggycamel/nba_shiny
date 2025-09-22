@@ -29,12 +29,9 @@ server <- function(input, output, session) {
   } else {
     dh_createCon("cockroach")
   }
-  # cur_date <<- strptime(Sys.time(), "%Y", tz = "EST")
-  cur_date <<- as.Date("2025-11-01")
-  # cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
-  # prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
-  cur_season <<- "2025-26"
-  prev_season <<- "2024-25"
+  cur_date <<- strptime(Sys.time(), "%Y", tz = "EST")
+  cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
+  prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
   df_fty_base <<- readRDS("fty_base.RDS")
   ls_fty_base <<- magrittr::`%$%`(
     distinct(df_fty_base, platform, league_id, league_name),
@@ -52,11 +49,7 @@ server <- function(input, output, session) {
   bindEvent(
     observe({
       if (input$fty_league_select != "") {
-        load(
-          here(paste0("fty_", ls_fty_base[input$fty_league_select], ".RData")),
-          envir = globalenv()
-        )
-        load(here("fty_ESPN_24608.RData"), envir = globalenv()) ### DELETE
+        load(here(paste0("fty_", ls_fty_base[input$fty_league_select], ".RData")), envir = globalenv())
       }
 
       updateSelectInput(
@@ -73,8 +66,6 @@ server <- function(input, output, session) {
       league_selected <<- str_split(ls_fty_base[input$fty_league_select], "_")[[
         1
       ]][2]
-      platform_selected <<- "ESPN" ### DELETE
-      league_selected <<- 24608 ### DELETE
     }),
     input$fty_league_select,
     ignoreNULL = TRUE
@@ -396,9 +387,7 @@ server <- function(input, output, session) {
       "comparison_team_or_player_filter",
       choices = if (input$comparison_team_or_player) {
         teams
-      } else if (
-        !input$comparison_team_or_player & input$comparison_free_agent_filter
-      ) {
+      } else if (!input$comparison_team_or_player & input$comparison_free_agent_filter) {
         intersect(
           free_agents,
           df_comparison |>
@@ -1642,10 +1631,7 @@ server <- function(input, output, session) {
           backgroundColor = styleEqual(levels = lvl, values = col)
         )
 
-        if (
-          match(input$week_selection, week_drop_box_choices) <
-            length(week_drop_box_choices)
-        ) {
+        if (match(input$week_selection, week_drop_box_choices) < length(week_drop_box_choices)) {
           tb <-
             formatStyle(
               tb,
@@ -1747,16 +1733,12 @@ server <- function(input, output, session) {
   observe({
     req(exists("vec_player_log_stream"))
 
-    if (
-      length(unique(vec_player_log_stream)) < length(input$draft_player_log)
-    ) {
+    if (length(unique(vec_player_log_stream)) < length(input$draft_player_log)) {
       nm <- tibble(
         player_name = setdiff(input$draft_player_log, vec_player_log_stream)
       )
       dh_ingestData(db_con, nm, "util", "draft_player_log")
-    } else if (
-      length(unique(vec_player_log_stream)) > length(input$draft_player_log)
-    ) {
+    } else if (length(unique(vec_player_log_stream)) > length(input$draft_player_log)) {
       nm <- str_replace_all(
         setdiff(vec_player_log_stream, input$draft_player_log),
         "'",
