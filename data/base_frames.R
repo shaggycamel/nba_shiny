@@ -60,17 +60,17 @@ df_nba_season_segments <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.
 
 # ALTERED THIS, NOW NEED TO CHECK IF IT WORKS
 cat("\t- df_nba_schedule\n")
-df_nba_schedule <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_season_segments_vw", sn="prev", pf=FALSE, lg=FALSE)) |> 
-  dplyr::filter(season == cur_season, season_type == "Regular Season") |> 
-  dplyr::select(begin_date, end_date) |> 
-  dplyr::mutate(dplyr::across(tidyselect::ends_with("date"), as.Date)) |> 
-  tidyr::pivot_longer(cols = tidyselect::ends_with("date"), values_to = "game_date") |> 
-  tidyr::complete(game_date = seq.Date(min(game_date), max(game_date), by = "day")) |> 
-  dplyr::select(game_date) |> 
+df_nba_schedule <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_season_segments_vw", sn="prev", pf=FALSE, lg=FALSE)) |>
+  dplyr::filter(season == cur_season, season_type == "Regular Season") |>
+  dplyr::select(begin_date, end_date) |>
+  dplyr::mutate(dplyr::across(tidyselect::ends_with("date"), as.Date)) |>
+  tidyr::pivot_longer(cols = tidyselect::ends_with("date"), values_to = "game_date") |>
+  tidyr::complete(game_date = seq.Date(min(game_date), max(game_date), by = "day")) |>
+  dplyr::select(game_date) |>
   dplyr::left_join(
-    nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_schedule_vw", pf=FALSE, lg=FALSE)), 
+    nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_schedule_vw", pf=FALSE, lg=FALSE)),
     by = dplyr::join_by(game_date)
-  ) |> 
+  ) |>
   dplyr::mutate(
     season = cur_season,
     season_type = "Regular Season",
