@@ -15,9 +15,9 @@ page_fty_league_overview <- layout_sidebar(
       "fty_lg_ov_cat",
       "Category",
       choices = list(
-        "Overall" = keep(fmt_to_db_stat_name, \(x) str_detect(x, "_cat")),
-        "Categories" = keep(fmt_to_db_stat_name, \(x) x %in% anl_cols$h2h_cols),
-        "Z Scores" = keep(fmt_to_db_stat_name, \(x) str_detect(x, "_z"))
+        "Overall" = keep(fmt_to_db_cat_name, \(x) str_detect(x, "_cat")),
+        "Categories" = keep(fmt_to_db_cat_name, \(x) x %in% anl_cols$h2h_cols),
+        "Z Scores" = keep(fmt_to_db_cat_name, \(x) str_detect(x, "_z"))
       )
     ),
     switchInput("fty_lg_ov_rank_toggle", value = TRUE, onLabel = "Rank", offLabel = "Value", size = "small"),
@@ -75,7 +75,7 @@ page_player_comparison <- layout_sidebar(
     selectizeInput(
       "comparison_excels_at_filter",
       "Excels at",
-      choices = discard(fmt_to_db_stat_name, \(x) str_detect(x, "_pct|_cat")),
+      choices = discard(fmt_to_db_cat_name, \(x) str_detect(x, "_pct|_cat|f[t|g][m|a]")), # UPDATE IN SERVER
       options = list(maxItems = 5, onInitialize = I('function() { this.setValue(""); }'))
     ),
     radioButtons("comparison_window", "Rolling days", c(7, 15, 30), inline = TRUE),
@@ -107,7 +107,7 @@ page_league_game_schedule <- layout_sidebar(
 
 page_player_trend <- layout_sidebar(
   sidebar = sidebar(
-    selectInput("trend_select_stat", "Statistic", choices = discard(fmt_to_db_stat_name, \(x) str_detect(x, "_z|_cat"))),
+    selectInput("trend_select_stat", "Statistic", choices = discard(fmt_to_db_cat_name, \(x) str_detect(x, "_z|_cat"))),
     selectInput("trend_select_player", "Player", multiple = TRUE, choices = character(0)),
     checkboxInput("this_season_trend_switch", "This year only", value = FALSE),
     # open = "open"
@@ -121,7 +121,7 @@ page_player_trend <- layout_sidebar(
 
 page_draft <- layout_sidebar(
   sidebar = sidebar(
-    selectInput("draft_stat", "Statistic", choices = discard(fmt_to_db_stat_name, \(x) str_detect(x, "_pct|_cat"))),
+    selectInput("draft_stat", "Statistic", choices = discard(fmt_to_db_cat_name, \(x) str_detect(x, "_pct|_cat|f[t|g][m|a]"))),
     sliderInput("draft_min_filter", "Limit Minutes", step = 1, min = 0, max = as.numeric(0), value = as.numeric(0), ticks = FALSE),
     sliderInput("draft_top_n", "Top N Players", min = 10, max = 20, value = 15, ticks = FALSE),
     sliderInput(

@@ -1,13 +1,13 @@
-
 # Genreal query template
-query_template <- function(qry_obj, sn="cur", pf=TRUE, lg=TRUE) paste0(
-  "SELECT *
-  FROM ", qry_obj,
-  " WHERE season >= '{", sn, "_season}'",
-  if(pf) " AND platform = '{platform}'",
-  if(lg) " AND league_id = {league_id}"
-)  
-
+# fmt: skip
+query_template <- function(qry_obj, sn = "cur", pf = TRUE, lg = TRUE) {
+  paste0(
+    "SELECT * FROM ", qry_obj,
+    " WHERE (season >= '{", sn, "_season}' OR season IS NULL)",
+    if (pf) " AND (platform = '{platform}' OR platform IS NULL)",
+    if (lg) " AND (league_id = {league_id} OR league_id IS NULL)"
+  )
+}
 
 
 #  -- SPLIT PROCESS INTO NBA DATA & FTY LEAGUE DATA
@@ -22,29 +22,29 @@ df_nba_news <<- nba.dataRub::dh_getQuery(db_con, "SELECT * FROM nba.transaction_
 # Player Box Score --------------------------------------------------------------
 
 cat("\t- df_nba_player_box_score\n")
-df_nba_player_box_score <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_player_box_score_vw", sn="prev", pf=FALSE, lg=FALSE)) |> 
-  dplyr::mutate(game_date = lubridate::force_tz(game_date, tz = "EST")) |> 
+df_nba_player_box_score <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_player_box_score_vw", sn = "prev", pf = FALSE, lg = FALSE)) |>
+  dplyr::mutate(game_date = lubridate::force_tz(game_date, tz = "EST")) |>
   dplyr::mutate(season = ordered(season)) |>
   dplyr::mutate(season_type = ordered(season_type, c("Pre Season", "Regular Season", "Playoffs"))) |>
-  dplyr::mutate(year_season_type = forcats::fct_cross(season_type, stringr::str_sub(season, start = 6), sep=" "))
- 
- 
+  dplyr::mutate(year_season_type = forcats::fct_cross(season_type, stringr::str_sub(season, start = 6), sep = " "))
+
+
 # Team Box Score --------------------------------------------------------------
 
 cat("\t- df_nba_team_box_score\n")
-df_nba_team_box_score <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_team_box_score_vw", sn="prev", pf=FALSE, lg=FALSE)) |> 
-  dplyr::mutate(game_date = lubridate::force_tz(game_date, tz = "EST")) |> 
+df_nba_team_box_score <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_team_box_score_vw", sn = "prev", pf = FALSE, lg = FALSE)) |>
+  dplyr::mutate(game_date = lubridate::force_tz(game_date, tz = "EST")) |>
   dplyr::mutate(season = ordered(season)) |>
   dplyr::mutate(season_type = ordered(season_type, c("Pre Season", "Regular Season", "Playoffs"))) |>
-  dplyr::mutate(year_season_type = forcats::fct_cross(season_type, stringr::str_sub(season, start = 6), sep=" "))
-  
+  dplyr::mutate(year_season_type = forcats::fct_cross(season_type, stringr::str_sub(season, start = 6), sep = " "))
+
 
 # Season segments ---------------------------------------------------------
 
 cat("\t- df_nba_season_segments\n")
-df_nba_season_segments <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_season_segments_vw", sn="prev", pf=FALSE, lg=FALSE)) |>
-  dplyr::mutate(dplyr::across(tidyselect::ends_with("date"), \(x) lubridate::force_tz(x, "EST"))) |> 
-  (\(df){
+df_nba_season_segments <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_season_segments_vw", sn = "prev", pf = FALSE, lg = FALSE)) |>
+  dplyr::mutate(dplyr::across(tidyselect::ends_with("date"), \(x) lubridate::force_tz(x, "EST"))) |>
+  (\(df) {
     dplyr::bind_rows(
       # REPLACE THIS SECTION WITH CUR_DATE?????
       dplyr::filter(df, cur_date > begin_date, cur_date < end_date) |>
@@ -60,7 +60,7 @@ df_nba_season_segments <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.
 
 # ALTERED THIS, NOW NEED TO CHECK IF IT WORKS
 cat("\t- df_nba_schedule\n")
-df_nba_schedule <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_season_segments_vw", sn="prev", pf=FALSE, lg=FALSE)) |>
+df_nba_schedule <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_season_segments_vw", sn = "prev", pf = FALSE, lg = FALSE)) |>
   dplyr::filter(season == cur_season, season_type == "Regular Season") |>
   dplyr::select(begin_date, end_date) |>
   dplyr::mutate(dplyr::across(tidyselect::ends_with("date"), as.Date)) |>
@@ -68,7 +68,7 @@ df_nba_schedule <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_sea
   tidyr::complete(game_date = seq.Date(min(game_date), max(game_date), by = "day")) |>
   dplyr::select(game_date) |>
   dplyr::left_join(
-    nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_schedule_vw", pf=FALSE, lg=FALSE)),
+    nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_schedule_vw", pf = FALSE, lg = FALSE)),
     by = dplyr::join_by(game_date)
   ) |>
   dplyr::mutate(
@@ -82,13 +82,13 @@ df_nba_schedule <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_sea
 # NBA team roster -------------------------------------------------------
 
 cat("\t- df_nba_roster\n")
-df_nba_roster <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_latest_team_roster_vw", pf=FALSE, lg=FALSE)) 
+df_nba_roster <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_latest_team_roster_vw", pf = FALSE, lg = FALSE))
 
 
 # NBA Injuries ------------------------------------------------------------
 
 cat("\t- df_nba_injuries\n")
-df_nba_injuries <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_injuries_vw", pf=FALSE, lg=FALSE)) |> 
+df_nba_injuries <<- nba.dataRub::dh_getQuery(db_con, query_template("nba.nba_injuries_vw", pf = FALSE, lg = FALSE)) |>
   dplyr::mutate(
     reason = dplyr::if_else(status == "Available", NA, stringr::str_remove(reason, "Injury/Illness - ")),
     status = ordered(status, c("Available", "Probable", "Questionable", "Doubtful", "Out"))
@@ -103,18 +103,19 @@ save(list = stringr::str_subset(objects(), "df_nba"), file = here::here("nba_bas
 # Fty base object ---------------------------------------------------------
 
 cat("\t- df_fty_base\n")
-df_fty_base <<- nba.dataRub::dh_getQuery(db_con, query_template("fty.fty_base_vw", pf=FALSE, lg=FALSE)) 
+df_fty_base <<- nba.dataRub::dh_getQuery(db_con, query_template("fty.fty_base_vw", pf = FALSE, lg = FALSE)) |>
+  filter(season != "2025-26") ##### DELETE
 saveRDS(df_fty_base, here::here("fty_base.RDS"))
 
 
 #### Map leagues
-purrr::walk2(unique(df_fty_base$platform), unique(df_fty_base$league_id), \(platform, league_id){
+purrr::pwalk(distinct(df_fty_base, platform, league_id), \(platform, league_id) {
   cat(paste0(platform, "_", league_id, "\n"))
-  
+
   # Fantasy competitor -------------------------------------------------
   cat("\t- df_fantasy_competitor\n")
   df_fty_competitor <- nba.dataRub::dh_getQuery(db_con, glue::glue(query_template("fty.league_competitor")))
-  
+
   # Fantasy league schedule -------------------------------------------------
   cat("\t- df_fantasy_schedule\n")
   df_fty_schedule <- nba.dataRub::dh_getQuery(db_con, glue::glue(query_template("fty.league_schedule")))
@@ -122,29 +123,36 @@ purrr::walk2(unique(df_fty_base$platform), unique(df_fty_base$league_id), \(plat
   # Fantasy competitor roster -------------------------------------------------------
   cat("\t- df_fty_roster\n")
   df_fty_roster <- nba.dataRub::dh_getQuery(db_con, glue::glue(query_template("fty.fty_team_roster_schedule_vw"))) |>
-    dplyr::mutate(timestamp = lubridate::with_tz(timestamp, tzone = "EST")) |> 
-    dplyr::mutate(date = lubridate::as_date(timestamp), .after = timestamp) |> 
+    dplyr::mutate(timestamp = lubridate::with_tz(timestamp, tzone = "EST")) |>
+    dplyr::mutate(date = lubridate::as_date(timestamp), .after = timestamp) |>
     dplyr::filter((max(timestamp) - timestamp) < 1000, .by = c(date, competitor_id)) |>
     dplyr::select(-c(competitor_name, opponent_name)) |>
     dplyr::left_join(
       dplyr::select(df_nba_season_segments, tidyr::starts_with("season"), begin_date, end_date),
       by = dplyr::join_by(season, timestamp >= begin_date, timestamp <= end_date)
-    ) |> 
+    ) |>
     dplyr::filter(season_type == "Regular Season")
-  
+
   # Fantasy Box Score -------------------------------------------------------
   cat("\t- df_fty_box_score\n")
   df_fty_box_score <- nba.dataRub::dh_getQuery(db_con, glue::glue(query_template("fty.fty_matchup_box_score_vw"))) |>
     dplyr::relocate(tidyselect::starts_with("competitor"), .before = matchup) |>
     dplyr::select(-tidyselect::matches("r_name|r_abbrev"))
-  
+
   # Fantasy free agents -------------------------------------------------------
   cat("\t- df_fty_free_agents\n")
   df_fty_free_agents <- nba.dataRub::dh_getQuery(db_con, glue::glue(query_template("fty.free_agents")))
-  
+
+  # Fantasy category labels -------------------------------------------------------
+  cat("\t- df_fty_cats\n")
+  df_fty_cats <- nba.dataRub::dh_getQuery(db_con, glue::glue(query_template("fty.fty_categories_vw"))) |>
+    fill(season, platform, league_id) # fill missing values downwards
+
+  # fmt: skip
+  fmt_to_db_cat_name <- magrittr::`%$%`(df_fty_cats, purrr::map(setNames(db_category, fmt_category), \(x) as.vector(x)))
+  db_to_fmt_cat_name <- magrittr::`%$%`(df_fty_cats, purrr::map(setNames(fmt_category, db_category), \(x) as.vector(x)))
+  fty_h2h_cols <- filter(df_fty_cats, measured)$db_category
+
   # Save data objects
   save(list = stringr::str_subset(objects(), "df_fty"), file = here::here(paste0("fty_", platform, "_", league_id, ".RData")))
-  
 })
-
-

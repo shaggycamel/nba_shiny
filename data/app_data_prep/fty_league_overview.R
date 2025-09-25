@@ -3,73 +3,20 @@ df_fty_league_overview_prepare <<- function(platform_selected, league_selected) 
     df_fty_box_score |>
     left_join(
       df_fty_box_score |>
-        select(competitor_id, matchup, all_of(anl_cols$h2h_cols)) |>
-        mutate(
-          across(anl_cols$h2h_cols, \(x) percent_rank(x)),
-          .by = matchup
-        ) |>
+        select(competitor_id, matchup, all_of(fty_h2h_cols)) |>
+        mutate(across(fty_h2h_cols, \(x) percent_rank(x)), .by = matchup) |>
         mutate(tov = 1 - tov) |> # Reverse turnover distribution | Eventually fix this in any hover boxes
-        pivot_longer(
-          all_of(anl_cols$h2h_cols),
-          names_to = "stat",
-          values_to = "perc_rank"
-        ) |>
-        mutate(nine_cat = sum(perc_rank), .by = c(competitor_id, matchup)) |>
-        slice_max(
-          perc_rank,
-          n = 5,
-          by = c(competitor_id, matchup),
-          with_ties = FALSE
-        ) |>
-        summarise(
-          five_cat = sum(perc_rank),
-          .by = c(competitor_id, matchup, nine_cat)
-        ),
+        pivot_longer(all_of(fty_h2h_cols), names_to = "stat", values_to = "perc_rank") |>
+        summarise(all_cat = sum(perc_rank), .by = c(competitor_id, matchup)),
       by = join_by(competitor_id, matchup)
     ) |>
     group_by(matchup) |>
     calc_z_pcts() |>
     ungroup() |>
-    mutate(
-      across(
-        c(
-          unlist(
-            fmt_to_db_stat_name[fmt_to_db_stat_name != "min"],
-            use.names = FALSE
-          ),
-          "matchup"
-        ),
-        \(x) lead(x, order_by = matchup),
-        .names = "{.col}_lead"
-      ),
-      .by = competitor_id
-    ) |>
-    mutate(
-      across(
-        unlist(
-          fmt_to_db_stat_name[fmt_to_db_stat_name != "min"],
-          use.names = FALSE
-        ),
-        \(x) rank(x * -1),
-        .names = "{.col}_rank"
-      ),
-      .by = matchup
-    ) |>
+    mutate(across(c(any_of(df_fty_cats$db_category), "matchup"), \(x) lead(x, order_by = matchup), .names = "{.col}_lead"), .by = competitor_id) |>
+    mutate(across(any_of(df_fty_cats$db_category), \(x) rank(x * -1), .names = "{.col}_rank"), .by = matchup) |>
     mutate(tov_rank = rank(tov), .by = matchup) |>
-    mutate(
-      across(
-        paste0(
-          unlist(
-            fmt_to_db_stat_name[fmt_to_db_stat_name != "min"],
-            use.names = FALSE
-          ),
-          "_rank"
-        ),
-        \(x) lead(x, order_by = matchup),
-        .names = "{.col}_lead"
-      ),
-      .by = competitor_id
-    )
+    mutate(across(any_of(str_c(df_fty_cats$db_category, "_rank")), \(x) lead(x, order_by = matchup), .names = "{.col}_lead"), .by = competitor_id)
 
   df_latest_matchup <- filter(df_fty_league_overview, matchup == max(matchup))
   df_fty_league_overview <- filter(df_fty_league_overview, matchup < max(matchup))
@@ -79,33 +26,22 @@ df_fty_league_overview_prepare <<- function(platform_selected, league_selected) 
     mutate(across(where(is.numeric), \(x) replace_na(x, 0))) |>
     group_by(competitor_id, matchup) |>
     group_modify(.keep = TRUE, \(df_t, ...) {
-
       x <- seq(-5, 5, 0.3)
       df_ls <- list()
 
       # To handle when df is empty, ie - start of season
       if (nrow(df_t) > 0) {
-        for (stat in fmt_to_db_stat_name[fmt_to_db_stat_name != "min"]) {
+        for (stat in filter(df_fty_cats, !str_detect(db_category, "min|f[t|g][m|a]"))$db_category) {
           matchup_sigmoid <- x
-          if (df_t[[stat]] > df_t[[paste0(stat, "_lead")]]) {
+          if (df_t[[stat]] > df_t[[str_c(stat, "_lead")]]) {
             matchup_sigmoid <- rev(matchup_sigmoid)
           }
-
-          stat_sigmoid <- scales::rescale(
-            pracma::sigmoid(matchup_sigmoid),
-            to = c(df_t[[stat]], df_t[[paste0(stat, "_lead")]])
-          )
+          stat_sigmoid <- scales::rescale(pracma::sigmoid(matchup_sigmoid), to = c(df_t[[stat]], df_t[[str_c(stat, "_lead")]]))
           stat_rank_sigmoid <- scales::rescale(
             pracma::sigmoid(matchup_sigmoid),
-            to = c(
-              df_t[[paste0(stat, "_rank")]],
-              df_t[[paste0(stat, "_rank_lead")]]
-            )
+            to = c(df_t[[str_c(stat, "_rank")]], df_t[[str_c(stat, "_rank_lead")]])
           )
-          matchup_sigmoid <- scales::rescale(
-            matchup_sigmoid,
-            to = c(df_t$matchup, df_t$matchup_lead)
-          )
+          matchup_sigmoid <- scales::rescale(matchup_sigmoid, to = c(df_t$matchup, df_t$matchup_lead))
 
           df_ls <- df_ls |>
             append(list(tibble(
@@ -118,8 +54,8 @@ df_fty_league_overview_prepare <<- function(platform_selected, league_selected) 
             )))
         }
       }
-      
-      if(length(df_ls) == 0){
+
+      if (length(df_ls) == 0) {
         tibble(
           # competitor_id = integer(),
           # matchup = integer(),
@@ -127,26 +63,19 @@ df_fty_league_overview_prepare <<- function(platform_selected, league_selected) 
           stat = character(),
           sigmoid = double(),
           rank_sigmoid = double()
-        )  
+        )
       } else {
-        bind_rows(ds_ls)  
+        bind_rows(df_ls)
       }
-      
     }) |>
-    ungroup() |> 
+    ungroup() |>
     filter(
       !(as.integer(matchup_sigmoid) == matchup_sigmoid &
         matchup != matchup_sigmoid)
     ) |>
-    pivot_wider(names_from = stat, values_from = c(sigmoid, rank_sigmoid)) |> 
-    rename_with(
-      \(x) str_remove(x, "sigmoid_"),
-      .cols = starts_with("sigmoid_")
-    ) |> 
-    rename_with(
-      \(x) str_c(str_remove(x, "rank_sigmoid_"), "_rank"),
-      .cols = starts_with("rank_sigmoid_")
-    )
+    pivot_wider(names_from = stat, values_from = c(sigmoid, rank_sigmoid)) |>
+    rename_with(\(x) str_remove(x, "sigmoid_"), .cols = starts_with("sigmoid_")) |>
+    rename_with(\(x) str_c(str_remove(x, "rank_sigmoid_"), "_rank"), .cols = starts_with("rank_sigmoid_"))
 
   df_fty_league_overview |>
     bind_rows(select(df_latest_matchup, any_of(colnames(df_fty_league_overview)))) |>

@@ -27,18 +27,16 @@ server <- function(input, output, session) {
   espn_api <- reticulate::import("espn_api.basketball")
 
   db_con <<- if (Sys.info()["user"] == "fred") dh_createCon("postgres") else dh_createCon("cockroach")
-  # cur_date <<- strptime(Sys.time(), "%Y", tz = "EST")
-  cur_date <<- as.Date("2025-12-01") # DELETE
-  # cur_season <<- nba_api$stats$library$parameters$Season$current_season
-  # prev_season <<- nba_api$stats$library$parameters$Season$previous_season
-  cur_season <<- "2025-26" # DELETE
-  prev_season <<- "2024-25" # DELETE
+  cur_date <<- strptime(Sys.time(), "%Y", tz = "EST")
+  cur_season <<- nba_api$stats$library$parameters$Season$current_season
+  prev_season <<- nba_api$stats$library$parameters$Season$previous_season
+  # cur_date <<- as.Date("2025-12-01") # DELETE
+  # cur_season <<- "2025-26" # DELETE
+  # prev_season <<- "2024-25" # DELETE
   df_fty_base <<- readRDS("fty_base.RDS")
   ls_fty_base <<- magrittr::`%$%`(
     distinct(df_fty_base, platform, league_id, league_name),
-    map(setNames(paste0(platform, "_", league_id), league_name), \(x) {
-      as.vector(x)
-    })
+    map(setNames(paste0(platform, "_", league_id), league_name), \(x) as.vector(x))
   )
   vec_player_log_stream <<- dh_getQuery(db_con, "SELECT * FROM util.draft_player_log")
 
@@ -146,9 +144,8 @@ server <- function(input, output, session) {
     showPageSpinner(type = 6, caption = data_collection_caption)
 
     # Data Frames
-    if (Sys.info()["user"] == "fred") {
-      source(here("data", "base_frames.R"))
-    }
+    # fmt: skip
+    if (Sys.info()["user"] == "fred") source(here("data", "base_frames.R"))
     load("nba_base.RData", envir = globalenv())
 
     .load_datasets <- function() {
@@ -406,7 +403,7 @@ server <- function(input, output, session) {
         labs(
           title = paste(
             "Competitor Category Ranking:",
-            db_to_fmt_stat_name[[input$fty_lg_ov_cat]]
+            db_to_fmt_cat_name[[input$fty_lg_ov_cat]]
           ),
           x = "Matchup Period",
           y = input$fty_lg_ov_cat
@@ -433,7 +430,7 @@ server <- function(input, output, session) {
         labs(
           title = paste(
             "Competitor Category Ranking:",
-            db_to_fmt_stat_name[[input$fty_lg_ov_cat]]
+            db_to_fmt_cat_name[[input$fty_lg_ov_cat]]
           ),
           x = "Matchup Period",
           y = input$fty_lg_ov_cat
@@ -1675,7 +1672,7 @@ server <- function(input, output, session) {
           ) +
           ylim(0, NA) +
           labs(
-            title = db_to_fmt_stat_name[[input$trend_select_stat]],
+            title = db_to_fmt_cat_name[[input$trend_select_stat]],
             x = NULL,
             y = NULL
           ) +
@@ -1798,7 +1795,7 @@ server <- function(input, output, session) {
         mutate(stat = str_replace(stat, "_pct", "_z"))
     ) |>
       filter(
-        stat %in% discard(fmt_to_db_stat_name, \(x) str_detect(x, "_pct|_cat")),
+        stat %in% discard(fmt_to_db_cat_name, \(x) str_detect(x, "_pct|_cat")),
         !(stat == input$draft_stat & covariance > input$draft_cov_filter)
       ) |>
       mutate(
@@ -1848,7 +1845,7 @@ server <- function(input, output, session) {
           "): ",
           ifelse(input$draft_tot_avg_toggle, "Total", "Average"),
           " ",
-          db_to_fmt_stat_name[[input$draft_stat]],
+          db_to_fmt_cat_name[[input$draft_stat]],
           ifelse(input$draft_scale_minutes, " Scaled", "")
         ),
         x = NULL,
