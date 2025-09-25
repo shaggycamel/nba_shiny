@@ -2,6 +2,7 @@
 
 library(dplyr)
 library(tidyr)
+library(purrr)
 library(lubridate)
 library(ggplot2)
 library(plotly)
@@ -11,9 +12,8 @@ library(shinycssloaders)
 # Initialisation files ----------------------------------------------------
 
 # only init python if running in shiny
-if (Sys.info()["user"] == "shiny") {
-  source(here("_proj_python.R"))
-}
+# fmt: skip
+if(Sys.info()["user"] == "shiny") source(here("_proj_python.R"))
 source(here("_proj_useful.R"))
 
 
@@ -23,49 +23,38 @@ server <- function(input, output, session) {
   # Variables ---------------------------------------------------------------
 
   fty_parameters_met <- reactiveVal(FALSE)
+  nba_api <- reticulate::import("nba_api")
+  espn_api <- reticulate::import("espn_api.basketball")
 
-  db_con <<- if (Sys.info()["user"] == "fred") {
-    dh_createCon("postgres")
-  } else {
-    dh_createCon("cockroach")
-  }
-  cur_date <<- strptime(Sys.time(), "%Y", tz = "EST")
-  cur_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$current_season
-  prev_season <<- reticulate::import("nba_api")$stats$library$parameters$Season$previous_season
+  db_con <<- if (Sys.info()["user"] == "fred") dh_createCon("postgres") else dh_createCon("cockroach")
+  # cur_date <<- strptime(Sys.time(), "%Y", tz = "EST")
+  cur_date <<- as.Date("2025-12-01") # DELETE
+  # cur_season <<- nba_api$stats$library$parameters$Season$current_season
+  # prev_season <<- nba_api$stats$library$parameters$Season$previous_season
+  cur_season <<- "2025-26" # DELETE
+  prev_season <<- "2024-25" # DELETE
   df_fty_base <<- readRDS("fty_base.RDS")
   ls_fty_base <<- magrittr::`%$%`(
     distinct(df_fty_base, platform, league_id, league_name),
-    purrr::map(setNames(paste0(platform, "_", league_id), league_name), \(x) {
+    map(setNames(paste0(platform, "_", league_id), league_name), \(x) {
       as.vector(x)
     })
   )
-  vec_player_log_stream <<- dh_getQuery(
-    db_con,
-    "SELECT * FROM util.draft_player_log"
-  )$player_name
+  vec_player_log_stream <<- dh_getQuery(db_con, "SELECT * FROM util.draft_player_log")
 
   # Login -------------------------------------------------------------------
 
   bindEvent(
     observe({
-      if (input$fty_league_select != "") {
-        load(here(paste0("fty_", ls_fty_base[input$fty_league_select], ".RData")), envir = globalenv())
-      }
+      # fmt: skip
+      if (input$fty_league_select != "") load(here(paste0("fty_", ls_fty_base[input$fty_league_select], ".RData")), envir = globalenv())
 
       updateSelectInput(
         inputId = "fty_competitor_select",
-        choices = filter(
-          df_fty_base,
-          league_name == input$fty_league_select
-        )$competitor_name
+        choices = filter(df_fty_base, league_name == input$fty_league_select)$competitor_name
       )
-      platform_selected <<- str_split(
-        ls_fty_base[input$fty_league_select],
-        "_"
-      )[[1]][1]
-      league_selected <<- str_split(ls_fty_base[input$fty_league_select], "_")[[
-        1
-      ]][2]
+      platform_selected <<- str_split(ls_fty_base[input$fty_league_select], "_")[[1]][1]
+      league_selected <<- str_split(ls_fty_base[input$fty_league_select], "_")[[1]][2]
     }),
     input$fty_league_select,
     ignoreNULL = TRUE
@@ -74,9 +63,7 @@ server <- function(input, output, session) {
   bindEvent(
     observe({
       if (input$fty_competitor_select == "" && input$fty_league_select == "") {
-        output$login_messages <- renderText(
-          "Select a league, then select a competitor."
-        )
+        output$login_messages <- renderText("Select a league, then select a competitor.")
       } else if (input$fty_competitor_select != "") {
         fty_parameters_met(TRUE)
         removeModal()
@@ -91,9 +78,7 @@ server <- function(input, output, session) {
   bindEvent(
     observe({
       if (!fty_parameters_met()) {
-        output$login_messages <- renderText(
-          "You gotta go fill the form at least once!"
-        )
+        output$login_messages <- renderText("You gotta go fill the form at least once!")
       } else {
         removeModal()
         output$login_messages <- NULL
@@ -236,39 +221,19 @@ server <- function(input, output, session) {
       )
     )
     ss_week <- select(df_fty_schedule, week, week_start, week_end)
-    week_drop_box_choices <<- unique(paste0(
-      "Week ",
-      ss_week$week,
-      ": (",
-      ss_week$week_start,
-      " to ",
-      ss_week$week_end,
-      ")"
-    ))
-    week_drop_box_choices <<- sort(setNames(
-      str_extract(week_drop_box_choices, "\\d{4}.*-\\d{2}"),
-      week_drop_box_choices
-    ))
+    week_drop_box_choices <<- unique(paste0("Week ", ss_week$week, ": (", ss_week$week_start, " to ", ss_week$week_end, ")"))
+    week_drop_box_choices <<- sort(setNames(str_extract(week_drop_box_choices, "\\d{4}.*-\\d{2}"), week_drop_box_choices))
 
     # Init app filter list creation -------------------------------------------
 
     # Player Comparison tab
-    updateSelectInput(
-      session,
-      "comparison_team_or_player_filter",
-      choices = teams
-    )
+    updateSelectInput(session, "comparison_team_or_player_filter", choices = teams)
 
     # Player trend tab
     updateSelectInput(session, "trend_select_player", choices = active_players)
 
     # H2H tab
-    updateSelectInput(
-      session,
-      "h2h_competitor",
-      choices = ls_fty_name_to_cid,
-      selected = ls_fty_name_to_cid[input$fty_competitor_select]
-    )
+    updateSelectInput(session, "h2h_competitor", choices = ls_fty_name_to_cid, selected = ls_fty_name_to_cid[input$fty_competitor_select])
 
     updateSelectInput(
       session,
@@ -286,20 +251,10 @@ server <- function(input, output, session) {
     updateSelectInput(session, "h2h_log_config", choices = ls_log_config)
 
     # NBA schedule tab
-    updateSelectInput(
-      session,
-      "week_selection",
-      choices = week_drop_box_choices,
-      selected = pluck(week_drop_box_choices, cur_week)
-    )
+    updateSelectInput(session, "week_selection", choices = week_drop_box_choices, selected = pluck(week_drop_box_choices, cur_week))
 
     # Draft tab
-    updateSelectInput(
-      session,
-      "draft_player_log",
-      choices = active_players,
-      selected = vec_player_log_stream
-    )
+    updateSelectInput(session, "draft_player_log", choices = active_players, selected = vec_player_log_stream$player_name)
 
     # Stop loading page
     hidePageSpinner()
@@ -863,6 +818,8 @@ server <- function(input, output, session) {
   })
 
   output$h2h_game_table <- renderDT({
+    req(fty_parameters_met(), exists("df_fty_base"))
+
     if (input$h2h_week < cur_week & input$h2h_future_only) {
       datatable(
         as.data.frame("Future only dumbass..."),
@@ -1730,35 +1687,56 @@ server <- function(input, output, session) {
 
   # Draft Assistance --------------------------------------------------------
 
+  # TRIED LIVE STREAMING IT, NO CHANCE. KEEP HERE TO TRY AGIAN IN FUTURE
+
+  # stream_timer <- reactiveTimer(10000)
+  # streaming <- reactiveVal(FALSE)
+  # observe(streaming(!streaming())) |>
+  #   bindEvent(input$draft_live_capture, ignoreInit = TRUE)
+
+  # league_live <- espn_api$League(
+  #   league_id = as.integer(95537),
+  #   year = as.integer(2026),
+  #   espn_s2 = "AEBlel7lXHFxGYh6V9PtPxp%2FGit736EKLhCFm9hV0KCpUzeXeC8sMSlke37b2%2BW2UEf32Gx3dcDd3NSIlaS07GWvDxBuQwitee77r%2FVGmDVjAD%2F065WPb4%2BAW%2FoJTA4G7sZhOkl4gFhfJ9f5i9iPfFiRbHiPS3PPYNl%2Fjhy41EJDgLauGSTOdEAG8tBSWvrsXgI4lPZl4Ds0p71RGK4nMcGwvqzlKggQPs%2Fm9wJsQZIF5jzvBG8WRwL7eq49tC%2BwFg3RwiT5PmVWmIap5d170mMC",
+  #   swid = "{65841A9D-0A7D-4E82-A2BD-25B825CBF245}"
+  # )
+
+  # existing <- dh_getQuery(db_con, "SELECT * FROM util.draft_player_log")
+  # name_match <- dh_getQuery(db_con, "SELECT * FROM util.nba_fty_name_match")
+
+  # observe({
+  #   stream_timer()
+  #   # skip when input$draft_live_capture FALSE
+  #   if (!streaming()) {
+  #     return()
+  #   }
+  #   print("STREAMING!!!")
+  #   league_draft_stream <- tibble(espn_name = map_chr(league_live$draft, \(pick) pluck(pick, "playerName"))) |>
+  #     left_join(select(name_match, espn_name, player_name = nba_name)) |>
+  #     distinct(player_name) |>
+  #     na.omit()
+
+  #   ingest <- bind_rows(existing, league_draft_stream) |>
+  #     slice_max(base_bust, by = player_name, with_ties = FALSE)
+
+  #   DBI::dbWriteTable(db_con, DBI::Id(schema = "util", table = "draft_player_log"), ingest, overwrite = TRUE)
+  #   updateSelectInput(session, "draft_player_log", choices = active_players, selected = ingest$player_name)
+  # })
+
   observe({
     req(exists("vec_player_log_stream"))
 
-    if (length(unique(vec_player_log_stream)) < length(input$draft_player_log)) {
-      nm <- tibble(
-        player_name = setdiff(input$draft_player_log, vec_player_log_stream)
-      )
+    if (length(unique(vec_player_log_stream$player_name)) < length(input$draft_player_log)) {
+      nm <- tibble(player_name = setdiff(input$draft_player_log, vec_player_log_stream$player_name))
       dh_ingestData(db_con, nm, "util", "draft_player_log")
-    } else if (length(unique(vec_player_log_stream)) > length(input$draft_player_log)) {
-      nm <- str_replace_all(
-        setdiff(vec_player_log_stream, input$draft_player_log),
-        "'",
-        "''"
-      )
+    } else if (length(unique(vec_player_log_stream$player_name)) > length(input$draft_player_log)) {
+      nm <- str_replace_all(setdiff(vec_player_log_stream$player_name, input$draft_player_log), "'", "''")
       nm <- paste(nm, collapse = "', '")
-
       DBI::dbBegin(db_con)
-      DBI::dbExecute(
-        db_con,
-        glue::glue(
-          "DELETE FROM util.draft_player_log WHERE player_name IN ('{nm}')"
-        )
-      )
+      DBI::dbExecute(db_con, glue::glue("DELETE FROM util.draft_player_log WHERE player_name IN ('{nm}')"))
       DBI::dbCommit(db_con)
     }
-    vec_player_log_stream <<- dh_getQuery(
-      db_con,
-      "SELECT * FROM util.draft_player_log"
-    )$player_name
+    vec_player_log_stream <<- dh_getQuery(db_con, "SELECT * FROM util.draft_player_log")
   }) |>
     bindEvent(input$draft_player_log, ignoreNULL = FALSE, ignoreInit = TRUE)
 
@@ -1770,16 +1748,8 @@ server <- function(input, output, session) {
         .by = c(season_type, team_abbreviation)
       )
 
-    # df_overview |>
-    #   mutate(tov_rate = tov / (min * log(1 + ast))) |>
-    #   View()
-
     # Stat calc
-    stat_calc <- if (input$draft_tot_avg_toggle) {
-      getFunction("sum")
-    } else {
-      getFunction("mean")
-    }
+    stat_calc <- if (input$draft_tot_avg_toggle) getFunction("sum") else getFunction("mean")
 
     df_overview <<- df_nba_player_box_score |>
       filter(season == prev_season, !(is.na(player_id) | is.na(player_name))) |>

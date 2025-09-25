@@ -1,5 +1,3 @@
-
-
 # Libraries ---------------------------------------------------------------
 
 library(shinyWidgets)
@@ -14,8 +12,8 @@ page_fty_league_overview <- layout_sidebar(
   tags$head(tags$style(HTML(".selectize-dropdown-content{min-width: 100%; box-sizing: border-box;}"))),
   sidebar = sidebar(
     selectInput(
-      "fty_lg_ov_cat", 
-      "Category", 
+      "fty_lg_ov_cat",
+      "Category",
       choices = list(
         "Overall" = keep(fmt_to_db_stat_name, \(x) str_detect(x, "_cat")),
         "Categories" = keep(fmt_to_db_stat_name, \(x) x %in% anl_cols$h2h_cols),
@@ -38,7 +36,7 @@ page_h2h <- layout_sidebar(
   sidebar = sidebar(
     layout_columns(
       selectInput("h2h_competitor", "Competitor", choices = character(0)),
-      selectInput("h2h_week", "Week", choices = 0) 
+      selectInput("h2h_week", "Week", choices = 0)
     ),
     radioButtons("h2h_window", "Rolling days", c(7, 15, 30), inline = TRUE),
     layout_columns(
@@ -47,7 +45,7 @@ page_h2h <- layout_sidebar(
     ),
     layout_columns(
       checkboxInput("h2h_future_only", "Future"),
-      checkboxInput("h2h_future_from_tomorrow", "Tmrw")      
+      checkboxInput("h2h_future_from_tomorrow", "Tmrw")
     ),
     selectInput("h2h_hl_player", "Highlight Player", choices = character(0), multiple = TRUE),
     selectInput("h2h_log_config", "Log Filter Config", choices = character(0), size = 4, selectize = FALSE),
@@ -61,9 +59,9 @@ page_h2h <- layout_sidebar(
     card(full_screen = TRUE, min_height = 500, max_height = 700, plotlyOutput("h2h_stat_plot")),
     card(full_screen = TRUE, min_height = 200, max_height = 650, DTOutput("h2h_game_table"))
   ),
-  fillable = TRUE, 
+  fillable = TRUE,
   tags$style(
-    type="text/css",
+    type = "text/css",
     ".selectize-dropdown-content{width: 200px;background-color: #FFFFFF; align: right;}"
   )
 )
@@ -74,7 +72,12 @@ page_player_comparison <- layout_sidebar(
   sidebar = sidebar(
     switchInput("comparison_team_or_player", value = TRUE, onLabel = "Team", offLabel = "Player", size = "small"),
     selectInput("comparison_team_or_player_filter", NULL, choices = character(0), multiple = TRUE),
-    selectizeInput("comparison_excels_at_filter", "Excels at", choices = discard(fmt_to_db_stat_name, \(x) str_detect(x, "_pct|_cat")), options = list(maxItems = 5, onInitialize = I('function() { this.setValue(""); }'))),
+    selectizeInput(
+      "comparison_excels_at_filter",
+      "Excels at",
+      choices = discard(fmt_to_db_stat_name, \(x) str_detect(x, "_pct|_cat")),
+      options = list(maxItems = 5, onInitialize = I('function() { this.setValue(""); }'))
+    ),
     radioButtons("comparison_window", "Rolling days", c(7, 15, 30), inline = TRUE),
     sliderInput("comparison_minute_filter", "Minute Filter", min = 0, max = 50, value = 20, round = TRUE),
     checkboxInput("comparison_free_agent_filter", "Free Agents only", value = TRUE),
@@ -90,7 +93,7 @@ page_player_comparison <- layout_sidebar(
 page_league_game_schedule <- layout_sidebar(
   sidebar = sidebar(
     selectInput("week_selection", "Week", choices = character(0), selectize = FALSE),
-    dateInput("pin_date", "Pinned Date"), 
+    dateInput("pin_date", "Pinned Date"),
     radioButtons("pin_dir", label = "Pin Direction", choices = c("-", "+"), selected = "+", inline = TRUE),
     actionButton("copy_teams", "Copy teams to Comparison")
     # open = "open"
@@ -121,12 +124,24 @@ page_draft <- layout_sidebar(
     selectInput("draft_stat", "Statistic", choices = discard(fmt_to_db_stat_name, \(x) str_detect(x, "_pct|_cat"))),
     sliderInput("draft_min_filter", "Limit Minutes", step = 1, min = 0, max = as.numeric(0), value = as.numeric(0), ticks = FALSE),
     sliderInput("draft_top_n", "Top N Players", min = 10, max = 20, value = 15, ticks = FALSE),
-    sliderInput("draft_cov_filter", "Variance Coefficient", step = 0.01, min = as.numeric(0), max = as.numeric(0), value = as.numeric(0), ticks = FALSE),
+    sliderInput(
+      "draft_cov_filter",
+      "Variance Coefficient",
+      step = 0.01,
+      min = as.numeric(0),
+      max = as.numeric(0),
+      value = as.numeric(0),
+      ticks = FALSE
+    ),
     checkboxInput("draft_scale_minutes", "Scale by Minutes"),
-    switchInput("draft_tot_avg_toggle", value = TRUE, onLabel = "Total", offLabel = "Mean", size = "small"),
-  ), 
+    switchInput("draft_tot_avg_toggle", value = FALSE, onLabel = "Total", offLabel = "Mean", size = "large"),
+  ),
   layout_sidebar(
-    sidebar = sidebar(selectInput("draft_player_log", NULL, choices = character(0), multiple = TRUE), position = "right"),
+    sidebar = sidebar(
+      switchInput("draft_live_capture", value = FALSE, onLabel = "Stream", offLabel = "Off", size = "normal"),
+      selectInput("draft_player_log", NULL, choices = character(0), multiple = TRUE),
+      position = "right"
+    ),
     card(full_screen = TRUE, plotlyOutput("draft_stat_plot")),
     border = FALSE
   ),
@@ -134,19 +149,6 @@ page_draft <- layout_sidebar(
   fillable = TRUE,
   class = "p-0"
 )
-
-
- layout_sidebar(
-    sidebar = sidebar("Left sidebar"),
-    layout_sidebar(
-        sidebar = sidebar("Right sidebar", position = "right", open = FALSE),
-        "Main contents",
-        border = FALSE
-    ),
-    border_radius = FALSE,
-    fillable = TRUE,
-    class = "p-0"
-  )
 
 
 # News Transactions -------------------------------------------------------
@@ -179,7 +181,7 @@ ui <- page_navbar(
   nav_panel("Game Schedule", page_league_game_schedule),
   nav_panel("Player Trend", page_player_trend),
   nav_menu(
-    "Misc.", 
+    "Misc.",
     nav_panel("Draft", page_draft),
     nav_panel("News", page_news),
     nav_panel("Info", page_info),
@@ -192,4 +194,3 @@ ui <- page_navbar(
     primary = "#133DEF"
   )
 )
-
