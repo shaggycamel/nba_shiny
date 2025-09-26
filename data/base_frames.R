@@ -3,7 +3,7 @@
 query_template <- function(qry_obj, sn = "cur", pf = TRUE, lg = TRUE) {
   paste0(
     "SELECT * FROM ", qry_obj,
-    " WHERE (season >= '{", sn, "_season}' OR season IS NULL)",
+    " WHERE (season >= '{", sn, "_season}' OR season IS NULL) AND season != '2025-26'", #### DELETE CONDITION
     if (pf) " AND (platform = '{platform}' OR platform IS NULL)",
     if (lg) " AND (league_id = {league_id} OR league_id IS NULL)"
   )
@@ -117,7 +117,7 @@ purrr::pwalk(distinct(df_fty_base, platform, league_id), \(platform, league_id) 
 
   # Fantasy league schedule -------------------------------------------------
   cat("\t- df_fantasy_schedule\n")
-  df_fty_schedule <- nba.dataRub::dh_getQuery(db_con, glue::glue(query_template("fty.league_schedule")))
+  df_fty_schedule <- nba.dataRub::dh_getQuery(db_con, glue::glue(query_template("fty.fty_league_schedule_vw")))
 
   # Fantasy competitor roster -------------------------------------------------------
   cat("\t- df_fty_roster\n")

@@ -7,7 +7,8 @@ df_rolling_stats <<- df_nba_player_box_score |>
   filter(game_date < cur_date) |> # SHOULD THIS FILTER BE PLACED BEFORE OR AFTER SLIDER??
   select(-c(season, season_type, year_season_type, game_id)) |>
   (\(df_t) {
-    map(set_names(c(7, 15, 30)), \(window) {
+    # set_names started randomly throwing error here
+    map(c("7" = 7, "15" = 15, "30" = 30), \(window) {
       df_t |>
         mutate(
           across(any_of(general_cat_cols), \(x) {
@@ -89,8 +90,8 @@ df_h2h_prepare <<- function(grain = 7, c_id = NULL, exclude = NULL, add = NULL, 
     ) |>
     left_join(
       df_fty_schedule |>
-        select(league_week = week, week_start, week_end, competitor_id, opponent_id),
-      by = join_by(competitor_id, between(game_date, week_start, week_end))
+        select(starts_with("matchup"), competitor_id, opponent_id),
+      by = join_by(competitor_id, between(game_date, matchup_start, matchup_end))
     ) |>
     mutate(dow = lubridate::wday(game_date, week_start = 1)) |>
     select(any_of(colnames(df_past)))

@@ -28,7 +28,7 @@ page_h2h <- layout_sidebar(
   sidebar = sidebar(
     layout_columns(
       selectInput("h2h_competitor", "Competitor", choices = character(0)),
-      selectInput("h2h_week", "Week", choices = 0)
+      selectInput("h2h_matchup", "Matchup", choices = 0)
     ),
     radioButtons("h2h_window", "Rolling days", c(7, 15, 30), inline = TRUE),
     layout_columns(
@@ -84,7 +84,7 @@ page_player_comparison <- layout_sidebar(
 
 page_league_game_schedule <- layout_sidebar(
   sidebar = sidebar(
-    selectInput("week_selection", "Week", choices = character(0), selectize = FALSE),
+    selectInput("matchup_selection", "Matchup", choices = character(0), selectize = FALSE),
     dateInput("pin_date", "Pinned Date"),
     radioButtons("pin_dir", label = "Pin Direction", choices = c("-", "+"), selected = "+", inline = TRUE),
     actionButton("copy_teams", "Copy teams to Comparison")
