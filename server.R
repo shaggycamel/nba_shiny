@@ -28,17 +28,15 @@ server <- function(input, output, session) {
 
   db_con <<- if (Sys.info()["user"] == "fred") dh_createCon("postgres") else dh_createCon("cockroach")
   # cur_date <<- strptime(Sys.time(), "%Y", tz = "EST")
-  cur_date <<- as.Date("2025-12-01") # DELETE
   # cur_season <<- nba_api$stats$library$parameters$Season$current_season
   # prev_season <<- nba_api$stats$library$parameters$Season$previous_season
+  cur_date <<- as.Date("2025-12-01") # DELETE
   cur_season <<- "2025-26" # DELETE
   prev_season <<- "2024-25" # DELETE
   df_fty_base <<- readRDS("fty_base.RDS")
   ls_fty_base <<- magrittr::`%$%`(
     distinct(df_fty_base, platform, league_id, league_name),
-    map(setNames(paste0(platform, "_", league_id), league_name), \(x) {
-      as.vector(x)
-    })
+    map(setNames(paste0(platform, "_", league_id), league_name), \(x) as.vector(x))
   )
   vec_player_log_stream <<- dh_getQuery(db_con, "SELECT * FROM util.draft_player_log")
 
@@ -46,13 +44,7 @@ server <- function(input, output, session) {
 
   bindEvent(
     observe({
-      # fmt: skip
-      if (input$fty_league_select != "") load(here(paste0("fty_", ls_fty_base[input$fty_league_select], ".RData")), envir = globalenv())
-
-      updateSelectInput(
-        inputId = "fty_competitor_select",
-        choices = filter(df_fty_base, league_name == input$fty_league_select)$competitor_name
-      )
+      updateSelectInput(inputId = "fty_competitor_select", choices = filter(df_fty_base, league_name == input$fty_league_select)$competitor_name)
       platform_selected <<- str_split(ls_fty_base[input$fty_league_select], "_")[[1]][1]
       league_selected <<- str_split(ls_fty_base[input$fty_league_select], "_")[[1]][2]
     }),
@@ -92,9 +84,7 @@ server <- function(input, output, session) {
   login_modal <- function() {
     showModal(
       modalDialog(
-        tags$head(tags$style(HTML(
-          ".selectize-dropdown-content{min-width: 100%; box-sizing: border-box;}"
-        ))),
+        tags$head(tags$style(HTML(".selectize-dropdown-content{min-width: 100%; box-sizing: border-box;}"))),
         selectizeInput(
           "fty_league_select",
           label = NULL,
@@ -146,10 +136,10 @@ server <- function(input, output, session) {
     showPageSpinner(type = 6, caption = data_collection_caption)
 
     # Data Frames
-    if (Sys.info()["user"] == "fred") {
-      source(here("data", "base_frames.R"))
-    }
+    # fmt: skip
+    if (Sys.info()["user"] == "fred") source(here("data", "base_frames.R"))
     load("nba_base.RData", envir = globalenv())
+    load(here(paste0("fty_", ls_fty_base[input$fty_league_select], ".RData")), envir = globalenv())
 
     .load_datasets <- function() {
       walk(list.files(here("data", "app_data_prep"), full.names = TRUE), \(x) {
@@ -172,9 +162,7 @@ server <- function(input, output, session) {
       cur_date
     }
     cur_week <<- df_week_game_count |>
-      mutate(
-        week_end = if_else(week_end - week_start < 6, week_start + 6, week_end)
-      ) |>
+      mutate(week_end = if_else(week_end - week_start < 6, week_start + 6, week_end)) |>
       filter(cur_date >= week_start, cur_date <= week_end) |>
       pull(week) |>
       unique()
@@ -195,31 +183,16 @@ server <- function(input, output, session) {
     }
 
     # Maybe get to the point where I place free agents at top of list
-    active_players <<- sort_players_by_min_desc(filter(
-      df_nba_player_box_score,
-      player_injury_status != "NA" | is.na(player_injury_status)
+    active_players <<- sort_players_by_min_desc(filter(df_nba_player_box_score, player_injury_status != "NA" | is.na(player_injury_status)))
+    free_agents <<- sort_players_by_min_desc(filter(df_nba_player_box_score, player_availability == "free_agent"))
+    ls_fty_name_to_cid <<- magrittr::`%$%`(df_fty_competitor, map(setNames(competitor_id, competitor_name), \(x) as.vector(x)))
+    ls_fty_cid_to_name <<- magrittr::`%$%`(df_fty_competitor, map(setNames(competitor_name, competitor_id), \(x) as.vector(x)))
+    # fmt: skip
+    ls_log_config <<- list("reset" = str_c(
+      "h2h_competitor=", ls_fty_name_to_cid[input$fty_competitor_select],
+      ";h2h_week=", cur_week,
+      ";h2h_ex_player=;h2h_add_player=;h2h_future_only=FALSE;h2h_future_from_tomorrow=FALSE;h2h_hl_player="
     ))
-    free_agents <<- sort_players_by_min_desc(filter(
-      df_nba_player_box_score,
-      player_availability == "free_agent"
-    ))
-    ls_fty_name_to_cid <<- magrittr::`%$%`(
-      df_fty_competitor,
-      map(setNames(competitor_id, competitor_name), \(x) as.vector(x))
-    )
-    ls_fty_cid_to_name <<- magrittr::`%$%`(
-      df_fty_competitor,
-      map(setNames(competitor_name, competitor_id), \(x) as.vector(x))
-    )
-    ls_log_config <<- list(
-      "reset" = paste0(
-        "h2h_competitor=",
-        ls_fty_name_to_cid[input$fty_competitor_select],
-        ";h2h_week=",
-        cur_week,
-        ";h2h_ex_player=;h2h_add_player=;h2h_future_only=FALSE;h2h_future_from_tomorrow=FALSE;h2h_hl_player="
-      )
-    )
     ss_week <- select(df_fty_schedule, week, week_start, week_end)
     week_drop_box_choices <<- unique(paste0("Week ", ss_week$week, ": (", ss_week$week_start, " to ", ss_week$week_end, ")"))
     week_drop_box_choices <<- sort(setNames(str_extract(week_drop_box_choices, "\\d{4}.*-\\d{2}"), week_drop_box_choices))
@@ -228,13 +201,15 @@ server <- function(input, output, session) {
 
     # Player Comparison tab
     updateSelectInput(session, "comparison_team_or_player_filter", choices = teams)
+    updateSelectizeInput(session, "comparison_excels_at_filter", choices = discard(fmt_to_nba_cat_name, \(x) str_detect(x, "_pct|_cat|f[t|g][m|a]")))
 
     # Player trend tab
     updateSelectInput(session, "trend_select_player", choices = active_players)
+    updateSelectInput(session, "trend_select_stat", choices = discard(fmt_to_nba_cat_name, \(x) str_detect(x, "_z|_cat|f[t|g][m|a]")))
 
     # H2H tab
     updateSelectInput(session, "h2h_competitor", choices = ls_fty_name_to_cid, selected = ls_fty_name_to_cid[input$fty_competitor_select])
-
+    updateSelectInput(session, "h2h_log_config", choices = ls_log_config)
     updateSelectInput(
       session,
       "h2h_week",
@@ -248,13 +223,24 @@ server <- function(input, output, session) {
         cur_week
       }
     )
-    updateSelectInput(session, "h2h_log_config", choices = ls_log_config)
 
     # NBA schedule tab
     updateSelectInput(session, "week_selection", choices = week_drop_box_choices, selected = pluck(week_drop_box_choices, cur_week))
 
     # Draft tab
     updateSelectInput(session, "draft_player_log", choices = active_players, selected = vec_player_log_stream$player_name)
+    updateSelectInput(session, "draft_stat", choices = discard(fmt_to_nba_cat_name, \(x) str_detect(x, "_pct|_cat|f[t|g][m|a]")))
+
+    # League Overview tab
+    updateSelectInput(
+      session,
+      "fty_lg_ov_cat",
+      choices = list(
+        "Overall" = keep(fmt_to_nba_cat_name, \(x) str_detect(x, "_cat")),
+        "Categories" = keep(fmt_to_nba_cat_name, \(x) x %in% fty_h2h_cols),
+        "Z Scores" = keep(fmt_to_nba_cat_name, \(x) str_detect(x, "_z"))
+      )
+    )
 
     # Stop loading page
     hidePageSpinner()
@@ -266,11 +252,7 @@ server <- function(input, output, session) {
   observe({
     # Draft Assistance tab
     req(fty_parameters_met, exists("df_nba_player_box_score"))
-    stat_calc <- if (input$draft_tot_avg_toggle) {
-      getFunction("sum")
-    } else {
-      getFunction("mean")
-    }
+    stat_calc <- if (input$draft_tot_avg_toggle) getFunction("sum") else getFunction("mean")
 
     # Minute Range Filter
     min_range <- filter(df_nba_player_box_score, season == prev_season) |>
@@ -378,7 +360,7 @@ server <- function(input, output, session) {
     bindEvent(input$fty_dash_init)
 
   output$fty_league_overview_rank_plot <- renderPlotly({
-    req(fty_parameters_met(), exists("df_fty_base"))
+    req(fty_parameters_met(), exists("df_fty_base"), exists("ls_fty_name_to_cid"))
 
     plot_col <- input$fty_lg_ov_cat
     if (input$fty_lg_ov_rank_toggle) {
@@ -406,7 +388,7 @@ server <- function(input, output, session) {
         labs(
           title = paste(
             "Competitor Category Ranking:",
-            db_to_fmt_stat_name[[input$fty_lg_ov_cat]]
+            nba_to_fmt_cat_name[[input$fty_lg_ov_cat]]
           ),
           x = "Matchup Period",
           y = input$fty_lg_ov_cat
@@ -433,7 +415,7 @@ server <- function(input, output, session) {
         labs(
           title = paste(
             "Competitor Category Ranking:",
-            db_to_fmt_stat_name[[input$fty_lg_ov_cat]]
+            nba_to_fmt_cat_name[[input$fty_lg_ov_cat]]
           ),
           x = "Matchup Period",
           y = input$fty_lg_ov_cat
@@ -503,7 +485,7 @@ server <- function(input, output, session) {
         slice_max(df_rolling_stats, game_date, by = player_id) |>
           select(
             player_id,
-            all_of(str_subset(anl_cols$stat_cols, "_z$", negate = TRUE))
+            all_of(str_subset(general_cat_cols, "_z$", negate = TRUE))
           ),
       ) |>
       summarise(
@@ -1085,7 +1067,7 @@ server <- function(input, output, session) {
         game_date >= cur_date - days(input$comparison_window)
       ) |>
       summarise(
-        across(any_of(anl_cols$stat_cols), \(x) mean(x)),
+        across(any_of(general_cat_cols), \(x) mean(x)),
         .by = c(player_id, player_name)
       ) |>
       mutate(across(where(is.numeric), \(x) replace_na(x, 0L))) |>
@@ -1675,7 +1657,7 @@ server <- function(input, output, session) {
           ) +
           ylim(0, NA) +
           labs(
-            title = db_to_fmt_stat_name[[input$trend_select_stat]],
+            title = nba_to_fmt_cat_name[[input$trend_select_stat]],
             x = NULL,
             y = NULL
           ) +
@@ -1741,10 +1723,10 @@ server <- function(input, output, session) {
     bindEvent(input$draft_player_log, ignoreNULL = FALSE, ignoreInit = TRUE)
 
   output$draft_stat_plot <- renderPlotly({
-    # USED FOR USAGE RATE, etc...
+    # USED FOR USAGE RATE, etc... | Need to think about dd and td here...
     df_team_overview <- filter(df_nba_team_box_score, season == prev_season) |>
       summarise(
-        across(any_of(anl_cols$stat_cols), \(x) sum(x, na.rm = TRUE)),
+        across(any_of(general_cat_cols), \(x) sum(x, na.rm = TRUE)),
         .by = c(season_type, team_abbreviation)
       )
 
@@ -1754,12 +1736,8 @@ server <- function(input, output, session) {
     df_overview <<- df_nba_player_box_score |>
       filter(season == prev_season, !(is.na(player_id) | is.na(player_name))) |>
       summarise(
-        across(
-          any_of(anl_cols$stat_cols),
-          \(x) sd(x, na.rm = TRUE) / mean(x, na.rm = TRUE),
-          .names = "{.col}_cov"
-        ),
-        across(any_of(anl_cols$stat_cols), \(x) stat_calc(x, na.rm = TRUE)),
+        across(any_of(general_cat_cols), \(x) sd(x, na.rm = TRUE) / mean(x, na.rm = TRUE), .names = "{.col}_cov"),
+        across(any_of(general_cat_cols), \(x) stat_calc(x, na.rm = TRUE)),
         .by = c(player_id, player_name)
       ) |>
       calc_z_pcts()
@@ -1771,43 +1749,29 @@ server <- function(input, output, session) {
     if (input$draft_scale_minutes) {
       df_overview <- df_overview |>
         mutate(across(
-          all_of(stat_selection$database_name[-c(1, 2)]),
+          all_of(filter(df_fty_cats, measured | str_detect(nba_category, "min|_z$"))$nba_category),
           ~ .x / min
         ))
     }
 
     # Create df for plot
-    max_min_players <- slice_max(
-      df_overview,
-      order_by = min,
-      prop = 0.35
-    )$player_id
+    max_min_players <- slice_max(df_overview, order_by = min, prop = 0.35)$player_id
 
     df_overview <- left_join(
       select(df_overview, -ends_with("_cov")) |>
-        pivot_longer(any_of(anl_cols$stat_cols), names_to = "stat") |>
+        pivot_longer(any_of(general_cat_cols), names_to = "stat") |>
         filter(!str_detect(stat, "_pct")),
 
       select(df_overview, player_id, player_name, ends_with("_cov")) |>
-        pivot_longer(
-          ends_with("_cov"),
-          names_to = "stat",
-          values_to = "covariance"
-        ) |>
+        pivot_longer(ends_with("_cov"), names_to = "stat", values_to = "covariance") |>
         mutate(stat = str_remove(stat, "_cov")) |>
         mutate(stat = str_replace(stat, "_pct", "_z"))
     ) |>
       filter(
-        stat %in% discard(fmt_to_db_stat_name, \(x) str_detect(x, "_pct|_cat")),
+        stat %in% discard(fmt_to_nba_cat_name, \(x) str_detect(x, "_pct|_cat|f[g|t][m|a]")),
         !(stat == input$draft_stat & covariance > input$draft_cov_filter)
       ) |>
-      mutate(
-        value = if_else(
-          stat == "tov" & !player_id %in% max_min_players,
-          NA,
-          value
-        )
-      ) |>
+      mutate(value = if_else(stat == "tov" & !player_id %in% max_min_players, NA, value)) |>
       mutate(
         rank = if_else(
           stat == "tov",
@@ -1817,10 +1781,7 @@ server <- function(input, output, session) {
         .by = stat
       ) |>
       mutate(top_cats = if_else(rank <= input$draft_top_n, stat, NA)) |>
-      mutate(
-        top_cats = na_if(paste(na.omit(top_cats), collapse = ", "), ""),
-        .by = player_id
-      ) |>
+      mutate(top_cats = na_if(paste(na.omit(top_cats), collapse = ", "), ""), .by = player_id) |>
       mutate(top_cat_count = str_count(top_cats, ",") + 1)
 
     # Stat selection and render plot
@@ -1838,18 +1799,13 @@ server <- function(input, output, session) {
         text = top_cats
       )) +
       geom_col() +
-      guides(
-        fill = guide_legend(title = "Other Category Count", reverse = TRUE)
-      ) +
+      guides(fill = guide_legend(title = "Other Category Count", reverse = TRUE)) +
       labs(
-        title = paste0(
-          "Previous Seasion (",
-          prev_season,
-          "): ",
-          ifelse(input$draft_tot_avg_toggle, "Total", "Average"),
-          " ",
-          db_to_fmt_stat_name[[input$draft_stat]],
-          ifelse(input$draft_scale_minutes, " Scaled", "")
+        # fmt: skip
+        title = str_c(
+          "Previous Seasion (", prev_season,"): ",
+          ifelse(input$draft_tot_avg_toggle, "Total", "Average"), " ",
+          nba_to_fmt_cat_name[[input$draft_stat]], ifelse(input$draft_scale_minutes, " Scaled", "")
         ),
         x = NULL,
         y = NULL
