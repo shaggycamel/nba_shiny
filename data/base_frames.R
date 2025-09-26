@@ -103,8 +103,7 @@ save(list = stringr::str_subset(objects(), "df_nba"), file = here::here("nba_bas
 # Fty base object ---------------------------------------------------------
 
 cat("\t- df_fty_base\n")
-df_fty_base <<- nba.dataRub::dh_getQuery(db_con, query_template("fty.fty_base_vw", pf = FALSE, lg = FALSE)) |>
-  filter(season != "2025-26") ##### DELETE
+df_fty_base <<- nba.dataRub::dh_getQuery(db_con, query_template("fty.fty_base_vw", pf = FALSE, lg = FALSE))
 saveRDS(df_fty_base, here::here("fty_base.RDS"))
 
 
@@ -146,13 +145,14 @@ purrr::pwalk(distinct(df_fty_base, platform, league_id), \(platform, league_id) 
   # Fantasy category labels -------------------------------------------------------
   cat("\t- df_fty_cats\n")
   df_fty_cats <- nba.dataRub::dh_getQuery(db_con, glue::glue(query_template("fty.fty_categories_vw"))) |>
-    fill(season, platform, league_id) # fill missing values downwards
+    fill(season, platform, league_id) |> # fill missing values downwards
+    arrange(display_order)
 
   # fmt: skip
-  fmt_to_db_cat_name <- magrittr::`%$%`(df_fty_cats, purrr::map(setNames(db_category, fmt_category), \(x) as.vector(x)))
-  db_to_fmt_cat_name <- magrittr::`%$%`(df_fty_cats, purrr::map(setNames(fmt_category, db_category), \(x) as.vector(x)))
-  fty_h2h_cols <- filter(df_fty_cats, measured)$db_category
+  fmt_to_nba_cat_name <- magrittr::`%$%`(df_fty_cats, purrr::map(setNames(nba_category, fmt_category), \(x) as.vector(x)))
+  nba_to_fmt_cat_name <- magrittr::`%$%`(df_fty_cats, purrr::map(setNames(fmt_category, nba_category), \(x) as.vector(x)))
+  fty_h2h_cols <- filter(df_fty_cats, measured)$nba_category
 
   # Save data objects
-  save(list = stringr::str_subset(objects(), "df_fty"), file = here::here(paste0("fty_", platform, "_", league_id, ".RData")))
+  save(list = stringr::str_subset(objects(), "fty|cat"), file = here::here(paste0("fty_", platform, "_", league_id, ".RData")))
 })
