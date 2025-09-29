@@ -8,9 +8,6 @@ library(ggplot2)
 library(plotly)
 library(shinycssloaders)
 
-library(magrittr, include.only = "%T>%")
-
-
 # Initialisation files ----------------------------------------------------
 
 # only init python if running in shiny
@@ -30,12 +27,12 @@ server <- function(input, output, session) {
 
   db_con <<- if (Sys.info()["user"] == "fred") dh_createCon("postgres") else dh_createCon("cockroach")
   # cur_date <<- strptime(Sys.time(), "%Y", tz = "EST")
-  cur_season <<- nba_api$stats$library$parameters$Season$current_season
-  prev_season <<- nba_api$stats$library$parameters$Season$previous_season
-  cur_date <<- as.Date("2025-02-01") # DELETE
-  # cur_date <<- as.Date("2025-12-01") # DELETE
-  # cur_season <<- "2025-26" # DELETE
-  # prev_season <<- "2024-25" # DELETE
+  # cur_season <<- nba_api$stats$library$parameters$Season$current_season
+  # prev_season <<- nba_api$stats$library$parameters$Season$previous_season
+  # cur_date <<- as.Date("2025-02-01") # DELETE
+  cur_date <<- as.Date("2025-12-01") # DELETE
+  cur_season <<- "2025-26" # DELETE
+  prev_season <<- "2024-25" # DELETE
   df_fty_base <<- readRDS("fty_base.RDS")
   ls_fty_base <<- magrittr::`%$%`(
     distinct(df_fty_base, platform, league_id, league_name),
@@ -1279,7 +1276,7 @@ server <- function(input, output, session) {
           ) +
           ylim(0, NA) +
           labs(
-            title = nba_to_fmt_cat_name[[input$trend_select_stat]],
+            title = names(keep(cat_specs(h2h = FALSE), \(x) x == input$draft_stat)),
             x = NULL,
             y = NULL
           ) +
@@ -1424,7 +1421,7 @@ server <- function(input, output, session) {
         title = str_c(
           "Previous Seasion (", prev_season,"): ",
           ifelse(input$draft_tot_avg_toggle, "Total", "Average"), " ",
-          nba_to_fmt_cat_name[[input$draft_stat]], ifelse(input$draft_scale_minutes, " Scaled", "")
+          names(keep(cat_specs(h2h=FALSE), \(x) x == input$draft_stat)), ifelse(input$draft_scale_minutes, " Scaled", "")
         ),
         x = NULL,
         y = NULL

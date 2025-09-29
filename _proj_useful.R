@@ -23,12 +23,12 @@ reverse_legend_labels <- function(plotly_plot) {
 # Cat extraction
 cat_specs <- function(vec = FALSE, h2h = TRUE, incl_nba_cat = NULL, excl_nba_cat = NULL) {
   # fmt: skip
-  obj <- df_fty_cats2
+  obj <- df_fty_cats
   if (h2h) {
     obj <- filter(obj, h2h_cat)
   }
   if (!is.null(incl_nba_cat)) {
-    obj <- bind_rows(obj, filter(df_fty_cats2, nba_category %in% incl_nba_cat))
+    obj <- bind_rows(obj, filter(df_fty_cats, nba_category %in% incl_nba_cat))
   }
   if (!is.null(excl_nba_cat)) {
     obj <- filter(obj, !nba_category %in% excl_nba_cat)

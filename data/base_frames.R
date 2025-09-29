@@ -5,8 +5,7 @@ query_template <- function(qry_obj, sn = "cur", pf = TRUE, lg = TRUE) {
     "SELECT * FROM ", qry_obj,
     " WHERE (season >= '{", sn, "_season}' OR season IS NULL)",
     if (pf) " AND (platform = '{platform}' OR platform IS NULL)",
-    if (lg) " AND (league_id = {league_id} OR league_id IS NULL)",
-      " AND (season != '2025-26' OR season IS NULL)" # DELETE
+    if (lg) " AND (league_id = {league_id} OR league_id IS NULL)"
   )
 }
 
@@ -146,16 +145,6 @@ purrr::pwalk(distinct(df_fty_base, platform, league_id), \(platform, league_id) 
   # Fantasy category labels -------------------------------------------------------
   cat("\t- df_fty_cats\n")
   df_fty_cats <- nba.dataRub::dh_getQuery(db_con, glue::glue(query_template("fty.fty_categories_vw"))) |>
-    fill(season, platform, league_id) |> # fill missing values downwards
-    arrange(display_order)
-
-  # fmt: skip
-  fmt_to_nba_cat_name <- magrittr::`%$%`(df_fty_cats, purrr::map(setNames(nba_category, fmt_category), \(x) as.vector(x)))
-  nba_to_fmt_cat_name <- magrittr::`%$%`(df_fty_cats, purrr::map(setNames(fmt_category, nba_category), \(x) as.vector(x)))
-  fty_h2h_cols <- filter(df_fty_cats, measured)$nba_category
-
-  df_fty_cats2 <- nba.dataRub::dh_getQuery(db_con, glue::glue(query_template("fty.fty_categories2_vw"))) |>
-    # fill(season, platform, league_id, .direction = "updown") |> # fill missing values downwards
     arrange(display_order)
 
   # Save data objects
