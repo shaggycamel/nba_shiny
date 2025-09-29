@@ -50,7 +50,7 @@ tbl_matchup_games <<- df_nba_schedule |>
   mutate(
     data = list(
       data |>
-        pivot_wider(names_from = game_day_date, values_from = against) |> # additional arg used to be: values_fn = list. dont know why
+        pivot_wider(names_from = game_day_date, values_from = against, values_fn = list) |> # additional arg used to be: values_fn = list. dont know why
         left_join(
           select(df_matchup_game_count, matchup_period, team, contains("games"), -starts_with("matchup_games")),
           by = join_by(matchup_period, team)

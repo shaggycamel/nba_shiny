@@ -8,15 +8,15 @@ df_rolling_stats <<- df_nba_player_box_score |>
   select(-c(season, season_type, year_season_type, game_id)) |>
   (\(df_t) {
     # set_names started randomly throwing error here
-    map(c("7" = 7, "15" = 15, "30" = 30), \(window) {
+    map(set_names(c(7, 15, 30)), \(window) {
       df_t |>
         mutate(
-          across(any_of(general_cat_cols), \(x) {
+          across(any_of(cat_specs(vec = TRUE, h2h = FALSE)), \(x) {
             slider::slide_period_dbl(x, game_date, "day", ~ mean(.x, na.rm = TRUE), .before = window, .after = -1)
           }),
           .by = player_id
         ) |>
-        mutate(across(any_of(general_cat_cols), \(x) coalesce(x, 0)))
+        mutate(across(any_of(cat_specs(vec = TRUE, h2h = FALSE)), \(x) coalesce(x, 0)))
     })
   })() |>
   map(\(df_t) {

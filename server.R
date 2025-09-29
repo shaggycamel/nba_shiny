@@ -8,7 +8,7 @@ library(ggplot2)
 library(plotly)
 library(shinycssloaders)
 
-library(magrittr)
+library(magrittr, include.only = "%T>%")
 
 
 # Initialisation files ----------------------------------------------------
@@ -194,7 +194,7 @@ server <- function(input, output, session) {
       ";h2h_matchup=", cur_matchup,
       ";h2h_ex_player=;h2h_add_player=;h2h_future_only=FALSE;h2h_future_from_tomorrow=FALSE;h2h_hl_player="
     ))
-    ss_matchup <- distinct(df_fty_schedule, matchup_period, matchup_start, matchup_end) |> arrange(matchup_period)
+    ss_matchup <<- distinct(df_fty_schedule, matchup_period, matchup_start, matchup_end) |> arrange(matchup_period)
     matchup_drop_box_choices <<- str_c("Matchup ", ss_matchup$matchup_period, ": (", ss_matchup$matchup_start, ")")
     matchup_drop_box_choices <<- setNames(str_extract(matchup_drop_box_choices, "\\d{4}.*-\\d{2}"), matchup_drop_box_choices)
 
@@ -202,11 +202,15 @@ server <- function(input, output, session) {
 
     # Player Comparison tab
     updateSelectInput(session, "comparison_team_or_player_filter", choices = teams)
-    updateSelectizeInput(session, "comparison_excels_at_filter", choices = discard(fmt_to_nba_cat_name, \(x) str_detect(x, "_pct|_cat|f[t|g][m|a]")))
+    updateSelectizeInput(
+      session,
+      "comparison_excels_at_filter",
+      choices = cat_specs(incl_nba_cat = c("min", "fg_z", "ft_z"), excl_nba_cat = c("fg_pct", "ft_pct"))
+    )
 
     # Player trend tab
     updateSelectInput(session, "trend_select_player", choices = active_players)
-    updateSelectInput(session, "trend_select_stat", choices = discard(fmt_to_nba_cat_name, \(x) str_detect(x, "_z|_cat|f[t|g][m|a]")))
+    updateSelectInput(session, "trend_select_stat", choices = cat_specs(incl_nba_cat = "min"))
 
     # H2H tab
     updateSelectInput(session, "h2h_competitor", choices = ls_fty_name_to_cid, selected = ls_fty_name_to_cid[input$fty_competitor_select])
@@ -225,22 +229,21 @@ server <- function(input, output, session) {
       }
     )
 
-    # UPTO HERE !!!!!!!!!!!!! - H2H plots not showing
     # NBA schedule tab
     updateSelectInput(session, "matchup_selection", choices = matchup_drop_box_choices, selected = pluck(matchup_drop_box_choices, cur_matchup))
 
     # Draft tab
     updateSelectInput(session, "draft_player_log", choices = active_players, selected = vec_player_log_stream$player_name)
-    updateSelectInput(session, "draft_stat", choices = discard(fmt_to_nba_cat_name, \(x) str_detect(x, "_cat|f[t|g][m|a]")))
+    updateSelectInput(session, "draft_stat", choices = cat_specs(incl_nba_cat = c("min", "fg_z", "ft_z"), excl_nba_cat = c("fg_pct", "ft_pct")))
 
     # League Overview tab
     updateSelectInput(
       session,
       "fty_lg_ov_cat",
       choices = list(
-        "Overall" = keep(fmt_to_nba_cat_name, \(x) str_detect(x, "_cat")),
-        "Categories" = keep(fmt_to_nba_cat_name, \(x) x %in% fty_h2h_cols),
-        "Z Scores" = keep(fmt_to_nba_cat_name, \(x) str_detect(x, "_z"))
+        "Overall" = cat_specs(h2h = FALSE)["All Categories"],
+        "Categories" = cat_specs(),
+        "Z Scores" = keep(cat_specs(h2h = FALSE), \(x) str_detect(x, "_z"))
       )
     )
 
@@ -269,8 +272,8 @@ server <- function(input, output, session) {
     cov_quantiles <- df_nba_player_box_score |>
       filter(season == prev_season) |>
       summarise(
-        cov = sd(!!sym(input$draft_stat), na.rm = TRUE) /
-          mean(!!sym(input$draft_stat), na.rm = TRUE),
+        cov = sd(!!sym(str_replace(input$draft_stat, "_z", "_pct")), na.rm = TRUE) /
+          mean(!!sym(str_replace(input$draft_stat, "_z", "_pct")), na.rm = TRUE),
         .by = c(player_id, player_name)
       ) |>
       pull(cov) |>
@@ -356,10 +359,7 @@ server <- function(input, output, session) {
         geom_point(data = df_point, size = 2) +
         scale_x_continuous(breaks = sort(unique(df_point$matchup)), labels = sort(unique(df_point$matchup))) +
         labs(
-          title = paste(
-            "Competitor Category Ranking:",
-            nba_to_fmt_cat_name[[input$fty_lg_ov_cat]]
-          ),
+          title = paste("Competitor Category Ranking:", names(keep(cat_specs(h2h = FALSE), \(x) x == input$fty_lg_ov_cat))),
           x = "Matchup Period",
           y = input$fty_lg_ov_cat
         ) +
@@ -368,12 +368,12 @@ server <- function(input, output, session) {
       df_point |>
         arrange(matchup) |>
         group_by(competitor_id) |>
-        mutate(across(c(all_of(fty_h2h_cols), matches("cat$|rank$")), \(x) cumsum(x))) |>
+        mutate(across(c(all_of(cat_specs(vec = TRUE)), matches("cat$|rank$")), \(x) cumsum(x))) |>
         ggplot(aes(x = matchup_sigmoid, y = !!sym(plot_col), colour = competitor_name)) +
         geom_path() +
         scale_x_continuous(breaks = sort(unique(df_point$matchup)), labels = sort(unique(df_point$matchup))) +
         labs(
-          title = paste("Competitor Category Ranking:", nba_to_fmt_cat_name[[input$fty_lg_ov_cat]]),
+          title = paste("Competitor Category Ranking:", names(keep(cat_specs(h2h = FALSE), \(x) x == input$fty_lg_ov_cat))),
           x = "Matchup Period",
           y = input$fty_lg_ov_cat
         ) +
@@ -405,7 +405,7 @@ server <- function(input, output, session) {
         ts <- map_int(1:length(plt$x$data), \(x) unlist(ls_fty_name_to_cid[pluck(plt$x$data, x, "name")]))
         ts_vis <- c(which(ts == c_id), which(ts == o_id))
 
-        style(plt, cisible = "legendonly", traces = setdiff(1:length(plt$x$data), ts_vis))
+        style(plt, visible = "legendonly", traces = setdiff(1:length(plt$x$data), ts_vis))
       }
     }
     plt
@@ -419,18 +419,17 @@ server <- function(input, output, session) {
       filter(date == max(date), player_injury_status %in% c("ACTIVE", "DAY_TO_DAY")) |>
       left_join(
         slice_max(df_rolling_stats, game_date, by = player_id) |>
-          select(player_id, all_of(str_subset(general_cat_cols, "_z$", negate = TRUE))),
+          select(player_id, all_of(cat_specs(vec = TRUE, h2h = FALSE, excl_nba_cat = c("ft_z", "fg_z")))),
       ) |>
       summarise(
-        across(all_of(str_subset(fty_h2h_cols, "_pct", negate = TRUE)), \(x) sum(x)),
-        across(c(ftm, fta, fgm, fga), \(x) sum(x)),
+        across(all_of(cat_specs(vec = TRUE, incl_nba_cat = c("ftm", "fta", "fgm", "fga"), excl_nba_cat = c("fg_pct", "ft_pct"))), \(x) sum(x)),
         .by = competitor_id
       ) |>
       mutate(ft_pct = ftm / fta, fg_pct = fgm / fga) |>
       mutate(across(where(is.numeric), \(x) round(x, 2))) |>
       select(-matches("(ft|fg)(m|a)$")) |>
       left_join(df_fty_competitor) |>
-      pivot_longer(all_of(fty_h2h_cols), names_to = "category") |>
+      pivot_longer(all_of(cat_specs(vec = TRUE)), names_to = "category") |>
       mutate(
         rank = if_else(category == "tov", rank(value, ties.method = "first"), rank(value * -1, ties.method = "first")),
         .by = category
@@ -553,7 +552,7 @@ server <- function(input, output, session) {
           player_injury_status %in% c("ACTIVE", "DAY_TO_DAY")
         ) |>
         pivot_longer(
-          cols = c(ast, stl, blk, tov, pts, ftm, fta, fgm, fga, fg3_m, reb),
+          cols = cat_specs(vec = TRUE, incl_nba_cat = c("fta", "ftm", "fga", "fgm"), excl_nba_cat = c("fg_pct", "ft_pct")),
           names_to = "stat",
           values_to = "value"
         ) |>
@@ -611,7 +610,10 @@ server <- function(input, output, session) {
             select(competitor_id, competitor_name),
           by = join_by(competitor_id)
         ) |>
-        mutate(competitor_name = ordered(competitor_name, c(ls_fty_cid_to_name[as.character(opp_id)], ls_fty_cid_to_name[input$h2h_competitor])))
+        mutate(
+          competitor_name = ordered(competitor_name, c(ls_fty_cid_to_name[as.character(opp_id)], ls_fty_cid_to_name[input$h2h_competitor])),
+          stat = factor(stat, levels = cat_specs(vec = TRUE), ordered = TRUE)
+        )
 
       (ggplot(h2h_plt, aes(x = stat, y = value, fill = competitor_name, text = paste(round(value, 2), "\n\n", competitor_roster))) +
         geom_col(position = "fill") +
@@ -664,7 +666,7 @@ server <- function(input, output, session) {
         ) |>
         mutate(player_injury_status = coalesce(player_injury_status, player_injury_status_temp)) |>
         select(-player_injury_status_temp) |>
-        # filter(competitor_id %in% c(as.numeric(input$h2h_competitor), opp_id), matchup_period == input$h2h_matchup) |>
+        filter(competitor_id %in% c(as.numeric(input$h2h_competitor), opp_id), matchup_period == input$h2h_matchup) |>
         mutate(
           inj_status = case_when(
             scheduled_to_play == 1 &
@@ -708,14 +710,13 @@ server <- function(input, output, session) {
 
           mutate(df, Total = Ttl)
         })() |>
-        mutate(Total = if_else(Total == 0 & is.na(player_team), NA, Total)) %T>%
-        colnames() |>
-        mutate(fty_matchup_period = as.numeric(input$h2h_matchup)) |>
+        mutate(Total = if_else(Total == 0 & is.na(player_team), NA, Total)) |>
+        mutate(matchup_period = as.numeric(input$h2h_matchup)) |>
         left_join(
           select(df_matchup_game_count, matchup_period, team, following_matchup_period_games),
-          by = join_by(player_team == team, fty_matchup_period == matchup_period)
+          by = join_by(player_team == team, matchup_period)
         ) |>
-        select(-fty_matchup_period, next_matchup_period = following_mathcup_period) |>
+        select(-matchup_period, following_matchup_period_games) |>
         distinct()
 
       df_h2h_matchup_game_count_tbl <<- df_h2h_matchup_game_count |>
@@ -723,7 +724,7 @@ server <- function(input, output, session) {
           starts_with("player"),
           all_of(sort(str_subset(colnames(df_h2h_matchup_game_count), "\\d"))),
           Total,
-          `Next Matchup Period` = next_matchup_period,
+          `Next Matchup Period` = following_matchup_period_games,
           Team = player_team,
           Player = player_name
         ) |>
@@ -787,10 +788,7 @@ server <- function(input, output, session) {
               dt,
               "Player",
               target = "row",
-              backgroundColor = styleEqual(
-                input$h2h_hl_player,
-                rep("#54FF9F", length(input$h2h_hl_player))
-              )
+              backgroundColor = styleEqual(input$h2h_hl_player, rep("#54FF9F", length(input$h2h_hl_player)))
             )
           }
 
@@ -805,7 +803,7 @@ server <- function(input, output, session) {
   .calc_xl_at_count <- function(df) {
     df$xl_at_count <- 0
 
-    for (category in unlist(fmt_to_nba_cat_name[input$comparison_excels_at_filter], use.names = FALSE)) {
+    for (category in unlist(cat_specs(h2h = FALSE)[input$comparison_excels_at_filter], use.names = FALSE)) {
       df$xl_at_count <- str_detect(df$`Excels At`, category) + df$xl_at_count
     }
     df
@@ -824,10 +822,7 @@ server <- function(input, output, session) {
       left_join(select(df_nba_roster, nba_id = player_id, salary)) |>
       select(team_slug, game_date, matchup, player_name, salary) |>
       arrange(desc(game_date), desc(salary)) |>
-      summarise(
-        player_names = paste(player_name, collapse = ", "),
-        .by = c(team_slug, game_date, matchup)
-      ) |>
+      summarise(player_names = paste(player_name, collapse = ", "), .by = c(team_slug, game_date, matchup)) |>
       nest_by(team_slug) |>
       (\(df_t) setNames(df_t$data, df_t$team_slug))()
 
@@ -838,26 +833,20 @@ server <- function(input, output, session) {
         game_date >= cur_date - days(input$comparison_window)
       ) |>
       summarise(
-        across(any_of(general_cat_cols), \(x) mean(x)),
+        across(any_of(cat_specs(vec = TRUE, incl_nba_cat = c("min", "fgm", "fga", "ftm", "fta"))), \(x) mean(x)),
         .by = c(player_id, player_name)
       ) |>
       mutate(across(where(is.numeric), \(x) replace_na(x, 0L))) |>
       calc_z_pcts() |>
-      select(-ends_with("_pct")) |>
+      select(-matches("_pct$|f[g|t][m|a]")) |>
       (\(df_tmp) {
         left_join(
           df_tmp,
           {
-            select(
-              df_tmp,
-              player_id,
-              player_name,
-              any_of(stat_selection$database_name),
-              -min
-            ) |>
-              mutate(across(any_of(stat_selection$database_name[stat_selection$database_name != "tov"]), ~ round(scales::rescale(.x), 2))) |>
+            select(df_tmp, player_id, player_name, any_of(cat_specs(vec = TRUE, h2h = FALSE, excl_nba_cat = "min"))) |>
+              mutate(across(any_of(cat_specs(vec = TRUE, h2h = FALSE, excl_nba_cat = "tov")), ~ round(scales::rescale(.x), 2))) |>
               mutate(tov = round((((tov * -1) - min(tov)) / (max(tov) - min(tov))) + 1, 2)) |>
-              pivot_longer(cols = any_of(stat_selection$database_name), names_to = "stat") |>
+              pivot_longer(cols = any_of(cat_specs(vec = TRUE, h2h = FALSE)), names_to = "stat") |>
               (\(df_tmp) {
                 bind_rows(
                   slice_max(df_tmp, value, n = 3, by = c(player_id, player_name), with_ties = FALSE) |>
@@ -876,8 +865,8 @@ server <- function(input, output, session) {
           by = join_by(player_name, player_id)
         )
       })() |>
-      select(player_name, any_of(stat_selection$database_name), contains("at"), -ends_with("pct")) |>
-      rename(any_of(setNames(stat_selection$database_name, stat_selection$formatted_name)), Player = player_name) |>
+      select(player_name, any_of(cat_specs(vec = TRUE, incl_nba_cat = c("fg_z", "ft_z", "min"), excl_nba_cat = c("ft_pct", "fg_pct"))), contains("at")) |>
+      rename(any_of(unlist(cat_specs(h2h = FALSE))), Player = player_name) |>
       left_join(
         slice_max(df_nba_player_box_score, game_date, by = player_name) |>
           select(Player = player_name, Team = team_slug, player_availability, player_injury_status),
@@ -919,18 +908,10 @@ server <- function(input, output, session) {
         }
       }
     }
+
     if (!is_null(input$comparison_excels_at_filter)) {
       df_comparison_table <- df_comparison_table |>
-        filter(str_detect(
-          `Excels At`,
-          paste0(
-            filter(
-              stat_selection,
-              database_name %in% input$comparison_excels_at_filter
-            )$database_name,
-            collapse = "|"
-          )
-        ))
+        filter(str_detect(`Excels At`, paste0(input$comparison_excels_at_filter, collapse = "|")))
     }
     df_comparison_table <- select(df_comparison_table, -c(player_availability, ends_with("_status"))) |>
       arrange(desc(Minutes))
@@ -1052,9 +1033,7 @@ server <- function(input, output, session) {
             list(fontSize = "80%", whiteSpace = "pre-line")
           }
         }),
-        "Weak At" = colDef(
-          style = list(fontSize = "80%", whiteSpace = "pre-line")
-        ),
+        "Weak At" = colDef(style = list(fontSize = "80%", whiteSpace = "pre-line")),
         "player_availability" = colDef(show = FALSE),
         "player_injury_status" = colDef(show = FALSE),
         "inj_status" = colDef(show = FALSE),
@@ -1094,36 +1073,23 @@ server <- function(input, output, session) {
   # NBA Schedule Table ------------------------------------------------------
 
   observe({
-    selected_week_dates <<- as.Date(str_split_1(input$week_selection, " to "))
+    selected_matchup_dates <<- ss_matchup[match(input$matchup_selection, matchup_drop_box_choices), ]
     date_input_value <- cur_date
-    if (input$pin_date < selected_week_dates[1]) {
-      date_input_value <- selected_week_dates[1]
+    if (input$pin_date < selected_matchup_dates$matchup_start) {
+      date_input_value <- selected_matchup_dates$matchup_start
     }
-    if (input$pin_date > selected_week_dates[2]) {
-      date_input_value <- selected_week_dates[2]
+    if (input$pin_date > selected_matchup_dates$matchup_end) {
+      date_input_value <- selected_matchup_dates$matchup_end
     }
-    updateDateInput(
-      session,
-      "pin_date",
-      value = date_input_value,
-      min = selected_week_dates[1],
-      max = selected_week_dates[2]
-    )
+    updateDateInput(session, "pin_date", value = date_input_value, min = selected_matchup_dates$matchup_start, max = selected_matchup_dates$matchup_end)
   }) |>
-    bindEvent(input$week_selection)
+    bindEvent(input$matchup_selection)
 
   observe({
     tms <- tbl_schedule_grid[input$schedule_table_rows_current, ]$Team
     updateSwitchInput(session, "comparison_team_or_player", value = TRUE)
     later::later(
-      \() {
-        updateSelectInput(
-          session,
-          "comparison_team_or_player_filter",
-          choices = teams,
-          selected = tms
-        )
-      },
+      \() updateSelectInput(session, "comparison_team_or_player_filter", choices = teams, selected = tms),
       delay = 0.05
     )
     show_toast(
@@ -1141,13 +1107,8 @@ server <- function(input, output, session) {
 
     # Prepare tables to be presented
     # tbl_schedule <<- tbl_matchup_games$data[[6]] |>
-    tbl_schedule <- tbl_matchup_games$data[[match(
-      input$matchup_selection,
-      matchup_drop_box_choices
-    )]] |>
-      mutate(across(ends_with(")"), \(x) {
-        if_else(as.character(x) == "NULL", 0, 1)
-      })) |>
+    tbl_schedule <- tbl_matchup_games$data[[match(input$matchup_selection, matchup_drop_box_choices)]] |>
+      mutate(across(ends_with(")"), \(x) if_else(as.character(x) == "NULL", 0, 1))) |>
       mutate(across(c(contains("games"), Team), as.factor))
 
     ts_names <- tmp_names <- str_subset(colnames(tbl_schedule), "\\(")
@@ -1159,45 +1120,21 @@ server <- function(input, output, session) {
       names(ts_names)[ix] <- paste0(nm[[1]], "_", names(nm))
 
       if (
-        as.Date(
-          paste0(
-            year(selected_week_dates[1]),
-            "/",
-            str_extract(tmp_names[ix], "\\d{2}/\\d{2}")
-          ),
-          "%Y/%d/%m"
-        ) ==
-          selected_week_dates[2]
+        as.Date(paste0(year(selected_matchup_dates$matchup_start), "/", str_extract(tmp_names[ix], "\\d{2}/\\d{2}")), "%Y/%d/%m") ==
+          selected_matchup_dates$matchup_end
       ) {
         wk_th <<- ix
       }
 
       if (
         !exists("wk_th") &&
-          as.Date(
-            paste0(
-              year(selected_week_dates[1]),
-              "/",
-              str_extract(tmp_names[ix], "\\d{2}/\\d{2}")
-            ),
-            "%Y/%d/%m"
-          ) ==
-            selected_week_dates[2] + days(1)
+          as.Date(paste0(year(selected_matchup_dates$matchup_start), "/", str_extract(tmp_names[ix], "\\d{2}/\\d{2}")), "%Y/%d/%m") ==
+            selected_matchup_dates$matchup_end + days(1)
       ) {
         wk_th <<- ix - 1
       }
     }
-    expected_elements <- c(
-      "1_Mon",
-      "1_Tue",
-      "1_Wed",
-      "1_Thu",
-      "1_Fri",
-      "1_Sat",
-      "1_Sun",
-      "2_Mon",
-      "2_Tue"
-    )
+    expected_elements <- c("1_Mon", "1_Tue", "1_Wed", "1_Thu", "1_Fri", "1_Sat", "1_Sun", "2_Mon", "2_Tue")
     ts_names <- discard(ts_names[expected_elements], is.na)
 
     # If a day is missing from ts_names add it in
@@ -1207,16 +1144,12 @@ server <- function(input, output, session) {
         names(ts_names)
       )
       ms_dt_ix <- which(expected_elements == ms_dt_nm) - 1
-      ms_dt <- (selected_week_dates[1] + days(ms_dt_ix)) |>
+      ms_dt <- (selected_matchup_dates$matchup_start + days(ms_dt_ix)) |>
         format("%a (%d/%m)") |>
         setNames(ms_dt_nm)
 
       ts_names <- append(ts_names, ms_dt, after = ms_dt_ix)
-      tbl_schedule <- mutate(
-        tbl_schedule,
-        !!ms_dt := NA_real_,
-        .after = ms_dt_ix + 1
-      )
+      tbl_schedule <- mutate(tbl_schedule, !!ms_dt := NA_real_, .after = ms_dt_ix + 1)
       wk_th <<- wk_th + 1
     }
 
@@ -1235,7 +1168,7 @@ server <- function(input, output, session) {
       mutate(
         # `Games From Pin` = factor(sum(c_across(str_subset(ts_names, format(input$pin_date, "%d/%m")):ts_names[wk_th]), na.rm = TRUE)),
         `Games From Pin` = factor(sum(c_across(pin_sum_cols), na.rm = TRUE)),
-        .before = "Following Matchup Games"
+        .before = "Following Matchup Period Games"
       ) |>
       relocate(contains("games"), .after = wk_th + 1) |>
       mutate(across(ends_with(")"), \(x) as.factor(if_else(x == 0, ".", "1"))))
@@ -1269,28 +1202,16 @@ server <- function(input, output, session) {
       (\(tb) {
         lvl <- 0:length(unique(tbl_schedule_grid$`Games From Pin`))
         col <- c("white", rev(RColorBrewer::brewer.pal(5, "Greens")))[lvl + 1]
-        tb <- formatStyle(
-          tb,
-          columns = "Games From Pin",
-          backgroundColor = styleEqual(levels = lvl, values = col)
-        )
+        tb <- formatStyle(tb, columns = "Games From Pin", backgroundColor = styleEqual(levels = lvl, values = col))
 
-        if (match(input$week_selection, matchup_drop_box_choices) < length(matchup_drop_box_choices)) {
+        if (match(input$matchup_selection, matchup_drop_box_choices) < length(matchup_drop_box_choices)) {
           tb <-
             formatStyle(
               tb,
-              columns = "Following Matchup Games",
+              columns = "Following Matchup Period Games",
               backgroundColor = styleEqual(
-                levels = 0:tail(
-                  levels(tbl_schedule_grid$`Following Matchup Games`),
-                  1
-                ),
-                values = rev(RColorBrewer::brewer.pal(
-                  length(
-                    0:tail(levels(tbl_schedule_grid$`Following Matchup Games`), 1)
-                  ),
-                  "Greens"
-                ))
+                levels = 0:tail(levels(tbl_schedule_grid$`Following Matchup Period Games`), 1),
+                values = rev(RColorBrewer::brewer.pal(length(0:tail(levels(tbl_schedule_grid$`Following Matchup Period Games`), 1)), "Greens"))
               )
             ) |>
             formatStyle(
@@ -1298,11 +1219,7 @@ server <- function(input, output, session) {
               backgroundColor = "lightgrey"
             )
         } else {
-          tb <- formatStyle(
-            tb,
-            columns = "Following Matchup Games",
-            backgroundColor = "lightgrey"
-          )
+          tb <- formatStyle(tb, columns = "Following Matchup Period Games", backgroundColor = "lightgrey")
         }
 
         tb # return
@@ -1429,20 +1346,20 @@ server <- function(input, output, session) {
 
   output$draft_stat_plot <- renderPlotly({
     # USED FOR USAGE RATE, etc... | Need to think about dd and td here...
-    df_team_overview <- filter(df_nba_team_box_score, season == prev_season) |>
-      summarise(
-        across(any_of(general_cat_cols), \(x) sum(x, na.rm = TRUE)),
-        .by = c(season_type, team_abbreviation)
-      )
+    # df_team_overview <- filter(df_nba_team_box_score, season == prev_season) |>
+    #   summarise(
+    #     across(any_of(cat_specs(vec = TRUE, h2h = FALSE)), \(x) sum(x, na.rm = TRUE)),
+    #     .by = c(season_type, team_abbreviation)
+    #   )
 
     # Stat calc
     stat_calc <- if (input$draft_tot_avg_toggle) getFunction("sum") else getFunction("mean")
 
-    df_overview <<- df_nba_player_box_score |>
+    df_overview <- df_nba_player_box_score |>
       filter(season == prev_season, !(is.na(player_id) | is.na(player_name))) |>
       summarise(
-        across(any_of(general_cat_cols), \(x) sd(x, na.rm = TRUE) / mean(x, na.rm = TRUE), .names = "{.col}_cov"),
-        across(any_of(general_cat_cols), \(x) stat_calc(x, na.rm = TRUE)),
+        across(any_of(cat_specs(vec = TRUE, h2h = FALSE)), \(x) sd(x, na.rm = TRUE) / mean(x, na.rm = TRUE), .names = "{.col}_cov"),
+        across(any_of(cat_specs(vec = TRUE, h2h = FALSE)), \(x) stat_calc(x, na.rm = TRUE)),
         .by = c(player_id, player_name)
       ) |>
       calc_z_pcts()
@@ -1453,10 +1370,7 @@ server <- function(input, output, session) {
 
     if (input$draft_scale_minutes) {
       df_overview <- df_overview |>
-        mutate(across(
-          all_of(filter(df_fty_cats, measured | str_detect(nba_category, "min|_z$"))$nba_category),
-          ~ .x / min
-        ))
+        mutate(across(any_of(cat_specs(vec = TRUE, h2h = FALSE)), \(x) x / min))
     }
 
     # Create df for plot
@@ -1464,7 +1378,7 @@ server <- function(input, output, session) {
 
     df_overview <- left_join(
       select(df_overview, -ends_with("_cov")) |>
-        pivot_longer(any_of(general_cat_cols), names_to = "stat") |>
+        pivot_longer(any_of(cat_specs(vec = TRUE, h2h = FALSE)), names_to = "stat") |>
         filter(!str_detect(stat, "_pct")),
 
       select(df_overview, player_id, player_name, ends_with("_cov")) |>
@@ -1473,7 +1387,7 @@ server <- function(input, output, session) {
         mutate(stat = str_replace(stat, "_pct", "_z"))
     ) |>
       filter(
-        stat %in% discard(fmt_to_nba_cat_name, \(x) str_detect(x, "_pct|_cat|f[g|t][m|a]")),
+        stat %in% cat_specs(incl_nba_cat = c("min", "fg_z", "ft_z")),
         !(stat == input$draft_stat & covariance > input$draft_cov_filter)
       ) |>
       mutate(value = if_else(stat == "tov" & !player_id %in% max_min_players, NA, value)) |>
