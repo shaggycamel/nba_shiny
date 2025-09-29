@@ -3,20 +3,37 @@ df_fty_league_overview_prepare <<- function(platform_selected, league_selected) 
     df_fty_box_score |>
     left_join(
       df_fty_box_score |>
-        select(competitor_id, matchup, all_of(fty_h2h_cols)) |>
-        mutate(across(all_of(fty_h2h_cols), \(x) percent_rank(x)), .by = matchup) |>
+        select(competitor_id, matchup, all_of(cat_specs(vec = TRUE))) |>
+        mutate(across(all_of(cat_specs(vec = TRUE)), \(x) percent_rank(x)), .by = matchup) |>
         mutate(tov = 1 - tov) |> # Reverse turnover distribution | Eventually fix this in any hover boxes
-        pivot_longer(all_of(fty_h2h_cols), names_to = "stat", values_to = "perc_rank") |>
+        pivot_longer(all_of(cat_specs(vec = TRUE)), names_to = "stat", values_to = "perc_rank") |>
         summarise(all_cat = sum(perc_rank), .by = c(competitor_id, matchup)),
       by = join_by(competitor_id, matchup)
     ) |>
     group_by(matchup) |>
     calc_z_pcts() |>
     ungroup() |>
-    mutate(across(c(any_of(df_fty_cats$nba_category), "matchup"), \(x) lead(x, order_by = matchup), .names = "{.col}_lead"), .by = competitor_id) |>
-    mutate(across(any_of(df_fty_cats$nba_category), \(x) rank(x * -1), .names = "{.col}_rank"), .by = matchup) |>
+    mutate(
+      across(
+        c(all_of(cat_specs(vec = TRUE, incl_nba_cat = c("all_cat", "fg_z", "ft_z"))), "matchup"),
+        \(x) lead(x, order_by = matchup),
+        .names = "{.col}_lead"
+      ),
+      .by = competitor_id
+    ) |>
+    mutate(
+      across(all_of(cat_specs(vec = TRUE, incl_nba_cat = c("all_cat", "fg_z", "ft_z"), excl_nba_cat = "tov")), \(x) rank(x * -1), .names = "{.col}_rank"),
+      .by = matchup
+    ) |>
     mutate(tov_rank = rank(tov), .by = matchup) |>
-    mutate(across(any_of(str_c(df_fty_cats$nba_category, "_rank")), \(x) lead(x, order_by = matchup), .names = "{.col}_lead"), .by = competitor_id)
+    mutate(
+      across(
+        all_of(str_c(cat_specs(vec = TRUE, incl_nba_cat = c("all_cat", "fg_z", "ft_z")), "_rank")),
+        \(x) lead(x, order_by = matchup),
+        .names = "{.col}_lead"
+      ),
+      .by = competitor_id
+    )
 
   df_latest_matchup <- filter(df_fty_league_overview, matchup == max(matchup))
   df_fty_league_overview <- filter(df_fty_league_overview, matchup < max(matchup))
@@ -31,7 +48,7 @@ df_fty_league_overview_prepare <<- function(platform_selected, league_selected) 
 
       # To handle when df is empty, ie - start of season
       if (nrow(df_t) > 0) {
-        for (stat in filter(df_fty_cats, !str_detect(nba_category, "min|f[t|g][m|a]"))$nba_category) {
+        for (stat in cat_specs(vec = TRUE, incl_nba_cat = c("all_cat", "fg_z", "ft_z"))) {
           matchup_sigmoid <- x
           if (df_t[[stat]] > df_t[[str_c(stat, "_lead")]]) {
             matchup_sigmoid <- rev(matchup_sigmoid)
@@ -45,8 +62,6 @@ df_fty_league_overview_prepare <<- function(platform_selected, league_selected) 
 
           df_ls <- df_ls |>
             append(list(tibble(
-              # competitor_id = df_t$competitor_id,
-              # matchup = df_t$matchup,
               matchup_sigmoid = matchup_sigmoid,
               stat = stat,
               sigmoid = stat_sigmoid,
@@ -57,8 +72,6 @@ df_fty_league_overview_prepare <<- function(platform_selected, league_selected) 
 
       if (length(df_ls) == 0) {
         tibble(
-          # competitor_id = integer(),
-          # matchup = integer(),
           matchup_sigmoid = double(),
           stat = character(),
           sigmoid = double(),

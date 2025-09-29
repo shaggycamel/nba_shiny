@@ -117,7 +117,7 @@ purrr::pwalk(distinct(df_fty_base, platform, league_id), \(platform, league_id) 
 
   # Fantasy league schedule -------------------------------------------------
   cat("\t- df_fantasy_schedule\n")
-  df_fty_schedule <- nba.dataRub::dh_getQuery(db_con, glue::glue(query_template("fty.league_schedule")))
+  df_fty_schedule <- nba.dataRub::dh_getQuery(db_con, glue::glue(query_template("fty.fty_league_schedule_vw")))
 
   # Fantasy competitor roster -------------------------------------------------------
   cat("\t- df_fty_roster\n")
@@ -145,13 +145,7 @@ purrr::pwalk(distinct(df_fty_base, platform, league_id), \(platform, league_id) 
   # Fantasy category labels -------------------------------------------------------
   cat("\t- df_fty_cats\n")
   df_fty_cats <- nba.dataRub::dh_getQuery(db_con, glue::glue(query_template("fty.fty_categories_vw"))) |>
-    fill(season, platform, league_id) |> # fill missing values downwards
     arrange(display_order)
-
-  # fmt: skip
-  fmt_to_nba_cat_name <- magrittr::`%$%`(df_fty_cats, purrr::map(setNames(nba_category, fmt_category), \(x) as.vector(x)))
-  nba_to_fmt_cat_name <- magrittr::`%$%`(df_fty_cats, purrr::map(setNames(fmt_category, nba_category), \(x) as.vector(x)))
-  fty_h2h_cols <- filter(df_fty_cats, measured)$nba_category
 
   # Save data objects
   save(list = stringr::str_subset(objects(), "fty|cat"), file = here::here(paste0("fty_", platform, "_", league_id, ".RData")))

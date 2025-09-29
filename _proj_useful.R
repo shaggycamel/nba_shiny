@@ -20,30 +20,23 @@ reverse_legend_labels <- function(plotly_plot) {
   plotly_plot
 }
 
-# General categories
-general_cat_cols = c(
-  "min",
-  "fgm",
-  "fga",
-  "fg_pct",
-  "fg_z",
-  "fg3_m",
-  "fg3_a",
-  "fg3_pct",
-  "ft_pct",
-  "ft_z",
-  "ftm",
-  "fta",
-  "oreb",
-  "dreb",
-  "reb",
-  "ast",
-  "stl",
-  "blk",
-  "tov",
-  "pf",
-  "pts",
-  "dd2",
-  "td3",
-  "plus_minus"
-)
+# Cat extraction
+cat_specs <- function(vec = FALSE, h2h = TRUE, incl_nba_cat = NULL, excl_nba_cat = NULL) {
+  # fmt: skip
+  obj <- df_fty_cats
+  if (h2h) {
+    obj <- filter(obj, h2h_cat)
+  }
+  if (!is.null(incl_nba_cat)) {
+    obj <- bind_rows(obj, filter(df_fty_cats, nba_category %in% incl_nba_cat))
+  }
+  if (!is.null(excl_nba_cat)) {
+    obj <- filter(obj, !nba_category %in% excl_nba_cat)
+  }
+  obj <- arrange(distinct(obj), display_order)
+  obj <- as.list(tibble::deframe(select(obj, fmt_category, nba_category)))
+  if (vec) {
+    obj <- unlist(obj, use.names = FALSE)
+  }
+  obj
+}
