@@ -1428,6 +1428,7 @@ server <- function(input, output, session) {
       theme_bw()
 
     ggplotly(plt, tooltip = "text") |>
+      layout(legend = list(x = 100, y = 0.5)) |>
       reverse_legend_labels() |>
       config(displayModeBar = FALSE)
   })
