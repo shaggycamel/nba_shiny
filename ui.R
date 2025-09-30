@@ -118,30 +118,24 @@ page_draft <- layout_sidebar(
     sliderInput("draft_top_n", "Top N Players", min = 10, max = 20, value = 15, ticks = FALSE),
     sliderInput("draft_cov_filter", "Variance Coefficient", step = 0.01, min = as.numeric(0), max = as.numeric(0), value = as.numeric(0), ticks = FALSE),
     checkboxInput("draft_scale_minutes", "Scale by Minutes"),
-    switchInput("draft_tot_avg_toggle", value = FALSE, onLabel = "Total", offLabel = "Mean", size = "large"),
+    switchInput("draft_tot_avg_toggle", value = FALSE, onLabel = "Total", offLabel = "Mean", size = "large")
   ),
+  card(full_screen = TRUE, plotlyOutput("draft_stat_plot")),
   absolutePanel(
     dropdownButton(
+      # switchInput("draft_live_capture", value = FALSE, onLabel = "Stream", offLabel = "Off", size = "normal"),
       selectInput(
         "draft_player_log",
-        NULL,
+        label = NULL,
         choices = character(0),
-        multiple = TRUE
-      )
+        multiple = TRUE,
+        width = "100%"
+      ),
+      width = "700px"
     ),
     right = 10,
-    top = 10,
-    draggabe = TRUE
+    top = 10
   ),
-  # layout_sidebar(
-  #   sidebar = sidebar(
-  #     switchInput("draft_live_capture", value = FALSE, onLabel = "Stream", offLabel = "Off", size = "normal"),
-  #     selectInput("draft_player_log", NULL, choices = character(0), multiple = TRUE),
-  #     position = "right"
-  #   ),
-  #   card(full_screen = TRUE, plotlyOutput("draft_stat_plot")),
-  #   border = FALSE
-  # ),
   border_radius = FALSE,
   fillable = TRUE,
   class = "p-0"
