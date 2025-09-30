@@ -29,7 +29,6 @@ server <- function(input, output, session) {
   # cur_date <<- strptime(Sys.time(), "%Y", tz = "EST")
   # cur_season <<- nba_api$stats$library$parameters$Season$current_season
   # prev_season <<- nba_api$stats$library$parameters$Season$previous_season
-  # cur_date <<- as.Date("2025-02-01") # DELETE
   cur_date <<- as.Date("2025-12-01") # DELETE
   cur_season <<- "2025-26" # DELETE
   prev_season <<- "2024-25" # DELETE
