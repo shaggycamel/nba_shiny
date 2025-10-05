@@ -7,6 +7,8 @@ library(lubridate)
 library(ggplot2)
 library(plotly)
 library(shinycssloaders)
+library(jsonlite)
+library(magrittr, include.only = "%$%")
 
 # Initialisation files ----------------------------------------------------
 
@@ -21,65 +23,63 @@ source(here("_proj_useful.R"))
 server <- function(input, output, session) {
   # Variables ---------------------------------------------------------------
 
-  fty_parameters_met <- reactiveVal(FALSE)
   nba_api <- reticulate::import("nba_api")
   espn_api <- reticulate::import("espn_api.basketball")
 
   db_con <<- if (Sys.info()["user"] == "fred") dh_createCon("postgres") else dh_createCon("cockroach")
   # cur_date <<- strptime(Sys.time(), "%Y", tz = "EST")
-  # cur_season <<- nba_api$stats$library$parameters$Season$current_season
-  # prev_season <<- nba_api$stats$library$parameters$Season$previous_season
   cur_date <<- as.Date("2025-12-01") # DELETE
-  cur_season <<- "2025-26" # DELETE
-  prev_season <<- "2024-25" # DELETE
+  cur_season <<- nba_api$stats$library$parameters$Season$current_season
+  prev_season <<- nba_api$stats$library$parameters$Season$previous_season
   df_fty_base <<- readRDS("fty_base.RDS")
-  ls_fty_base <<- magrittr::`%$%`(
-    distinct(df_fty_base, platform, league_id, league_name),
-    map(setNames(paste0(platform, "_", league_id), league_name), \(x) as.vector(x))
-  )
+  ls_fty_base <<- distinct(df_fty_base, platform, league_id, league_name) %$% map(setNames(paste0(platform, "_", league_id), league_name), \(x) as.vector(x))
   vec_player_log_stream <<- dh_getQuery(db_con, "SELECT * FROM util.draft_player_log")
 
   # Login -------------------------------------------------------------------
 
-  bindEvent(
-    observe({
-      updateSelectInput(inputId = "fty_competitor_select", choices = filter(df_fty_base, league_name == input$fty_league_select)$competitor_name)
-      platform_selected <<- str_split(ls_fty_base[input$fty_league_select], "_")[[1]][1]
-      league_selected <<- str_split(ls_fty_base[input$fty_league_select], "_")[[1]][2]
-    }),
-    input$fty_league_select,
-    ignoreNULL = TRUE
-  )
+  # Reactive values
+  fty_parameters_met <- reactiveVal(FALSE)
+  platform_selected <- reactiveVal()
+  league_selected <- reactiveVal()
+  competitor_selected <- reactiveVal()
 
-  bindEvent(
-    observe({
-      if (input$fty_competitor_select == "" && input$fty_league_select == "") {
-        output$login_messages <- renderText("Select a league, then select a competitor.")
-      } else if (input$fty_competitor_select != "") {
-        fty_parameters_met(TRUE)
-        removeModal()
-        output$login_messages <- NULL
-      } else {
-        output$login_messages <- renderText("Select a competitor")
-      }
-    }),
-    input$fty_dash_init
-  )
+  # Assign values to platform and league selected
+  observe({
+    updateSelectInput(inputId = "fty_competitor_select", choices = filter(df_fty_base, league_name == input$fty_league_select)$competitor_name)
+    platform_selected(str_split(ls_fty_base[input$fty_league_select], "_")[[1]][1])
+    league_selected(str_split(ls_fty_base[input$fty_league_select], "_")[[1]][2])
+  }) |>
+    bindEvent(input$fty_league_select, ignoreNULL = TRUE)
 
-  bindEvent(
-    observe({
-      if (!fty_parameters_met()) {
-        output$login_messages <- renderText("You gotta go fill the form at least once!")
-      } else {
-        removeModal()
-        output$login_messages <- NULL
-      }
-    }),
-    input$fty_abort
-  )
+  # Login modal error hadling
+  observe({
+    if (input$fty_competitor_select == "" && input$fty_league_select == "") {
+      output$login_messages <- renderText("Select a league, then select a competitor.")
+    } else if (input$fty_competitor_select != "") {
+      fty_parameters_met(TRUE)
+      removeModal()
+      output$login_messages <- NULL
+    } else {
+      output$login_messages <- renderText("Select a competitor")
+    }
+  }) |>
+    bindEvent(input$fty_dash_init)
 
+  # Login modal progress into app
+  observe({
+    if (!fty_parameters_met()) {
+      output$login_messages <- renderText("You gotta go fill the form at least once!")
+    } else {
+      removeModal()
+      output$login_messages <- NULL
+    }
+  }) |>
+    bindEvent(input$fty_abort)
+
+  # In the case league is switched mid-use of app
   bindEvent(observe(login_modal()), input$fty_league_competitor_switch)
 
+  # Login modal object
   login_modal <- function() {
     showModal(
       modalDialog(
@@ -182,17 +182,12 @@ server <- function(input, output, session) {
     # Maybe get to the point where I place free agents at top of list
     active_players <<- sort_players_by_min_desc(filter(df_nba_player_box_score, player_injury_status != "NA" | is.na(player_injury_status)))
     free_agents <<- sort_players_by_min_desc(filter(df_nba_player_box_score, player_availability == "free_agent"))
-    ls_fty_name_to_cid <<- magrittr::`%$%`(df_fty_competitor, map(setNames(competitor_id, competitor_name), \(x) as.vector(x)))
-    ls_fty_cid_to_name <<- magrittr::`%$%`(df_fty_competitor, map(setNames(competitor_name, competitor_id), \(x) as.vector(x)))
-    # fmt: skip
-    ls_log_config <<- list("reset" = str_c(
-      "h2h_competitor=", ls_fty_name_to_cid[input$fty_competitor_select],
-      ";h2h_matchup=", cur_matchup,
-      ";h2h_ex_player=;h2h_add_player=;h2h_future_only=FALSE;h2h_future_from_tomorrow=FALSE;h2h_hl_player="
-    ))
+    ls_fty_name_to_cid <<- df_fty_competitor %$% map(setNames(competitor_id, competitor_name), \(x) as.vector(x))
+    ls_fty_cid_to_name <<- df_fty_competitor %$% map(setNames(competitor_name, competitor_id), \(x) as.vector(x))
     ss_matchup <<- distinct(df_fty_schedule, matchup_period, matchup_start, matchup_end) |> arrange(matchup_period)
     matchup_drop_box_choices <<- str_c("Matchup ", ss_matchup$matchup_period, ": (", ss_matchup$matchup_start, ")")
     matchup_drop_box_choices <<- setNames(str_extract(matchup_drop_box_choices, "\\d{4}.*-\\d{2}"), matchup_drop_box_choices)
+    competitor_selected(ls_fty_name_to_cid[[input$fty_competitor_select]])
 
     # Init app filter list creation -------------------------------------------
 
@@ -210,7 +205,7 @@ server <- function(input, output, session) {
 
     # H2H tab
     updateSelectInput(session, "h2h_competitor", choices = ls_fty_name_to_cid, selected = ls_fty_name_to_cid[input$fty_competitor_select])
-    updateSelectInput(session, "h2h_log_config", choices = ls_log_config)
+    updateSelectInput(session, "h2h_log_config", choices = h2h_configurations())
     updateSelectInput(
       session,
       "h2h_matchup",
@@ -246,7 +241,7 @@ server <- function(input, output, session) {
     # Stop loading page
     hidePageSpinner()
   }) |>
-    bindEvent(input$fty_dash_init)
+    bindEvent(input$fty_dash_init, fty_parameters_met(), ignoreInit = TRUE)
 
   # On-going filter list alteration -----------------------------------------
 
@@ -285,22 +280,6 @@ server <- function(input, output, session) {
   }) |>
     bindEvent(input$draft_tot_avg_toggle, input$draft_stat)
 
-  # Additional H2H filter alteration
-  observe({
-    req(fty_parameters_met, exists("df_h2h_og"))
-
-    competitor_players <- slice_max(df_h2h_og, game_date, by = competitor_id) |>
-      filter(competitor_id == input$h2h_competitor) |>
-      pull(player_name) |>
-      sort()
-
-    updateSelectInput(session, "h2h_ex_player", choices = competitor_players)
-    updateSelectInput(session, "h2h_add_player", choices = setdiff(active_players, competitor_players))
-    updateSelectInput(session, "h2h_hl_player", choices = competitor_players)
-    # Is it possible to highlight newly added players? - Can they be included in list?
-  }) |>
-    bindEvent(input$h2h_competitor)
-
   # Additional Team or Player comparison filter alteration
   observe({
     req(exists("teams"))
@@ -335,7 +314,8 @@ server <- function(input, output, session) {
   # FTY League Overview -------------------------------------------------
 
   # Reactive H2H data creation
-  df_lo <- reactive(df_fty_league_overview_prepare(platform_selected, league_selected)) |>
+  # df_lo <-
+  df_fty_league_overview <- reactive(df_fty_league_overview_prepare()) |>
     bindEvent(input$fty_dash_init)
 
   output$fty_league_overview_rank_plot <- renderPlotly({
@@ -345,11 +325,11 @@ server <- function(input, output, session) {
     if (input$fty_lg_ov_rank_toggle) {
       plot_col <- str_c(plot_col, "_rank")
     }
-    df_fty_league_overview <<- df_lo()
-    df_point <- filter(df_fty_league_overview, as.integer(matchup_sigmoid) == matchup_sigmoid)
+
+    df_point <- filter(df_fty_league_overview(), as.integer(matchup_sigmoid) == matchup_sigmoid)
 
     plt <- if (input$fty_lg_ov_cum_toggle) {
-      df_fty_league_overview |>
+      df_fty_league_overview() |>
         ggplot(aes(x = matchup_sigmoid, y = !!sym(plot_col), colour = competitor_name)) +
         geom_line(linewidth = 0.5) +
         geom_point(data = df_point, size = 2) +
@@ -407,395 +387,429 @@ server <- function(input, output, session) {
     plt
   })
 
-  # NOT FINISHED -- MIGHT SCRAP
-  output$competitor_snapshot <- renderPlotly({
-    req(fty_parameters_met(), exists("df_fty_base"))
+  # # NOT FINISHED -- MIGHT SCRAP
+  # output$competitor_snapshot <- renderPlotly({
+  #   req(fty_parameters_met(), exists("df_fty_base"))
 
-    df_fty_roster |>
-      filter(date == max(date), player_injury_status %in% c("ACTIVE", "DAY_TO_DAY")) |>
-      left_join(
-        slice_max(df_rolling_stats, game_date, by = player_id) |>
-          select(player_id, all_of(cat_specs(vec = TRUE, h2h = FALSE, excl_nba_cat = c("ft_z", "fg_z")))),
-      ) |>
-      summarise(
-        across(all_of(cat_specs(vec = TRUE, incl_nba_cat = c("ftm", "fta", "fgm", "fga"), excl_nba_cat = c("fg_pct", "ft_pct"))), \(x) sum(x)),
-        .by = competitor_id
-      ) |>
-      mutate(ft_pct = ftm / fta, fg_pct = fgm / fga) |>
-      mutate(across(where(is.numeric), \(x) round(x, 2))) |>
-      select(-matches("(ft|fg)(m|a)$")) |>
-      left_join(df_fty_competitor) |>
-      pivot_longer(all_of(cat_specs(vec = TRUE)), names_to = "category") |>
-      mutate(
-        rank = if_else(category == "tov", rank(value, ties.method = "first"), rank(value * -1, ties.method = "first")),
-        .by = category
-      ) |>
-      mutate(competitor_cat = category) |>
-      pivot_wider(id_cols = rank, values_from = c(value, competitor_name), names_from = category) |>
-      rename_with(\(x) str_remove(x, "value_")) |>
-      arrange(rank) |>
-      (\(x) {
-        reactable(
-          x,
-          columns = list(
-            # Hide these cols
-            colnames(x) |>
-              str_subset("competitor_name_") |>
-              set_names() |>
-              map(\(col) colDef(show = FALSE)),
+  #   df_fty_roster |>
+  #     filter(date == max(date), player_injury_status %in% c("ACTIVE", "DAY_TO_DAY")) |>
+  #     left_join(
+  #       slice_max(df_rolling_stats, game_date, by = player_id) |>
+  #         select(player_id, all_of(cat_specs(vec = TRUE, h2h = FALSE, excl_nba_cat = c("ft_z", "fg_z")))),
+  #     ) |>
+  #     summarise(
+  #       across(all_of(cat_specs(vec = TRUE, incl_nba_cat = c("ftm", "fta", "fgm", "fga"), excl_nba_cat = c("fg_pct", "ft_pct"))), \(x) sum(x)),
+  #       .by = competitor_id
+  #     ) |>
+  #     mutate(ft_pct = ftm / fta, fg_pct = fgm / fga) |>
+  #     mutate(across(where(is.numeric), \(x) round(x, 2))) |>
+  #     select(-matches("(ft|fg)(m|a)$")) |>
+  #     left_join(df_fty_competitor) |>
+  #     pivot_longer(all_of(cat_specs(vec = TRUE)), names_to = "category") |>
+  #     mutate(
+  #       rank = if_else(category == "tov", rank(value, ties.method = "first"), rank(value * -1, ties.method = "first")),
+  #       .by = category
+  #     ) |>
+  #     mutate(competitor_cat = category) |>
+  #     pivot_wider(id_cols = rank, values_from = c(value, competitor_name), names_from = category) |>
+  #     rename_with(\(x) str_remove(x, "value_")) |>
+  #     arrange(rank) |>
+  #     (\(x) {
+  #       reactable(
+  #         x,
+  #         columns = list(
+  #           # Hide these cols
+  #           colnames(x) |>
+  #             str_subset("competitor_name_") |>
+  #             set_names() |>
+  #             map(\(col) colDef(show = FALSE)),
 
-            # Colour these cells - NOT WORKING YET
-            colnames(x) |>
-              str_subset("competitor_name_|rank", negate = TRUE) |>
-              set_names() |>
-              map(\(col) {
-                colDef(
-                  cell = function(value, index) {
-                    competitor <- x[paste0("competitor_name_", col), index]
-                    color <- if (score >= 90) "green" else "red"
-                    htmltools::tags$span(style = paste("color:", color), value)
-                  }
-                )
-              }),
-          ),
-          pagination = FALSE
-        )
-      })()
-  })
+  #           # Colour these cells - NOT WORKING YET
+  #           colnames(x) |>
+  #             str_subset("competitor_name_|rank", negate = TRUE) |>
+  #             set_names() |>
+  #             map(\(col) {
+  #               colDef(
+  #                 cell = function(value, index) {
+  #                   competitor <- x[paste0("competitor_name_", col), index]
+  #                   color <- if (score >= 90) "green" else "red"
+  #                   htmltools::tags$span(style = paste("color:", color), value)
+  #                 }
+  #               )
+  #             }),
+  #         ),
+  #         pagination = FALSE
+  #       )
+  #     })()
+  # })
 
   # FTY Head to Head --------------------------------------------------------
 
-  # Reactive H2H data creation
-  df_h2h <- reactive(df_h2h_prepare(
-    input$h2h_window,
-    as.numeric(input$h2h_competitor),
-    input$h2h_ex_player,
-    input$h2h_add_player,
-    input$h2h_future_from_tomorrow
-  )) |>
-    bindEvent(input$h2h_window, input$h2h_competitor, input$h2h_ex_player, input$h2h_add_player, input$h2h_future_from_tomorrow)
+  # Reactive vals for H2H
+  player_transactions <- reactiveVal(tibble())
+  h2h_configurations <- reactiveVal(list("reset" = toJSON(list("h2h_competitor" = isolate(input$h2h_competitor), "h2h_matchup" = isolate(input$h2h_matchup)))))
 
+  # Reactive H2H data creation -  NEEDS WORK!!!!
+  df_h2h <- reactive(df_h2h_prepare(c_id = isolate(input$h2h_competitor))) |>
+    bindEvent(input$h2h_window, input$h2h_competitor, input$h2h_dl_player_transaction, input$h2h_add_player_transaction, ignoreInit = TRUE)
+
+  #---------- Observe Events for H2H
+  # Additional H2H filter alteration
   observe({
-    t_ls_pre <- map(str_split(input$h2h_log_config, ";"), \(x) str_split(x, "="))[[1]]
-    t_ls <- lst()
-    # fmt: skip
-    for (el in t_ls_pre) t_ls[el[1]] <- el[2]
-    for (el in names(t_ls)) {
-      if (str_detect(t_ls[[el]], "TRUE|FALSE")) {
-        t_ls[[el]] = as.logical(t_ls[[el]])
-      } else if (str_detect(t_ls[[el]], "\\d+")) {
-        t_ls[[el]] = as.numeric(t_ls[[el]])
-      } else if (str_detect(t_ls[[el]], ", ")) {
-        t_ls[[el]] = str_split_1(t_ls[[el]], ", ")
-      }
-    }
+    req(fty_parameters_met, exists("df_h2h"))
 
-    chk_boxes <- c("h2h_future_only", "h2h_future_from_tomorrow")
-    walk(chk_boxes, \(x) updateCheckboxInput(session, x, value = t_ls[[x]]))
-    walk(setdiff(names(t_ls), chk_boxes), \(x) updateSelectInput(session, x, selected = t_ls[[x]]))
+    competitor_players <- slice_max(df_h2h(), game_date, by = competitor_id) |>
+      filter(competitor_id == input$h2h_competitor) |>
+      pull(player_name) |>
+      sort()
+
+    #   updateSelectInput(session, "h2h_hl_player", choices = competitor_players)
+    #   updateSelectInput(
+    #     session,
+    #     "transaction_player_name",
+    #     choices = if (input$transaction_type) setdiff(active_players, competitor_players) else competitor_players
+    #   )
   }) |>
-    bindEvent(input$h2h_log_config, ignoreInit = TRUE)
+    bindEvent(df_h2h())
 
-  observe({
-    # fmt: skip
-    el_cfg <- paste0(
-      "h2h_competitor=", str_squish(input$h2h_competitor),
-      ";h2h_matchup=", input$h2h_matchup,
-      ";h2h_ex_player=", toString(input$h2h_ex_player),
-      ";h2h_add_player=", toString(input$h2h_add_player),
-      ";h2h_future_only=", input$h2h_future_only,
-      ";h2h_future_from_tomorrow=", input$h2h_future_from_tomorrow,
-      ";h2h_hl_player=", toString(input$h2h_hl_player)
-    )
-    ls_log_config[paste0("config_", input$h2h_snapshot_config)] <<- el_cfg
-    ls_log_config <<- ls_log_config[!duplicated(unlist(ls_log_config, use.names = FALSE))]
-    updateSelectInput(session, "h2h_log_config", choices = ls_log_config)
-  }) |>
-    bindEvent(input$h2h_snapshot_config, ignoreInit = TRUE)
+  # # Add element to h2h_configurations reactiveValues list
+  # observe({
+  #   h2h_configurations[paste0("config_", input$h2h_snapshot_config)] <- toJSON(list(
+  #     "h2h_competitor" = input$h2h_competitor,
+  #     "h2h_matchup" = input$h2h_matchup,
+  #     "h2h_future_only" = input$h2h_future_only,
+  #     "h2h_hl_player" = input$h2h_hl_player,
+  #     "team_transaction_table" = input$team_transaction_table
+  #   ))
+  #   h2h_configurations <- h2h_configurations[!duplicated(h2h_configurations)]
+  #   updateSelectInput(session, "h2h_log_config", choices = h2h_configurations)
+  # }) |>
+  #   bindEvent(input$h2h_snapshot_config, ignoreInit = TRUE)
 
-  output$h2h_stat_plot <- renderPlotly({
-    req(fty_parameters_met(), exists("df_fty_base"))
+  # # Repopulate all widgets with logged configurations
+  # observe({
+  #   cfg <- h2h_configurations[paste0("config_", input$h2h_log_config)]
+  #   updateSelectInput(session, "h2h_competitor", selected = cfg$h2h_competitor)
+  #   updateSelectInput(session, "h2h_matchup", selected = cfg$h2h_matchup)
+  #   updateSelectInput(session, "h2h_hl_player", cfg$h2h_hl_player)
+  #   updateCheckboxInput(session, "h2h_future_only", value = cfg$h2h_future_only)
+  #   player_transactions(cfg$team_transaction_table)
+  # }) |>
+  #   bindEvent(input$h2h_log_config, ignoreInit = TRUE)
 
-    if (input$h2h_matchup < cur_matchup & input$h2h_future_only) {
-      ggplotly(
-        (ggplot() +
-          theme_void() +
-          geom_text(aes(x = 0, y = 0, label = "Future only dumbass...")))
-      )
-    } else {
-      df_h <<- df_h2h()
-      if (input$h2h_future_from_tomorrow) {
-        df_h <- mutate(df_h, origin = if_else(origin == "today", "past", origin))
-      }
-      if (input$h2h_future_only) {
-        df_h <- filter(df_h, origin != "past")
-      }
-      opp_id <- filter(df_h, matchup_period == input$h2h_matchup, competitor_id == as.numeric(input$h2h_competitor))$opponent_id[1]
+  # # Add row to transaction table
+  # observe({
+  #   player_transaction <- tibble(
+  #     transaction = factor(if_else(input$transaction_type, "Add", "Drop"), levels = c("Drop", "Add")),
+  #     player = input$transaction_player_name,
+  #     date = input$transaction_date
+  #   )
+  #   player_transactions(distinct(bind_rows(player_transactions(), player_transaction)))
+  # }) |>
+  #   bindEvent(input$h2h_add_player_transaction, ignoreInit = TRUE)
 
-      h2h_plt <- df_h |>
-        # Need to join player injury status and coalesce it for add players (player_injury_status_temp).
-        # Initially I tried doing this in h2h prep file, but it kept breaking other things
-        left_join(
-          select(df_stitch, player_fantasy_id, player_injury_status_temp = player_injury_status),
-          by = join_by(player_fantasy_id)
-        ) |>
-        mutate(player_injury_status = coalesce(player_injury_status, player_injury_status_temp)) |>
-        select(-player_injury_status_temp) |>
-        filter(
-          competitor_id %in% c(as.numeric(input$h2h_competitor), opp_id),
-          matchup_period == input$h2h_matchup,
-          scheduled_to_play == 1,
-          player_injury_status %in% c("ACTIVE", "DAY_TO_DAY")
-        ) |>
-        pivot_longer(
-          cols = cat_specs(vec = TRUE, incl_nba_cat = c("fta", "ftm", "fga", "fgm"), excl_nba_cat = c("fg_pct", "ft_pct")),
-          names_to = "stat",
-          values_to = "value"
-        ) |>
-        select(competitor_id, player_name, stat, value) |>
-        summarise(value = sum(value, na.rm = TRUE), .by = c(competitor_id, player_name, stat)) |>
-        (\(df_tmp) {
-          bind_rows(
-            # fg_pct
-            filter(df_tmp, stat %in% c("fga", "fgm")) |>
-              pivot_wider(names_from = stat, values_from = value) |>
-              arrange(desc(fgm)) |>
-              mutate(fg_pct = round(fgm / fga, 2)) |>
-              summarise(
-                # fmt: skip
-                competitor_roster = str_c(player_name, " ", fg_pct, " (", round(fgm, 2), "/", round(fga, 2), ")", collapse = "\n"),
-                value = sum(fgm) / sum(fga),
-                .by = competitor_id
-              ) |>
-              mutate(stat = "fg_pct"),
+  # # Remove row from transaction table
+  # observe({
+  #   if (!is.null(input$team_transaction_table_rows_selected)) {
+  #     player_transactions(player_transactions()[-input$team_transaction_table_rows_selected, ])
+  #   }
+  # }) |>
+  #   bindEvent(input$h2h_dl_player_transaction, ignoreInit = TRUE)
 
-            #ft_pct
-            filter(df_tmp, stat %in% c("fta", "ftm")) |>
-              pivot_wider(names_from = stat, values_from = value) |>
-              arrange(desc(ftm)) |>
-              mutate(ft_pct = round(ftm / fta, 2)) |>
-              summarise(
-                # fmt: skip
-                competitor_roster = str_c(player_name, " ", ft_pct, " (", round(ftm, 2), "/", round(fta, 2), ")", collapse = "\n"),
-                value = sum(ftm) / sum(fta),
-                .by = competitor_id
-              ) |>
-              mutate(stat = "ft_pct"),
+  # #------- Output
+  # output$team_transaction_table <- renderDT(datatable(
+  #   player_transactions(),
+  #   rownames = FALSE,
+  #   colnames = NULL,
+  #   filter = "none",
+  #   selection = "single",
+  #   options = lst(dom = "t", paging = FALSE, ordering = FALSE),
+  # ))
 
-            # tov
-            filter(df_tmp, stat == "tov") |>
-              arrange(value) |>
-              summarise(
-                competitor_roster = paste(player_name, round(value), collapse = "\n"),
-                value = sum(value),
-                .by = c(competitor_id, stat)
-              ),
+  # output$h2h_stat_plot <- renderPlotly({
+  #   req(fty_parameters_met(), exists("df_fty_base"))
 
-            # the rest
-            filter(df_tmp, !stat %in% c("fga", "fgm", "fta", "ftm", "tov")) |>
-              arrange(desc(value)) |>
-              summarise(
-                competitor_roster = paste(player_name, round(value), collapse = "\n"),
-                value = sum(value),
-                .by = c(competitor_id, stat)
-              )
-          )
-        })() |>
-        left_join(
-          filter(df_fty_base, platform == platform_selected, league_id == as.numeric(league_selected)) |>
-            select(competitor_id, competitor_name),
-          by = join_by(competitor_id)
-        ) |>
-        mutate(
-          competitor_name = ordered(competitor_name, c(ls_fty_cid_to_name[as.character(opp_id)], ls_fty_cid_to_name[input$h2h_competitor])),
-          stat = factor(stat, levels = cat_specs(vec = TRUE), ordered = TRUE)
-        )
+  #   if (input$h2h_matchup < cur_matchup & input$h2h_future_only) {
+  #     ggplotly(
+  #       (ggplot() +
+  #         theme_void() +
+  #         geom_text(aes(x = 0, y = 0, label = "Future only dumbass...")))
+  #     )
+  #   } else {
+  #     df_h <<- df_h2h()
+  #     if (input$h2h_future_from_tomorrow) {
+  #       df_h <- mutate(df_h, origin = if_else(origin == "today", "past", origin))
+  #     }
+  #     if (input$h2h_future_only) {
+  #       df_h <- filter(df_h, origin != "past")
+  #     }
+  #     opp_id <- filter(df_h, matchup_period == input$h2h_matchup, competitor_id == as.numeric(input$h2h_competitor))$opponent_id[1]
 
-      (ggplot(h2h_plt, aes(x = stat, y = value, fill = competitor_name, text = paste(round(value, 2), "\n\n", competitor_roster))) +
-        geom_col(position = "fill") +
-        geom_hline(yintercept = 0.5) +
-        scale_fill_brewer(type = "qual", palette = "Set2") +
-        labs(
-          # fmt: skip
-          title = str_c(
-            input$h2h_matchup, ": ", 
-            ls_fty_cid_to_name[input$h2h_competitor], " vs ", ls_fty_cid_to_name[as.character(opp_id)],
-            x = NULL,
-            y = NULL,
-            fill = NULL
-          )
-        ) +
-        theme_bw()) |>
-        ggplotly(tooltip = "text") |>
-        layout(hovermode = "x") |>
-        config(displayModeBar = FALSE)
-    }
-  })
+  #     h2h_plt <- df_h |>
+  #       # Need to join player injury status and coalesce it for add players (player_injury_status_temp).
+  #       # Initially I tried doing this in h2h prep file, but it kept breaking other things
+  #       left_join(
+  #         select(df_stitch, player_fantasy_id, player_injury_status_temp = player_injury_status),
+  #         by = join_by(player_fantasy_id)
+  #       ) |>
+  #       mutate(player_injury_status = coalesce(player_injury_status, player_injury_status_temp)) |>
+  #       select(-player_injury_status_temp) |>
+  #       filter(
+  #         competitor_id %in% c(as.numeric(input$h2h_competitor), opp_id),
+  #         matchup_period == input$h2h_matchup,
+  #         scheduled_to_play == 1,
+  #         player_injury_status %in% c("ACTIVE", "DAY_TO_DAY")
+  #       ) |>
+  #       pivot_longer(
+  #         cols = cat_specs(vec = TRUE, incl_nba_cat = c("fta", "ftm", "fga", "fgm"), excl_nba_cat = c("fg_pct", "ft_pct")),
+  #         names_to = "stat",
+  #         values_to = "value"
+  #       ) |>
+  #       select(competitor_id, player_name, stat, value) |>
+  #       summarise(value = sum(value, na.rm = TRUE), .by = c(competitor_id, player_name, stat)) |>
+  #       (\(df_tmp) {
+  #         bind_rows(
+  #           # fg_pct
+  #           filter(df_tmp, stat %in% c("fga", "fgm")) |>
+  #             pivot_wider(names_from = stat, values_from = value) |>
+  #             arrange(desc(fgm)) |>
+  #             mutate(fg_pct = round(fgm / fga, 2)) |>
+  #             summarise(
+  #               # fmt: skip
+  #               competitor_roster = str_c(player_name, " ", fg_pct, " (", round(fgm, 2), "/", round(fga, 2), ")", collapse = "\n"),
+  #               value = sum(fgm) / sum(fga),
+  #               .by = competitor_id
+  #             ) |>
+  #             mutate(stat = "fg_pct"),
 
-  output$h2h_game_table <- renderDT({
-    req(fty_parameters_met(), exists("df_fty_base"))
+  #           #ft_pct
+  #           filter(df_tmp, stat %in% c("fta", "ftm")) |>
+  #             pivot_wider(names_from = stat, values_from = value) |>
+  #             arrange(desc(ftm)) |>
+  #             mutate(ft_pct = round(ftm / fta, 2)) |>
+  #             summarise(
+  #               # fmt: skip
+  #               competitor_roster = str_c(player_name, " ", ft_pct, " (", round(ftm, 2), "/", round(fta, 2), ")", collapse = "\n"),
+  #               value = sum(ftm) / sum(fta),
+  #               .by = competitor_id
+  #             ) |>
+  #             mutate(stat = "ft_pct"),
 
-    if (input$h2h_matchup < cur_matchup & input$h2h_future_only) {
-      datatable(
-        as.data.frame("Future only dumbass..."),
-        rownames = FALSE,
-        colnames = "",
-        options = lst(dom = "t", paging = FALSE),
-      )
-    } else {
-      df_h <<- df_h2h()
+  #           # tov
+  #           filter(df_tmp, stat == "tov") |>
+  #             arrange(value) |>
+  #             summarise(
+  #               competitor_roster = paste(player_name, round(value), collapse = "\n"),
+  #               value = sum(value),
+  #               .by = c(competitor_id, stat)
+  #             ),
 
-      if (input$h2h_future_from_tomorrow) {
-        df_h <- mutate(df_h, origin = if_else(origin == "today", "past", origin))
-      }
-      if (input$h2h_future_only) {
-        df_h <- filter(df_h, origin != "past")
-      }
-      opp_id <- filter(df_h, competitor_id == as.numeric(input$h2h_competitor), matchup_period == input$h2h_matchup)$opponent_id[1]
+  #           # the rest
+  #           filter(df_tmp, !stat %in% c("fga", "fgm", "fta", "ftm", "tov")) |>
+  #             arrange(desc(value)) |>
+  #             summarise(
+  #               competitor_roster = paste(player_name, round(value), collapse = "\n"),
+  #               value = sum(value),
+  #               .by = c(competitor_id, stat)
+  #             )
+  #         )
+  #       })() |>
+  #       left_join(
+  #         filter(df_fty_base, platform == platform_selected, league_id == as.numeric(league_selected)) |>
+  #           select(competitor_id, competitor_name),
+  #         by = join_by(competitor_id)
+  #       ) |>
+  #       mutate(
+  #         competitor_name = ordered(competitor_name, c(ls_fty_cid_to_name[as.character(opp_id)], ls_fty_cid_to_name[input$h2h_competitor])),
+  #         stat = factor(stat, levels = cat_specs(vec = TRUE), ordered = TRUE)
+  #       )
 
-      df_h2h_matchup_game_count <<- df_h |>
-        # Need to join player injury status and coalesce it for add players (player_injury_status_temp).
-        # Initially I tried doing this in h2h prep file, but it kept breaking other things
-        left_join(
-          select(df_stitch, player_fantasy_id, player_injury_status_temp = player_injury_status),
-          by = join_by(player_fantasy_id)
-        ) |>
-        mutate(player_injury_status = coalesce(player_injury_status, player_injury_status_temp)) |>
-        select(-player_injury_status_temp) |>
-        filter(competitor_id %in% c(as.numeric(input$h2h_competitor), opp_id), matchup_period == input$h2h_matchup) |>
-        mutate(
-          inj_status = case_when(
-            scheduled_to_play == 1 &
-              str_detect(player_injury_status, "^O|INJ") ~
-              "1*",
-            scheduled_to_play == 1 ~ "1",
-            .default = NA_character_
-          )
-        ) |>
-        arrange(game_date) |>
-        pivot_wider(
-          id_cols = c(competitor_id, opponent_id, player_team, player_name),
-          names_from = game_date,
-          values_from = inj_status
-        ) |>
-        (\(df) {
-          inner_func <- function(x, nm) {
-            filter(x, competitor_id == nm) |>
-              mutate(player_team = "Total", player_name = str_trim(nm)) |>
-              summarise(across(starts_with("20"), \(x) as.character(sum(x == "1", na.rm = TRUE))), .by = c(player_team, player_name))
-          }
+  #     (ggplot(h2h_plt, aes(x = stat, y = value, fill = competitor_name, text = paste(round(value, 2), "\n\n", competitor_roster))) +
+  #       geom_col(position = "fill") +
+  #       geom_hline(yintercept = 0.5) +
+  #       scale_fill_brewer(type = "qual", palette = "Set2") +
+  #       labs(
+  #         # fmt: skip
+  #         title = str_c(
+  #           input$h2h_matchup, ": ",
+  #           ls_fty_cid_to_name[input$h2h_competitor], " vs ", ls_fty_cid_to_name[as.character(opp_id)],
+  #           x = NULL,
+  #           y = NULL,
+  #           fill = NULL
+  #         )
+  #       ) +
+  #       theme_bw()) |>
+  #       ggplotly(tooltip = "text") |>
+  #       layout(hovermode = "x", legend = list(x = 100, y = 0.5)) |>
+  #       config(displayModeBar = FALSE)
+  #   }
+  # })
 
-          bind_rows(
-            inner_func(df, opp_id),
-            inner_func(df, as.numeric(input$h2h_competitor)),
-            setNames(as.data.frame(matrix(rep(NA, length(colnames(df))), nrow = 1)), colnames(df)),
-            select(
-              filter(df, competitor_id == as.numeric(input$h2h_competitor)),
-              starts_with(c("player", "20"))
-            ) |>
-              arrange(player_name) |>
-              mutate(across(starts_with("20"), \(x) as.character(x)))
-          )
-        })() |>
-        select(-starts_with(c("competitor", "opponent"))) |>
-        (\(df) {
-          Ttl = as.data.frame(t(df)) |>
-            mutate(across(everything(), \(x) ifelse(is.na(as.numeric(x)) | as.numeric(x) <= 10, as.numeric(x), 10))) |>
-            summarise(across(everything(), \(x) sum(x, na.rm = TRUE))) |>
-            t()
+  # output$h2h_game_table <- renderDT({
+  #   req(fty_parameters_met(), exists("df_fty_base"))
 
-          mutate(df, Total = Ttl)
-        })() |>
-        mutate(Total = if_else(Total == 0 & is.na(player_team), NA, Total)) |>
-        mutate(matchup_period = as.numeric(input$h2h_matchup)) |>
-        left_join(
-          select(df_matchup_game_count, matchup_period, team, following_matchup_period_games),
-          by = join_by(player_team == team, matchup_period)
-        ) |>
-        select(-matchup_period, following_matchup_period_games) |>
-        distinct()
+  #   if (input$h2h_matchup < cur_matchup & input$h2h_future_only) {
+  #     datatable(
+  #       as.data.frame("Future only dumbass..."),
+  #       rownames = FALSE,
+  #       colnames = "",
+  #       options = lst(dom = "t", paging = FALSE),
+  #     )
+  #   } else {
+  #     df_h <<- df_h2h()
 
-      df_h2h_matchup_game_count_tbl <<- df_h2h_matchup_game_count |>
-        select(
-          starts_with("player"),
-          all_of(sort(str_subset(colnames(df_h2h_matchup_game_count), "\\d"))),
-          Total,
-          `Next Matchup Period` = following_matchup_period_games,
-          Team = player_team,
-          Player = player_name
-        ) |>
-        rename_with(.fn = \(x) format(as.Date(x), "%a (%d/%m)"), .cols = starts_with("20")) |>
-        mutate(
-          Player = str_replace_all(
-            Player,
-            setNames(
-              unlist(ls_fty_cid_to_name),
-              map_chr(names(ls_fty_cid_to_name), \(x) paste0("^", x, "$"))
-            )
-          )
-        )
+  #     if (input$h2h_future_from_tomorrow) {
+  #       df_h <- mutate(df_h, origin = if_else(origin == "today", "past", origin))
+  #     }
+  #     if (input$h2h_future_only) {
+  #       df_h <- filter(df_h, origin != "past")
+  #     }
+  #     opp_id <- filter(df_h, competitor_id == as.numeric(input$h2h_competitor), matchup_period == input$h2h_matchup)$opponent_id[1]
 
-      max_game_count <- max(df_h2h_matchup_game_count_tbl$Total, na.rm = TRUE)
-      min_next_matchup_game_count <- min(df_h2h_matchup_game_count_tbl$`Next Matchup Period`, na.rm = TRUE)
+  #     df_h2h_matchup_game_count <<- df_h |>
+  #       # Need to join player injury status and coalesce it for add players (player_injury_status_temp).
+  #       # Initially I tried doing this in h2h prep file, but it kept breaking other things
+  #       left_join(
+  #         select(df_stitch, player_fantasy_id, player_injury_status_temp = player_injury_status),
+  #         by = join_by(player_fantasy_id)
+  #       ) |>
+  #       mutate(player_injury_status = coalesce(player_injury_status, player_injury_status_temp)) |>
+  #       select(-player_injury_status_temp) |>
+  #       filter(competitor_id %in% c(as.numeric(input$h2h_competitor), opp_id), matchup_period == input$h2h_matchup) |>
+  #       mutate(
+  #         inj_status = case_when(
+  #           scheduled_to_play == 1 &
+  #             str_detect(player_injury_status, "^O|INJ") ~
+  #             "1*",
+  #           scheduled_to_play == 1 ~ "1",
+  #           .default = NA_character_
+  #         )
+  #       ) |>
+  #       arrange(game_date) |>
+  #       pivot_wider(
+  #         id_cols = c(competitor_id, opponent_id, player_team, player_name),
+  #         names_from = game_date,
+  #         values_from = inj_status
+  #       ) |>
+  #       (\(df) {
+  #         inner_func <- function(x, nm) {
+  #           filter(x, competitor_id == nm) |>
+  #             mutate(player_team = "Total", player_name = str_trim(nm)) |>
+  #             summarise(across(starts_with("20"), \(x) as.character(sum(x == "1", na.rm = TRUE))), .by = c(player_team, player_name))
+  #         }
 
-      tibble::rowid_to_column(df_h2h_matchup_game_count_tbl) |>
-        datatable(
-          rownames = FALSE,
-          escape = FALSE,
-          style = "default",
-          options = lst(
-            dom = "t",
-            paging = FALSE,
-            ordering = FALSE,
-            columnDefs = list(list(visible = FALSE, targets = "rowid")),
-            initComplete = JS(
-              "function(settings, json) {",
-              "$(this.api().table().header()).css({'background-color': 'blue', 'color': 'white'});",
-              "}"
-            )
-          )
-        ) |>
-        formatStyle(colnames(df_h2h_matchup_game_count_tbl), border = "1px solid #000") |>
-        formatStyle("rowid", target = "row", backgroundColor = styleEqual(3, "grey")) |>
-        formatStyle("Total", target = "cell", backgroundColor = styleEqual(max_game_count, "lightgreen")) |>
-        formatStyle(c("Team", "Player"), backgroundColor = "azure") |>
-        formatStyle("Next Matchup Period", target = "cell", backgroundColor = styleEqual(min_next_matchup_game_count, "#FFBBFF")) |>
-        (\(dt) {
-          cols <- str_subset(colnames(df_h2h_matchup_game_count_tbl), "\\(")
-          for (col in cols) {
-            dt <- formatStyle(dt, columns = col, target = "cell", backgroundColor = styleInterval(10, c(NA, "pink"))) |>
-              formatStyle(columns = col, target = "cell", backgroundColor = styleEqual("1*", "pink"))
-          }
+  #         bind_rows(
+  #           inner_func(df, opp_id),
+  #           inner_func(df, as.numeric(input$h2h_competitor)),
+  #           setNames(as.data.frame(matrix(rep(NA, length(colnames(df))), nrow = 1)), colnames(df)),
+  #           select(
+  #             filter(df, competitor_id == as.numeric(input$h2h_competitor)),
+  #             starts_with(c("player", "20"))
+  #           ) |>
+  #             arrange(player_name) |>
+  #             mutate(across(starts_with("20"), \(x) as.character(x)))
+  #         )
+  #       })() |>
+  #       select(-starts_with(c("competitor", "opponent"))) |>
+  #       (\(df) {
+  #         Ttl = as.data.frame(t(df)) |>
+  #           mutate(across(everything(), \(x) ifelse(is.na(as.numeric(x)) | as.numeric(x) <= 10, as.numeric(x), 10))) |>
+  #           summarise(across(everything(), \(x) sum(x, na.rm = TRUE))) |>
+  #           t()
 
-          if (format(cur_date, "%a (%d/%m)") %in% cols) {
-            dt <- formatStyle(
-              dt,
-              format(cur_date, "%a (%d/%m)"),
-              target = "cell",
-              backgroundColor = styleEqual(
-                "1*",
-                "pink",
-                default = "lightyellow"
-              )
-            )
-          }
-          if (length(input$h2h_hl_player) > 0) {
-            dt <- formatStyle(
-              dt,
-              "Player",
-              target = "row",
-              backgroundColor = styleEqual(input$h2h_hl_player, rep("#54FF9F", length(input$h2h_hl_player)))
-            )
-          }
+  #         mutate(df, Total = Ttl)
+  #       })() |>
+  #       mutate(Total = if_else(Total == 0 & is.na(player_team), NA, Total)) |>
+  #       mutate(matchup_period = as.numeric(input$h2h_matchup)) |>
+  #       left_join(
+  #         select(df_matchup_game_count, matchup_period, team, following_matchup_period_games),
+  #         by = join_by(player_team == team, matchup_period)
+  #       ) |>
+  #       select(-matchup_period, following_matchup_period_games) |>
+  #       distinct()
 
-          dt
-        })()
-    }
-  })
+  #     df_h2h_matchup_game_count_tbl <<- df_h2h_matchup_game_count |>
+  #       select(
+  #         starts_with("player"),
+  #         all_of(sort(str_subset(colnames(df_h2h_matchup_game_count), "\\d"))),
+  #         Total,
+  #         `Next Matchup Period` = following_matchup_period_games,
+  #         Team = player_team,
+  #         Player = player_name
+  #       ) |>
+  #       rename_with(.fn = \(x) format(as.Date(x), "%a (%d/%m)"), .cols = starts_with("20")) |>
+  #       mutate(
+  #         Player = str_replace_all(
+  #           Player,
+  #           setNames(
+  #             unlist(ls_fty_cid_to_name),
+  #             map_chr(names(ls_fty_cid_to_name), \(x) paste0("^", x, "$"))
+  #           )
+  #         )
+  #       )
 
-  # NBA Player Comparison -------------------------------------------------------
+  #     max_game_count <- max(df_h2h_matchup_game_count_tbl$Total, na.rm = TRUE)
+  #     min_next_matchup_game_count <- min(df_h2h_matchup_game_count_tbl$`Next Matchup Period`, na.rm = TRUE)
+
+  #     rowid_to_column(df_h2h_matchup_game_count_tbl) |>
+  #       datatable(
+  #         rownames = FALSE,
+  #         escape = FALSE,
+  #         style = "default",
+  #         options = lst(
+  #           dom = "t",
+  #           paging = FALSE,
+  #           ordering = FALSE,
+  #           columnDefs = list(list(visible = FALSE, targets = "rowid")),
+  #           initComplete = JS(
+  #             "function(settings, json) {",
+  #             "$(this.api().table().header()).css({'background-color': 'blue', 'color': 'white'});",
+  #             "}"
+  #           )
+  #         )
+  #       ) |>
+  #       formatStyle(colnames(df_h2h_matchup_game_count_tbl), border = "1px solid #000") |>
+  #       formatStyle("rowid", target = "row", backgroundColor = styleEqual(3, "grey")) |>
+  #       formatStyle("Total", target = "cell", backgroundColor = styleEqual(max_game_count, "lightgreen")) |>
+  #       formatStyle(c("Team", "Player"), backgroundColor = "azure") |>
+  #       formatStyle("Next Matchup Period", target = "cell", backgroundColor = styleEqual(min_next_matchup_game_count, "#FFBBFF")) |>
+  #       (\(dt) {
+  #         cols <- str_subset(colnames(df_h2h_matchup_game_count_tbl), "\\(")
+  #         for (col in cols) {
+  #           dt <- formatStyle(dt, columns = col, target = "cell", backgroundColor = styleInterval(10, c(NA, "pink"))) |>
+  #             formatStyle(columns = col, target = "cell", backgroundColor = styleEqual("1*", "pink"))
+  #         }
+
+  #         if (format(cur_date, "%a (%d/%m)") %in% cols) {
+  #           dt <- formatStyle(
+  #             dt,
+  #             format(cur_date, "%a (%d/%m)"),
+  #             target = "cell",
+  #             backgroundColor = styleEqual(
+  #               "1*",
+  #               "pink",
+  #               default = "lightyellow"
+  #             )
+  #           )
+  #         }
+  #         if (length(input$h2h_hl_player) > 0) {
+  #           dt <- formatStyle(
+  #             dt,
+  #             "Player",
+  #             target = "row",
+  #             backgroundColor = styleEqual(input$h2h_hl_player, rep("#54FF9F", length(input$h2h_hl_player)))
+  #           )
+  #         }
+
+  #         dt
+  #       })()
+  #   }
+  # })
+
+  # # NBA Player Comparison -------------------------------------------------------
 
   # Count how many events a player excels given the selection
+  # THIS SHOULD BE REACTIVE, SO TOO SHOULD BE MAIN DF
   .calc_xl_at_count <- function(df) {
     df$xl_at_count <- 0
 
@@ -1428,39 +1442,40 @@ server <- function(input, output, session) {
       theme_bw()
 
     ggplotly(plt, tooltip = "text") |>
+      layout(legend = list(x = 100, y = 0.5)) |>
       reverse_legend_labels() |>
       config(displayModeBar = FALSE)
   })
 
-  # News Transactions -------------------------------------------------------
+  # # News Transactions -------------------------------------------------------
 
-  output$news_transactions <- renderDT({
-    df_t <- df_nba_news |>
-      arrange(desc(date)) |>
-      rename_with(\(x) str_to_title(str_replace(x, "_", " ")))
+  # output$news_transactions <- renderDT({
+  #   df_t <- df_nba_news |>
+  #     arrange(desc(date)) |>
+  #     rename_with(\(x) str_to_title(str_replace(x, "_", " ")))
 
-    datatable(
-      df_t,
-      rownames = FALSE,
-      class = "cell-border stripe",
-      style = "default",
-      filter = list(position = "top", clear = FALSE),
-      options = list(
-        paging = FALSE,
-        autoWidth = TRUE,
-        dom = 't',
-        scrollX = TRUE,
-        initComplete = JS(
-          "function(settings, json) {",
-          "$(this.api().table().header()).css({'background-color': 'blue', 'color': 'white'});",
-          "}"
-        )
-      )
-    ) |>
-      formatStyle(
-        columns = colnames(df_t),
-        background = "white",
-        color = "black"
-      )
-  })
+  #   datatable(
+  #     df_t,
+  #     rownames = FALSE,
+  #     class = "cell-border stripe",
+  #     style = "default",
+  #     filter = list(position = "top", clear = FALSE),
+  #     options = list(
+  #       paging = FALSE,
+  #       autoWidth = TRUE,
+  #       dom = 't',
+  #       scrollX = TRUE,
+  #       initComplete = JS(
+  #         "function(settings, json) {",
+  #         "$(this.api().table().header()).css({'background-color': 'blue', 'color': 'white'});",
+  #         "}"
+  #       )
+  #     )
+  #   ) |>
+  #     formatStyle(
+  #       columns = colnames(df_t),
+  #       background = "white",
+  #       color = "black"
+  #     )
+  # })
 }

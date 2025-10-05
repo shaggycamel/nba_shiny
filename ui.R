@@ -26,24 +26,38 @@ page_fty_league_overview <- layout_sidebar(
 
 page_h2h <- layout_sidebar(
   sidebar = sidebar(
-    layout_columns(
-      selectInput("h2h_competitor", "Competitor", choices = character(0)),
-      selectInput("h2h_matchup", "Matchup", choices = 0)
-    ),
-    radioButtons("h2h_window", "Rolling days", c(7, 15, 30), inline = TRUE),
-    layout_columns(
-      selectInput("h2h_ex_player", "Exclude", choices = character(0), multiple = TRUE),
-      selectInput("h2h_add_player", "Add", choices = character(0), multiple = TRUE),
-    ),
+    selectInput("h2h_competitor", "Competitor", choices = character(0)),
+    selectInput("h2h_matchup", "Matchup", choices = 0),
     layout_columns(
       checkboxInput("h2h_future_only", "Future"),
-      checkboxInput("h2h_future_from_tomorrow", "Tmrw")
+      radioButtons("h2h_window", "Rolling days", c(7, 15, 30), inline = TRUE)
+    ),
+    absolutePanel(
+      dropdownButton(
+        layout_columns(
+          switchInput("transaction_type", value = TRUE, onLabel = "Add", offLabel = "Drop"),
+          selectInput("transaction_player_name", label = NULL, choices = character(0)),
+          dateInput("transaction_date", label = NULL),
+          col_widths = c(2, 5, 5)
+        ),
+        layout_columns(
+          # div(),
+          actionButton("h2h_add_player_transaction", "Add Transaction"),
+          actionButton("h2h_dl_player_transaction", "Remove Transaction")
+          # div
+          # col_widths = c(2, 4, 4, 2)
+        ),
+        DTOutput("team_transaction_table"),
+        width = "500px",
+        inputId = "h2h_player_transaction_window"
+      ),
+      right = 10,
+      top = 10
     ),
     selectInput("h2h_hl_player", "Highlight Player", choices = character(0), multiple = TRUE),
     selectInput("h2h_log_config", "Log Filter Config", choices = character(0), size = 4, selectize = FALSE),
     actionButton("h2h_snapshot_config", "Snapshot config"),
-    # width = 350,
-    # open = "open"
+    # width = 350
   ),
   card(
     height = 1400,
@@ -131,7 +145,7 @@ page_draft <- layout_sidebar(
         multiple = TRUE,
         width = "100%"
       ),
-      width = "700px"
+      width = "850px"
     ),
     right = 10,
     top = 10
@@ -165,6 +179,7 @@ ui <- page_navbar(
   id = "title_container",
   window_title = "NBA Fantasy",
   title = uiOutput("navbar_title"),
+  includeCSS("www/custom.css"), # Custom CSS: increases z-index for pop-ups
   nav_spacer(),
   nav_panel("Fantasy Overview", page_fty_league_overview),
   nav_panel("Head to Head", page_h2h),

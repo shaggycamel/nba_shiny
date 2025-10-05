@@ -1,4 +1,4 @@
-df_fty_league_overview_prepare <<- function(platform_selected, league_selected) {
+df_fty_league_overview_prepare <<- function() {
   df_fty_league_overview <-
     df_fty_box_score |>
     left_join(
@@ -95,7 +95,7 @@ df_fty_league_overview_prepare <<- function(platform_selected, league_selected) 
     mutate(matchup_sigmoid = if_else(is.na(matchup_sigmoid), matchup, matchup_sigmoid)) |>
     left_join(
       df_fty_base |>
-        filter(platform == platform_selected, league_id == league_selected) |>
+        filter(platform == platform_selected(), league_id == league_selected()) |>
         select(competitor_id, competitor_name),
       by = join_by(competitor_id)
     )

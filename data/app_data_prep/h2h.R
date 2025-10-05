@@ -55,7 +55,7 @@ df_past <<- df_fty_roster |>
   distinct()
 # distinct to combat duplication that happens on server ONLY
 
-df_h2h_prepare <<- function(grain = 7, c_id = NULL, exclude = NULL, add = NULL, from_tomorrow = NULL) {
+df_h2h_prepare <<- function(grain = 7, c_id = NULL, transaction_tbl = NULL) {
   df_rs <- df_rolling_stats[[as.character(grain)]]
 
   # TODAY
@@ -67,10 +67,11 @@ df_h2h_prepare <<- function(grain = 7, c_id = NULL, exclude = NULL, add = NULL, 
       by = join_by(player_team == team, date == game_date)
     ) |>
     rename(game_date = date) |>
+    ### HERE -------
     bind_rows(
       filter(df_nba_player_box_score, player_name %in% add) |>
         slice_max(order_by = game_date, by = player_name) |>
-        select(player_id, player_fantasy_id := str_c(str_to_lower(platform_selected), "_id"), player_name, player_team = team_slug) |>
+        select(player_id, player_fantasy_id := str_c(str_to_lower(platform_selected()), "_id"), player_name, player_team = team_slug) |>
         mutate(season = cur_season, competitor_id = c_id)
     ) |>
     select(-c(season_type, begin_date, end_date))
@@ -103,24 +104,27 @@ df_h2h_prepare <<- function(grain = 7, c_id = NULL, exclude = NULL, add = NULL, 
       by = join_by(player_id, game_date)
     )
 
-  # FROM TOMORROW TWEAKING
-  if (from_tomorrow) {
-    df_h2h <- df_h2h |>
-      anti_join(
-        filter(df_h2h, competitor_id == c_id, player_name %in% add, origin == "today"),
-        by = join_by(competitor_id, player_id, game_date)
-      ) |>
-      anti_join(
-        filter(df_h2h, competitor_id == c_id, player_name %in% exclude, origin == "future"),
-        by = join_by(competitor_id, player_id, game_date)
-      )
-  } else {
-    df_h2h <- df_h2h |>
-      anti_join(
-        filter(df_h2h, competitor_id == c_id, player_name %in% exclude, origin != "past"),
-        by = join_by(competitor_id, player_id, game_date)
-      )
-  }
+  # Add section to handle transaction_tbl
+  df_h2h
+
+  # # FROM TOMORROW TWEAKING
+  # if (from_tomorrow) {
+  #   df_h2h <- df_h2h |>
+  #     anti_join(
+  #       filter(df_h2h, competitor_id == c_id, player_name %in% add, origin == "today"),
+  #       by = join_by(competitor_id, player_id, game_date)
+  #     ) |>
+  #     anti_join(
+  #       filter(df_h2h, competitor_id == c_id, player_name %in% exclude, origin == "future"),
+  #       by = join_by(competitor_id, player_id, game_date)
+  #     )
+  # } else {
+  #   df_h2h <- df_h2h |>
+  #     anti_join(
+  #       filter(df_h2h, competitor_id == c_id, player_name %in% exclude, origin != "past"),
+  #       by = join_by(competitor_id, player_id, game_date)
+  #     )
+  # }
 }
 
-df_h2h_og <<- df_h2h_prepare(c_id = 5, from_tomorrow = FALSE)
+# df_h2h_og <<- df_h2h_prepare(c_id = 5, from_tomorrow = FALSE)
