@@ -1,5 +1,3 @@
-# IS IT VIABLE QUERYING DATA FROM COCKROACH ON THE SHINY SERVER?
-
 # Genreal query template
 # fmt: skip
 query_template <- function(qry_obj, sn = "cur", pf = TRUE, lg = TRUE) {
@@ -105,9 +103,7 @@ save(list = stringr::str_subset(objects(), "df_nba"), file = here::here("nba_bas
 # Fty base object ---------------------------------------------------------
 
 cat("\t- df_fty_base\n")
-df_fty_base <<- nba.dataRub::dh_getQuery(db_con, query_template("fty.fty_base_vw", pf = FALSE, lg = FALSE)) |>
-  dplyr::mutate(league_handle = str_c(platform, league_id, sep = "_"))
-
+df_fty_base <<- nba.dataRub::dh_getQuery(db_con, query_template("fty.fty_base_vw", pf = FALSE, lg = FALSE))
 saveRDS(df_fty_base, here::here("fty_base.RDS"))
 
 

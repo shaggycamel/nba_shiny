@@ -179,6 +179,7 @@ ui <- page_navbar(
   id = "title_container",
   window_title = "NBA Fantasy",
   title = uiOutput("navbar_title"),
+  includeCSS("www/custom.css"), # Custom CSS: increases z-index for pop-ups
   nav_spacer(),
   nav_panel("Fantasy Overview", page_fty_league_overview),
   nav_panel("Head to Head", page_h2h),
