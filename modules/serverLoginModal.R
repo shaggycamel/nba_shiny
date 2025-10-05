@@ -1,10 +1,10 @@
-loginModalServer <- function(id, df_fty_base, ls_fty_base, base_selections, fty_parameters_met) {
+serverLoginModal <- function(id, df_fty_base, base_parameters, base_selections, fty_parameters_met) {
   moduleServer(id, function(input, output, session) {
     # Assign values to platform and league selected
     observe({
       updateSelectInput(inputId = "fty_competitor_select", choices = filter(df_fty_base, league_name == input$fty_league_select)$competitor_name)
-      base_selections$platform_selected <- str_split(ls_fty_base[input$fty_league_select], "_")[[1]][1]
-      base_selections$league_id_selected <- str_split(ls_fty_base[input$fty_league_select], "_")[[1]][2]
+      base_selections$platform_selected <- str_split(base_parameters$ls_fty_base[input$fty_league_select], "_")[[1]][1]
+      base_selections$league_id_selected <- str_split(base_parameters$ls_fty_base[input$fty_league_select], "_")[[1]][2]
     }) |>
       bindEvent(input$fty_league_select, ignoreNULL = TRUE)
 
