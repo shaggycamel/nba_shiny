@@ -2,12 +2,11 @@
 
 # Doesn't account for situations where a player is traded.
 # Assigns stats to player's most recent team (within one season)
-df_rolling_stats <<- df_nba_player_box_score |>
+df_rolling_stats <- df_nba_player_box_score |>
   arrange(game_date) |>
-  filter(game_date < cur_date) |> # SHOULD THIS FILTER BE PLACED BEFORE OR AFTER SLIDER??
+  filter(game_date < base_parameters$cur_date) |> # SHOULD THIS FILTER BE PLACED BEFORE OR AFTER SLIDER??
   select(-c(season, season_type, year_season_type, game_id)) |>
   (\(df_t) {
-    # set_names started randomly throwing error here
     map(set_names(c(7, 15, 30)), \(window) {
       df_t |>
         mutate(
@@ -23,7 +22,7 @@ df_rolling_stats <<- df_nba_player_box_score |>
     df_t |>
       bind_rows(
         df_nba_schedule |>
-          filter(game_date > (cur_date - days(1))) |>
+          filter(game_date > (base_parameters$cur_date - days(1))) |>
           left_join(
             select(df_nba_roster, player_id, espn_id, yahoo_id, player_name = player, team_slug),
             by = join_by(team == team_slug),
@@ -39,11 +38,11 @@ df_rolling_stats <<- df_nba_player_box_score |>
       )
   })
 # distinct() # putting this here just in case...
-# specifically for the section: filter(game_date >= (cur_date - days(1)))
+# specifically for the section: filter(game_date >= (base_parameters$cur_date - days(1)))
 # NEED TO TAKE TIME TO UNDERSTAND WHY THIS IS DIFFERENT ON SERVER VS LOCAL
 
 # PAST
-df_past <<- df_fty_roster |>
+df_past <- df_fty_roster |>
   filter(timestamp < force_tz(as.Date(max(timestamp)), tz = "EST")) |>
   mutate(dow = lubridate::wday(date, week_start = 1), .after = date) |>
   left_join(
@@ -55,7 +54,7 @@ df_past <<- df_fty_roster |>
   distinct()
 # distinct to combat duplication that happens on server ONLY
 
-df_h2h_prepare <<- function(grain = 7, c_id = NULL, transaction_tbl = NULL) {
+fn_h2h <- function(grain = 7, c_id = NULL, transaction_tbl = NULL) {
   df_rs <- df_rolling_stats[[as.character(grain)]]
 
   # TODAY
@@ -127,4 +126,4 @@ df_h2h_prepare <<- function(grain = 7, c_id = NULL, transaction_tbl = NULL) {
   # }
 }
 
-# df_h2h_og <<- df_h2h_prepare(c_id = 5, from_tomorrow = FALSE)
+lst(df_rolling_stats, df_past, fn_h2h)

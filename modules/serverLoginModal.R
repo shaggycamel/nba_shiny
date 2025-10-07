@@ -1,4 +1,4 @@
-serverLoginModal <- function(id, df_fty_base, base_parameters, base_selections, fty_parameters_met) {
+serverLoginModal <- function(id, df_fty_base, base_parameters, base_selections, fty_parameters) {
   moduleServer(id, function(input, output, session) {
     # Assign values to platform and league selected
     observe({
@@ -6,14 +6,15 @@ serverLoginModal <- function(id, df_fty_base, base_parameters, base_selections, 
       base_selections$platform_selected <- str_split(base_parameters$ls_fty_base[input$fty_league_select], "_")[[1]][1]
       base_selections$league_id_selected <- str_split(base_parameters$ls_fty_base[input$fty_league_select], "_")[[1]][2]
     }) |>
-      bindEvent(input$fty_league_select, ignoreNULL = TRUE)
+      bindEvent(input$fty_league_select, ignoreNULL = TRUE, ignoreInit = TRUE)
 
-    # Login modal error hadling
+    # Close modal and progress into app
     observe({
       if (input$fty_competitor_select == "" && input$fty_league_select == "") {
         output$login_messages <- renderText("Select a league, then select a competitor.")
       } else if (input$fty_competitor_select != "") {
-        fty_parameters_met(TRUE)
+        fty_parameters$met <- TRUE
+        fty_parameters$seq_cnt <- 1
         base_selections$competitor_name_selected <- input$fty_competitor_select
         removeModal()
         output$login_messages <- NULL
@@ -23,9 +24,9 @@ serverLoginModal <- function(id, df_fty_base, base_parameters, base_selections, 
     }) |>
       bindEvent(input$fty_dash_init)
 
-    # Login modal progress into app
+    # Login modal error hadling
     observe({
-      if (!fty_parameters_met()) {
+      if (!fty_parameters$met) {
         output$login_messages <- renderText("You gotta go fill the form at least once!")
       } else {
         removeModal()

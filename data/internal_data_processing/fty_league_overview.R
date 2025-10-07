@@ -1,4 +1,4 @@
-df_fty_league_overview_prepare <<- function() {
+fn_fty_league_overview <- function() {
   df_fty_league_overview <-
     df_fty_box_score |>
     left_join(
@@ -25,7 +25,13 @@ df_fty_league_overview_prepare <<- function() {
       across(all_of(cat_specs(vec = TRUE, incl_nba_cat = c("all_cat", "fg_z", "ft_z"), excl_nba_cat = "tov")), \(x) rank(x * -1), .names = "{.col}_rank"),
       .by = matchup
     ) |>
-    mutate(tov_rank = rank(tov), .by = matchup) |>
+    (\(df_t) {
+      if ("tov" %in% cat_specs(vec = TRUE)) {
+        mutate(df_t, tov_rank = rank(tov), .by = matchup)
+      } else {
+        df_t
+      }
+    })() |>
     mutate(
       across(
         all_of(str_c(cat_specs(vec = TRUE, incl_nba_cat = c("all_cat", "fg_z", "ft_z")), "_rank")),
@@ -90,7 +96,7 @@ df_fty_league_overview_prepare <<- function() {
     rename_with(\(x) str_remove(x, "sigmoid_"), .cols = starts_with("sigmoid_")) |>
     rename_with(\(x) str_c(str_remove(x, "rank_sigmoid_"), "_rank"), .cols = starts_with("rank_sigmoid_"))
 
-  df_fty_league_overview |>
+  df_fty_league_overview <- df_fty_league_overview |>
     bind_rows(select(df_latest_matchup, any_of(colnames(df_fty_league_overview)))) |>
     mutate(matchup_sigmoid = if_else(is.na(matchup_sigmoid), matchup, matchup_sigmoid)) |>
     left_join(
@@ -99,4 +105,6 @@ df_fty_league_overview_prepare <<- function() {
         select(competitor_id, competitor_name),
       by = join_by(competitor_id)
     )
+
+  df_fty_league_overview
 }

@@ -34,12 +34,13 @@ server <- function(input, output, session) {
     cur_date = as.Date("2025-12-01"), # DELETE
     cur_season = reticulate::import("nba_api")$stats$library$parameters$Season$current_season,
     prev_season = reticulate::import("nba_api")$stats$library$parameters$Season$previous_season,
-    ls_fty_base = as.list(deframe(distinct(df_fty_base, league_handle, league_name)))
+    ls_fty_base = as.list(deframe(distinct(df_fty_base, league_name, league_handle)))
   )
 
   # Reactive values referenced throughout
   base_selections <- reactiveValues()
-  fty_parameters_met <- reactiveVal()
+  fty_parameters <- reactiveValues()
+  # Create fty counter rv that logs the sequene of things
 
   # Login -------------------------------------------------------------------
 
@@ -47,17 +48,17 @@ server <- function(input, output, session) {
   output$navbar_title <- renderUI(span(input$fty_league_select))
 
   # Login to a league upon app init
-  serverLoginModal("login_modal", df_fty_base, base_parameters, base_selections, fty_parameters_met)
-  showModal(uiLoginModal("login_modal", df_fty_base))
+  serverLoginModal("kobeee", df_fty_base, base_parameters, base_selections, fty_parameters)
+  showModal(uiLoginModal("kobeee", df_fty_base))
 
   # In the case league is switched mid-use of app
-  bindEvent(observe(showModal(uiLoginModal("login_modal", df_fty_base))), input$fty_league_competitor_switch)
+  bindEvent(observe(showModal(uiLoginModal("kobeee", df_fty_base))), input$fty_league_competitor_switch)
 
   # Internal Data Processing -----------------------------------------------
 
   # Load datasets
   # FOR SOME REASON base_selections IS NA WITHIN THE SERVER
-  serverLoadDatasets("load_datasets", db_con, base_parameters, base_selections, fty_parameters_met)
+  serverLoadDatasets("kobeee", db_con, base_parameters, base_selections, fty_parameters)
 
   # Create additional parameters and reactive values that rely on datasets
   # serverAdditionalParameters("additional_parameters")
