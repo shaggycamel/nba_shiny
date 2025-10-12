@@ -1,21 +1,3 @@
-# Initialisation files ----------------------------------------------------
-
-# Helper and Py config files
-source(here("R", "useful.R"))
-if (Sys.info()["user"] == "shiny") {
-  source(here("R", "python_shiny_config.R"))
-}
-
-# Modules
-# walk(list.files(here("modules"), full.names = TRUE), \(x) {
-# cat(paste("Sourcing:", str_extract(x, "modules\\/\\w+.R"), "\n"))
-# source(x)
-# })
-source("modules/serverLoginModal.R")
-source("modules/uiLoginModal.R")
-source("modules/serverLoadDatasets.R")
-# source("modules/serverAdditionalParameters.R")
-
 # Server code -------------------------------------------------------------
 
 server <- function(input, output, session) {
@@ -40,7 +22,6 @@ server <- function(input, output, session) {
   # Reactive values referenced throughout
   base_selections <- reactiveValues()
   fty_parameters <- reactiveValues()
-  # Create fty counter rv that logs the sequene of things
 
   # Login -------------------------------------------------------------------
 
@@ -48,20 +29,19 @@ server <- function(input, output, session) {
   output$navbar_title <- renderUI(span(input$fty_league_select))
 
   # Login to a league upon app init
-  serverLoginModal("kobeee", df_fty_base, base_parameters, base_selections, fty_parameters)
-  showModal(uiLoginModal("kobeee", df_fty_base))
+  loginModalServer("kobeee", df_fty_base, base_parameters, base_selections, fty_parameters)
+  showModal(loginModalUI("kobeee", df_fty_base))
 
   # In the case league is switched mid-use of app
-  bindEvent(observe(showModal(uiLoginModal("kobeee", df_fty_base))), input$fty_league_competitor_switch)
+  bindEvent(observe(showModal(loginModalUI("kobeee", df_fty_base))), input$fty_league_competitor_switch)
 
   # Internal Data Processing -----------------------------------------------
 
-  # Load datasets
-  # FOR SOME REASON base_selections IS NA WITHIN THE SERVER
-  serverLoadDatasets("kobeee", db_con, base_parameters, base_selections, fty_parameters)
+  # Load datasets and save to object
+  data_objs <- loadDatasetsServer("kobeee", db_con, base_parameters, base_selections, fty_parameters)
 
   # Create additional parameters and reactive values that rely on datasets
-  # serverAdditionalParameters("additional_parameters")
+  additionalParametersServer("kobeee", base_parameters, fty_parameters, data_objs)
 
   # FTY League Overview ----------------------------------------------------
 
@@ -114,9 +94,7 @@ server <- function(input, output, session) {
 
   # # NBA Player Trend -------------------------------------------------------
 
-  #     # Player trend tab
-  #     updateSelectInput(session, "trend_select_player", choices = active_players)
-  #     updateSelectInput(session, "trend_select_stat", choices = cat_specs(incl_nba_cat = "min"))
+  nbaPlayerTrendServer("kobeee", base_parameters, fty_parameters, data_objs)
 
   # # FTY Draft Assistance ---------------------------------------------------
 

@@ -30,7 +30,7 @@ sort_players_by_min_desc <- function(df) {
 }
 
 # Cat extraction
-cat_specs <- function(vec = FALSE, h2h = TRUE, incl_nba_cat = NULL, excl_nba_cat = NULL) {
+cat_specs <- function(df_fty_cats, vec = FALSE, h2h = TRUE, incl_nba_cat = NULL, excl_nba_cat = NULL) {
   # fmt: skip
   obj <- df_fty_cats
   if (h2h) {

@@ -1,4 +1,4 @@
-serverLoginModal <- function(id, df_fty_base, base_parameters, base_selections, fty_parameters) {
+loginModalServer <- function(id, df_fty_base, base_parameters, base_selections, fty_parameters) {
   moduleServer(id, function(input, output, session) {
     # Assign values to platform and league selected
     observe({

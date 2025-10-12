@@ -1,5 +1,5 @@
 # Login modal object
-uiLoginModal <- function(id, df_fty_base) {
+loginModalUI <- function(id, df_fty_base) {
   ns <- NS(id)
 
   tagList(
