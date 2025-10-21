@@ -142,7 +142,7 @@ purrr::pwalk(dplyr::distinct(df_fty_base, platform, league_id), \(platform, leag
   # Fantasy category labels -------------------------------------------------------
   cat("\t- df_fty_cats\n")
   df_fty_cats <- nba.dataRub::dh_getQuery(db_con, glue::glue(query_template("fty.fty_categories_vw"))) |>
-    arrange(display_order)
+    dplyr::arrange(display_order)
 
   # Save data objects
   save(list = stringr::str_subset(objects(), "fty|cat"), file = here::here(paste0("fty_", platform, "_", league_id, ".RData")))
