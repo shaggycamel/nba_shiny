@@ -44,14 +44,14 @@ df_rolling_stats <<- df_nba_player_box_score |>
 
 # PAST
 df_past <<- df_fty_roster |>
-  filter(timestamp < force_tz(as.Date(max(timestamp)), tz = "EST")) |>
-  mutate(dow = lubridate::wday(date, week_start = 1), .after = date) |>
+  filter(assigned_date < max(assigned_date)) |>
+  mutate(dow = lubridate::wday(assigned_date, week_start = 1), .after = assigned_date) |>
   left_join(
     select(df_nba_schedule, team, game_date, scheduled_to_play),
-    by = join_by(player_team == team, date == game_date)
+    by = join_by(player_team == team, assigned_date == game_date)
   ) |>
   select(-c(season_type, begin_date, end_date)) |>
-  rename(game_date = date) |>
+  rename(game_date = assigned_date) |>
   distinct()
 # distinct to combat duplication that happens on server ONLY
 
@@ -60,13 +60,13 @@ df_h2h_prepare <<- function(grain = 7, c_id = NULL, exclude = NULL, add = NULL, 
 
   # TODAY
   df_today <- df_fty_roster |>
-    filter(timestamp >= force_tz(as.Date(max(timestamp)), tz = "EST")) |>
-    mutate(dow = lubridate::wday(date, week_start = 1), .after = date) |>
+    filter(assigned_date == max(assigned_date)) |>
+    mutate(dow = lubridate::wday(assigned_date, week_start = 1), .after = assigned_date) |>
     left_join(
       select(df_nba_schedule, team, game_date, scheduled_to_play),
-      by = join_by(player_team == team, date == game_date)
+      by = join_by(player_team == team, assigned_date == game_date)
     ) |>
-    rename(game_date = date) |>
+    rename(game_date = assigned_date) |>
     bind_rows(
       filter(df_nba_player_box_score, player_name %in% add) |>
         slice_max(order_by = game_date, by = player_name) |>
@@ -77,7 +77,7 @@ df_h2h_prepare <<- function(grain = 7, c_id = NULL, exclude = NULL, add = NULL, 
 
   # FUTURE
   df_future <- distinct(df_nba_schedule, game_date) |>
-    filter(game_date > max(df_fty_roster$timestamp)) |>
+    filter(game_date > max(df_fty_roster$assigned_date)) |>
     cross_join(select(df_fty_competitor, competitor_id)) |>
     left_join(
       select(df_today, season, platform, league_id, competitor_id, player_fantasy_id, player_id, player_name, player_team, player_injury_status),

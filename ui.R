@@ -131,7 +131,7 @@ page_draft <- layout_sidebar(
         multiple = TRUE,
         width = "100%"
       ),
-      width = "700px"
+      width = "850px"
     ),
     right = 10,
     top = 10

@@ -1,4 +1,3 @@
-
 # Initialise workspace ----------------------------------------------------
 
 # renv::restore(clean = TRUE, prompt = FALSE)
@@ -12,7 +11,6 @@ cur_date <- lubridate::force_tz(as.Date(lubridate::with_tz(Sys.time(), "EST")), 
 db_con <- nba.dataRub::dh_createCon("cockroach")
 # db_con <- nba.dataRub::dh_createCon("postgres")
 
-
 # Read datasets -----------------------------------------------------------
 
 cat("Creating datasets...\n")
@@ -25,15 +23,15 @@ cat("Deploying to Shiny Server...\n\n")
 rsconnect::deployApp(
   appDir = here::here(),
   appFiles = c(
-    "_proj_python.R", 
+    "_proj_python.R",
     "_proj_useful.R",
     "fty_base.RDS",
     unname(fs::dir_ls(glob = "*.RData")),
     ".Rprofile",
-    "data", 
-    "renv.lock", 
-    "requirements.txt", 
-    "server.R", 
+    "data",
+    "renv.lock",
+    "requirements.txt",
+    "server.R",
     "ui.R",
     "global.R"
   ),
@@ -48,8 +46,7 @@ rsconnect::deployApp(
   python = "/usr/bin/python3"
 )
 
-cat("Successfully deployed on:", format(as.POSIXct(Sys.time(), tz="NZ"), usetz=TRUE), "\n\n")
-
+cat("Successfully deployed on:", format(as.POSIXct(Sys.time(), tz = "NZ"), usetz = TRUE), "\n\n")
 
 # Delete residual files ---------------------------------------------------
 # Not residual any more...
