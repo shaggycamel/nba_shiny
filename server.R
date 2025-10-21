@@ -23,7 +23,6 @@ server <- function(input, output, session) {
 
   fty_parameters_met <- reactiveVal(FALSE)
   nba_api <- reticulate::import("nba_api")
-  espn_api <- reticulate::import("espn_api.basketball")
 
   db_con <<- if (Sys.info()["user"] == "fred") dh_createCon("postgres") else dh_createCon("cockroach")
   cur_date <<- strptime(Sys.time(), "%Y", tz = "EST")
