@@ -343,6 +343,8 @@ server <- function(input, output, session) {
     }
     df_fty_league_overview <<- df_lo()
     df_point <- filter(df_fty_league_overview, as.integer(matchup_sigmoid) == matchup_sigmoid)
+    print(plot_col)
+    glimpse(df_fty_league_overview)
 
     plt <- if (input$fty_lg_ov_cum_toggle) {
       df_fty_league_overview |>
@@ -808,8 +810,8 @@ server <- function(input, output, session) {
       filter(
         status != "Available",
         game_date <= cur_date,
-        # game_date >= cur_date - days(7)
-        game_date >= cur_date - days(input$comparison_window)
+        game_date >= cur_date - days(7)
+        # game_date >= cur_date - days(input$comparison_window)
       ) |>
       left_join(select(df_nba_roster, nba_id = player_id, salary)) |>
       select(team_slug, game_date, matchup, player_name, salary) |>
@@ -822,7 +824,8 @@ server <- function(input, output, session) {
     df_comparison <<- df_nba_player_box_score |>
       filter(
         game_date <= cur_date,
-        game_date >= cur_date - days(input$comparison_window)
+        game_date >= cur_date - days(7)
+        # game_date >= cur_date - days(input$comparison_window)
       ) |>
       summarise(
         across(any_of(cat_specs(vec = TRUE, incl_nba_cat = c("min", "fgm", "fga", "ftm", "fta"))), \(x) mean(x)),
@@ -854,7 +857,8 @@ server <- function(input, output, session) {
               summarise(stat_value = paste(stat_value, collapse = "\n"), .groups = "drop") |>
               pivot_wider(names_from = performance, values_from = stat_value)
           },
-          by = join_by(player_name, player_id)
+          by = join_by(player_name, player_id),
+          relationship = "many-to-many"
         )
       })() |>
       select(player_name, any_of(cat_specs(vec = TRUE, incl_nba_cat = c("fg_z", "ft_z", "min"), excl_nba_cat = c("ft_pct", "fg_pct"))), contains("at")) |>
@@ -882,10 +886,11 @@ server <- function(input, output, session) {
           .default = "azure"
         )
       ) |>
-      relocate(Team, .after = Player) |>
-      .calc_xl_at_count()
+      relocate(Team, .after = Player)
+    # .calc_xl_at_count()
 
     df_comparison_table <- filter(df_comparison, Minutes >= input$comparison_minute_filter)
+    # df_comparison_table <- df_comparison
     if (input$comparison_free_agent_filter) {
       df_comparison_table <- filter(df_comparison_table, player_availability == "free_agent")
     }
@@ -1001,64 +1006,64 @@ server <- function(input, output, session) {
             list(background = "azure")
           }
         }),
-        "Excels At" = colDef(style = \(val, ix) {
-          xl_at <- df_comparison_table$xl_at_count[ix]
-          if (xl_at == 1) {
-            list(
-              background = "#00CDCD",
-              fontSize = "80%",
-              whiteSpace = "pre-line"
-            )
-          } else if (xl_at == 2) {
-            list(
-              background = "#8DEEEE",
-              fontSize = "80%",
-              whiteSpace = "pre-line"
-            )
-          } else if (xl_at == 3) {
-            list(
-              background = "#00FFFF",
-              fontSize = "80%",
-              whiteSpace = "pre-line"
-            )
-          } else {
-            list(fontSize = "80%", whiteSpace = "pre-line")
-          }
-        }),
+        # "Excels At" = colDef(style = \(val, ix) {
+        #   xl_at <- df_comparison_table$xl_at_count[ix]
+        #   if (xl_at == 1) {
+        #     list(
+        #       background = "#00CDCD",
+        #       fontSize = "80%",
+        #       whiteSpace = "pre-line"
+        #     )
+        #   } else if (xl_at == 2) {
+        #     list(
+        #       background = "#8DEEEE",
+        #       fontSize = "80%",
+        #       whiteSpace = "pre-line"
+        #     )
+        #   } else if (xl_at == 3) {
+        #     list(
+        #       background = "#00FFFF",
+        #       fontSize = "80%",
+        #       whiteSpace = "pre-line"
+        #     )
+        #   } else {
+        #     list(fontSize = "80%", whiteSpace = "pre-line")
+        #   }
+        # }),
         "Weak At" = colDef(style = list(fontSize = "80%", whiteSpace = "pre-line")),
         "player_availability" = colDef(show = FALSE),
         "player_injury_status" = colDef(show = FALSE),
         "inj_status" = colDef(show = FALSE),
-        "player_colour" = colDef(show = FALSE),
-        "xl_at_count" = colDef(show = FALSE)
-      ),
-      onClick = "expand",
-      details = function(ix) {
-        # format this table nicely somehow...
-        tm <- df_comparison_table$Team[ix]
-        if (is.na(tm)) {
-          tags$div(tags$h2(class = "title", "Team not found..."))
-        } else {
-          tags$div(
-            style = "margin-left: 10px; margin-top: 10px; margin-bottom: 30px;",
-            tags$h2(
-              class = "title",
-              paste(tm, "Last", input$comparison_window, "Day Injury History: ")
-            ),
-            reactable(
-              ls_inj[[tm]],
-              pagination = FALSE,
-              fullWidth = FALSE,
-              defaultColDef = colDef(
-                align = "left",
-                minWidth = 120,
-                headerStyle = list(background = "lightblue", color = "white")
-              ),
-              columns = list(player_names = colDef(minWidth = 1000))
-            )
-          )
-        }
-      }
+        "player_colour" = colDef(show = FALSE)
+        # "xl_at_count" = colDef(show = FALSE)
+      )
+      # onClick = "expand",
+      # details = function(ix) {
+      #   # format this table nicely somehow...
+      #   tm <- df_comparison_table$Team[ix]
+      #   if (is.na(tm)) {
+      #     tags$div(tags$h2(class = "title", "Team not found..."))
+      #   } else {
+      #     tags$div(
+      #       style = "margin-left: 10px; margin-top: 10px; margin-bottom: 30px;",
+      #       tags$h2(
+      #         class = "title",
+      #         paste(tm, "Last", input$comparison_window, "Day Injury History: ")
+      #       ),
+      #       reactable(
+      #         pluck(ls_inj, tm, tibble(!!tm := "No Injuries")),
+      #         pagination = FALSE,
+      #         fullWidth = FALSE,
+      #         defaultColDef = colDef(
+      #           align = "left",
+      #           minWidth = 120,
+      #           headerStyle = list(background = "lightblue", color = "white")
+      #         ),
+      #         columns = list(player_names = colDef(minWidth = 1000))
+      #       )
+      #     )
+      #   }
+      # }
     )
   })
 
